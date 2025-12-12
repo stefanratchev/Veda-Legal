@@ -1,0 +1,98 @@
+// Veda Legal Timesheet Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User model - linked to Microsoft 365 SSO
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  role          UserRole  @default(EMPLOYEE)
+  hourlyRate    Decimal?  @db.Decimal(10, 2)
+
+  // Relations
+  timeEntries   TimeEntry[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  PARTNER
+  ASSOCIATE
+  PARALEGAL
+  EMPLOYEE
+}
+
+// Client model
+model Client {
+  id            String        @id @default(cuid())
+  name          String
+  email         String?
+  phone         String?
+  address       String?
+  practiceArea  PracticeArea?
+  status        ClientStatus  @default(ACTIVE)
+  notes         String?
+
+  // Relations
+  timeEntries   TimeEntry[]
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("clients")
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum PracticeArea {
+  CORPORATE
+  FAMILY_LAW
+  IP_PATENT
+  REAL_ESTATE
+  LITIGATION
+  EMPLOYMENT
+  TAX
+  IMMIGRATION
+  CRIMINAL
+  OTHER
+}
+
+// TimeEntry model - the core timesheet entries
+model TimeEntry {
+  id            String    @id @default(cuid())
+  date          DateTime  @db.Date
+  hours         Decimal   @db.Decimal(4, 2)
+  description   String
+  billable      Boolean   @default(true)
+  rate          Decimal?  @db.Decimal(10, 2)
+
+  // Relations
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([clientId])
+  @@index([date])
+  @@map("time_entries")
+}

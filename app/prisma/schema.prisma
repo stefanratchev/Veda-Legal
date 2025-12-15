@@ -39,6 +39,7 @@ model Client {
   id            String        @id @default(cuid())
   name          String
   email         String?
+  hourlyRate    Decimal?      @db.Decimal(10, 2)
   phone         String?
   address       String?
   practiceArea  PracticeArea?

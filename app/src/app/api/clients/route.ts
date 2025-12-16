@@ -8,6 +8,9 @@ import { getToken } from "next-auth/jwt";
 const CLIENT_SELECT = {
   id: true,
   name: true,
+  timesheetCode: true,
+  invoicedName: true,
+  invoiceAttn: true,
   email: true,
   hourlyRate: true,
   status: true,
@@ -103,10 +106,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { name, email, hourlyRate, status } = body;
+  const { name, timesheetCode, invoicedName, invoiceAttn, email, hourlyRate, status } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  }
+
+  if (!timesheetCode || typeof timesheetCode !== "string" || timesheetCode.trim().length === 0) {
+    return NextResponse.json({ error: "Timesheet code is required" }, { status: 400 });
+  }
+
+  // Check if timesheetCode is unique
+  const existingClient = await db.client.findUnique({
+    where: { timesheetCode: timesheetCode.trim() },
+  });
+  if (existingClient) {
+    return NextResponse.json({ error: "Timesheet code already exists" }, { status: 400 });
   }
 
   if (email && typeof email === "string" && email.length > 0) {
@@ -133,6 +148,9 @@ export async function POST(request: NextRequest) {
     const client = await db.client.create({
       data: {
         name: name.trim(),
+        timesheetCode: timesheetCode.trim(),
+        invoicedName: invoicedName?.trim() || null,
+        invoiceAttn: invoiceAttn?.trim() || null,
         email: email?.trim() || null,
         hourlyRate: hourlyRate ? new Prisma.Decimal(hourlyRate) : null,
         status: status || "ACTIVE",
@@ -164,7 +182,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, name, email, hourlyRate, status } = body;
+  const { id, name, timesheetCode, invoicedName, invoiceAttn, email, hourlyRate, status } = body;
 
   if (!id) {
     return NextResponse.json(
@@ -178,6 +196,26 @@ export async function PATCH(request: NextRequest) {
     (typeof name !== "string" || name.trim().length === 0)
   ) {
     return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
+  }
+
+  if (
+    timesheetCode !== undefined &&
+    (typeof timesheetCode !== "string" || timesheetCode.trim().length === 0)
+  ) {
+    return NextResponse.json({ error: "Timesheet code cannot be empty" }, { status: 400 });
+  }
+
+  // Check if timesheetCode is unique (if being changed)
+  if (timesheetCode !== undefined) {
+    const existingClient = await db.client.findFirst({
+      where: {
+        timesheetCode: timesheetCode.trim(),
+        NOT: { id },
+      },
+    });
+    if (existingClient) {
+      return NextResponse.json({ error: "Timesheet code already exists" }, { status: 400 });
+    }
   }
 
   if (email && typeof email === "string" && email.length > 0) {
@@ -202,6 +240,9 @@ export async function PATCH(request: NextRequest) {
 
   const updateData: Prisma.ClientUpdateInput = {};
   if (name !== undefined) updateData.name = name.trim();
+  if (timesheetCode !== undefined) updateData.timesheetCode = timesheetCode.trim();
+  if (invoicedName !== undefined) updateData.invoicedName = invoicedName?.trim() || null;
+  if (invoiceAttn !== undefined) updateData.invoiceAttn = invoiceAttn?.trim() || null;
   if (email !== undefined) updateData.email = email?.trim() || null;
   if (hourlyRate !== undefined) {
     updateData.hourlyRate = hourlyRate ? new Prisma.Decimal(hourlyRate) : null;

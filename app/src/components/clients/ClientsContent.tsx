@@ -6,6 +6,9 @@ import { ClientStatus } from "@prisma/client";
 interface Client {
   id: string;
   name: string;
+  timesheetCode: string;
+  invoicedName: string | null;
+  invoiceAttn: string | null;
   email: string | null;
   hourlyRate: number | null;
   status: ClientStatus;
@@ -20,6 +23,9 @@ type ModalMode = "create" | "edit" | "delete" | null;
 
 interface FormData {
   name: string;
+  timesheetCode: string;
+  invoicedName: string;
+  invoiceAttn: string;
   email: string;
   hourlyRate: string;
   status: ClientStatus;
@@ -27,6 +33,9 @@ interface FormData {
 
 const initialFormData: FormData = {
   name: "",
+  timesheetCode: "",
+  invoicedName: "",
+  invoiceAttn: "",
   email: "",
   hourlyRate: "",
   status: "ACTIVE",
@@ -50,6 +59,9 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
   const openEditModal = useCallback((client: Client) => {
     setFormData({
       name: client.name,
+      timesheetCode: client.timesheetCode,
+      invoicedName: client.invoicedName || "",
+      invoiceAttn: client.invoiceAttn || "",
       email: client.email || "",
       hourlyRate: client.hourlyRate?.toString() || "",
       status: client.status,
@@ -159,7 +171,6 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
   const statusColors: Record<ClientStatus, { bg: string; text: string }> = {
     ACTIVE: { bg: "var(--success-bg)", text: "var(--success)" },
     INACTIVE: { bg: "var(--danger-bg)", text: "var(--danger)" },
-    PENDING: { bg: "var(--warning-bg)", text: "var(--accent-gold)" },
   };
 
   return (
@@ -239,7 +250,7 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
                     {client.email || "—"}
                   </td>
                   <td className="px-6 py-4 text-[var(--text-secondary)]">
-                    {client.hourlyRate ? `$${client.hourlyRate.toFixed(2)}` : "—"}
+                    {client.hourlyRate ? `€${client.hourlyRate.toFixed(2)}` : "—"}
                   </td>
                   <td className="px-6 py-4">
                     <span
@@ -341,6 +352,72 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
                     />
                   </div>
 
+                  {/* Timesheet Code */}
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                      Timesheet Code <span className="text-[var(--danger)]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.timesheetCode}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, timesheetCode: e.target.value }))
+                      }
+                      className="
+                        w-full px-4 py-2.5 rounded-xl
+                        bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                        text-[var(--text-primary)] placeholder-[var(--text-muted)]
+                        focus:border-[var(--border-accent)] focus:ring-[3px] focus:ring-[var(--accent-gold-glow)]
+                        focus:outline-none transition-all duration-200
+                      "
+                      placeholder="e.g., ACME-001"
+                    />
+                  </div>
+
+                  {/* Invoiced Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                      Invoiced Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.invoicedName}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, invoicedName: e.target.value }))
+                      }
+                      className="
+                        w-full px-4 py-2.5 rounded-xl
+                        bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                        text-[var(--text-primary)] placeholder-[var(--text-muted)]
+                        focus:border-[var(--border-accent)] focus:ring-[3px] focus:ring-[var(--accent-gold-glow)]
+                        focus:outline-none transition-all duration-200
+                      "
+                      placeholder="Name for outgoing invoices"
+                    />
+                  </div>
+
+                  {/* Invoice Attn */}
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                      Invoice Attn
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.invoiceAttn}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, invoiceAttn: e.target.value }))
+                      }
+                      className="
+                        w-full px-4 py-2.5 rounded-xl
+                        bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                        text-[var(--text-primary)] placeholder-[var(--text-muted)]
+                        focus:border-[var(--border-accent)] focus:ring-[3px] focus:ring-[var(--accent-gold-glow)]
+                        focus:outline-none transition-all duration-200
+                      "
+                      placeholder="Contact person for invoices"
+                    />
+                  </div>
+
                   {/* Email */}
                   <div>
                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
@@ -366,11 +443,11 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
                   {/* Hourly Rate */}
                   <div>
                     <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-                      Hourly Rate
+                      Hourly Rate (EUR)
                     </label>
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
-                        $
+                        €
                       </span>
                       <input
                         type="number"
@@ -419,7 +496,6 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
                     >
                       <option value="ACTIVE">Active</option>
                       <option value="INACTIVE">Inactive</option>
-                      <option value="PENDING">Pending</option>
                     </select>
                   </div>
                 </div>
@@ -466,7 +542,7 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
               ) : (
                 <button
                   onClick={modalMode === "create" ? handleCreate : handleUpdate}
-                  disabled={isLoading || !formData.name.trim()}
+                  disabled={isLoading || !formData.name.trim() || !formData.timesheetCode.trim()}
                   className="
                     px-4 py-2 rounded-xl
                     bg-[var(--accent-gold)] text-[var(--bg-deep)] text-sm font-medium

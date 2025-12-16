@@ -38,8 +38,11 @@ enum UserRole {
 model Client {
   id            String        @id @default(cuid())
   name          String
+  timesheetCode String        @unique    // Code shown in employee timesheets
+  invoicedName  String?                  // Name on outgoing invoices
+  invoiceAttn   String?                  // Contact person for invoices
   email         String?
-  hourlyRate    Decimal?      @db.Decimal(10, 2)
+  hourlyRate    Decimal?      @db.Decimal(10, 2)  // Rate in EUR
   phone         String?
   address       String?
   practiceArea  PracticeArea?
@@ -58,7 +61,6 @@ model Client {
 enum ClientStatus {
   ACTIVE
   INACTIVE
-  PENDING
 }
 
 enum PracticeArea {

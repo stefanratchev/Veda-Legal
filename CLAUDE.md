@@ -67,13 +67,6 @@ After modifying `prisma/schema.prisma`:
 2. **Apply migration:** `npm run db:migrate` (or `npx prisma db push` for quick dev iterations)
 3. **Restart dev server:** Required for Prisma client changes to take effect
 
-### Adding Required Fields to Existing Data
-
-If adding a required field without a default value and data exists:
-```bash
-npx prisma db push --force-reset  # WARNING: Destroys all data - dev only!
-```
-
 ### Troubleshooting
 
 - **"Column does not exist" errors:** Restart the dev server after `db:generate`
@@ -98,8 +91,15 @@ Dark theme with gold accent. Key CSS variables in `app/src/app/globals.css`:
 ## Database Models
 
 - **User** - Employees linked to MS365 SSO (roles: ADMIN, PARTNER, ASSOCIATE, PARALEGAL, EMPLOYEE)
-- **Client** - Client records with practice area and status
+- **Client** - Client records with timesheetCode, practice area, and status (ACTIVE/INACTIVE)
 - **TimeEntry** - Billable hours logged against clients
+
+## Architecture Patterns
+
+- **Server Components** fetch data directly via Prisma, serialize for client components
+- **Client Components** (`"use client"`) handle interactivity, call API routes for mutations
+- **API Routes** (`app/api/`) use `requireAuth()` and `requireWriteAccess()` helpers for auth
+- **Role-based access:** ADMIN, PARTNER, ASSOCIATE have write access; others read-only
 
 ## Environment Variables
 
@@ -122,9 +122,3 @@ DATABASE_URL=postgresql://...
 - **Billable Hours**: Time chargeable to clients
 - **Practice Area**: Legal specialty (Corporate, Family, IP, etc.)
 
-## Active Technologies
-- TypeScript 5.x (strict mode) + Next.js 16 (App Router), Prisma ORM v7, NextAuth.js, Tailwind CSS v4 (001-client-management)
-- PostgreSQL via Prisma ORM (001-client-management)
-
-## Recent Changes
-- 001-client-management: Added TypeScript 5.x (strict mode) + Next.js 16 (App Router), Prisma ORM v7, NextAuth.js, Tailwind CSS v4

@@ -94,9 +94,10 @@ interface SidebarProps {
     role: string;
     initials: string;
   };
+  className?: string;
 }
 
-export function Sidebar({ user }: SidebarProps) {
+export function Sidebar({ user, className }: SidebarProps) {
   const pathname = usePathname();
 
   const NavItem = ({ item }: { item: NavItem }) => {
@@ -130,7 +131,7 @@ export function Sidebar({ user }: SidebarProps) {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[240px] bg-[var(--bg-elevated)] border-r border-[var(--border-subtle)] flex flex-col animate-slide-in">
+    <aside className={`fixed left-0 top-0 h-screen w-[240px] bg-[var(--bg-elevated)] border-r border-[var(--border-subtle)] flex flex-col ${className || ""}`}>
       {/* Logo */}
       <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
         <h1 className="font-heading text-[22px] font-semibold tracking-tight">

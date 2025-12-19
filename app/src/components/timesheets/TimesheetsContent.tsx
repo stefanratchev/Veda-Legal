@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { ClientSelect } from "@/components/ui/ClientSelect";
-import { DurationPicker } from "@/components/ui/DurationPicker";
+import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicker";
 
 interface Client {
   id: string;
@@ -104,6 +104,7 @@ export function TimesheetsContent({ userId, clients }: TimesheetsContentProps) {
   const [editFormData, setEditFormData] = useState<FormData>(initialFormData);
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const monthPickerRef = useRef<HTMLDivElement>(null);
+  const durationPickerRef = useRef<DurationPickerRef>(null);
 
   // Week days for the strip
   const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
@@ -385,7 +386,7 @@ export function TimesheetsContent({ userId, clients }: TimesheetsContentProps) {
   }, [today]);
 
   return (
-    <div className="space-y-4 animate-fade-up">
+    <div className="space-y-4">
       {/* Page Title */}
       <div>
         <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">
@@ -395,7 +396,7 @@ export function TimesheetsContent({ userId, clients }: TimesheetsContentProps) {
       </div>
 
       {/* Week Strip */}
-      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-3 animate-fade-up delay-1">
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-3">
         <div className="flex items-center gap-3">
           {/* Prev Week */}
           <button
@@ -409,7 +410,7 @@ export function TimesheetsContent({ userId, clients }: TimesheetsContentProps) {
           </button>
 
           {/* Days */}
-          <div className="flex-1 flex items-center justify-between">
+          <div className="flex-1 flex items-center gap-2">
             {weekDays.map((day) => {
               const disabled = isFuture(day);
               const selected = isSelected(day);
@@ -423,7 +424,7 @@ export function TimesheetsContent({ userId, clients }: TimesheetsContentProps) {
                   onClick={() => !disabled && setSelectedDate(day)}
                   className={`
                     relative flex flex-col items-center gap-0.5 px-3 py-2 rounded
-                    transition-all duration-200 min-w-[56px]
+                    transition-all duration-200 flex-1
                     ${disabled ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}
                     ${selected
                       ? "bg-[var(--accent-pink)] text-[var(--bg-deep)] shadow-lg shadow-[var(--accent-pink-glow)]"
@@ -501,19 +502,24 @@ export function TimesheetsContent({ userId, clients }: TimesheetsContentProps) {
       </div>
 
       {/* Entry Form - Single Row */}
-      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4 animate-fade-up delay-3">
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
         <div className="flex items-center gap-3">
           {/* Client Selector */}
           <ClientSelect
             clients={clients}
             value={formData.clientId}
-            onChange={(clientId) => setFormData((prev) => ({ ...prev, clientId }))}
+            onChange={(clientId) => {
+              setFormData((prev) => ({ ...prev, clientId }));
+              // Auto-open duration picker after client selection
+              setTimeout(() => durationPickerRef.current?.open(), 0);
+            }}
             placeholder="Select client..."
             className="w-[220px] flex-shrink-0"
           />
 
           {/* Duration Picker */}
           <DurationPicker
+            ref={durationPickerRef}
             hours={formData.hours}
             minutes={formData.minutes}
             onChange={(hours, minutes) => setFormData((prev) => ({ ...prev, hours, minutes }))}
@@ -562,7 +568,7 @@ export function TimesheetsContent({ userId, clients }: TimesheetsContentProps) {
       </div>
 
       {/* Entries List */}
-      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded overflow-hidden animate-fade-up delay-4">
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--border-subtle)]">
           <h3 className="font-medium text-sm text-[var(--text-primary)]">
             {isToday(selectedDate) ? "Today's Entries" : "Entries"}

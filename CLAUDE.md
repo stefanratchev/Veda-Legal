@@ -99,6 +99,8 @@ Dark theme aligned with veda.uk branding. Key CSS variables in `app/src/app/glob
 
 **Typography:** Roboto Condensed (headings) + Roboto (body) — matching veda.uk
 
+**Animations:** No entrance animations on page navigation — pages should render instantly. Use `animate-fade-up` only for interactive elements that appear on user action (dropdowns, modals, popovers).
+
 ## Database Models
 
 - **User** - Employees linked to MS365 SSO (roles: ADMIN, PARTNER, ASSOCIATE, PARALEGAL, EMPLOYEE)

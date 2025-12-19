@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 
 interface DurationPickerProps {
   hours: number;
@@ -10,17 +10,32 @@ interface DurationPickerProps {
   className?: string;
 }
 
-export function DurationPicker({
+export interface DurationPickerRef {
+  open: () => void;
+}
+
+export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>(function DurationPicker({
   hours,
   minutes,
   onChange,
   disabled = false,
   className = "",
-}: DurationPickerProps) {
+}, ref) {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<"hours" | "minutes">("hours");
   const [pendingHours, setPendingHours] = useState(hours);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Expose open() method to parent
+  useImperativeHandle(ref, () => ({
+    open: () => {
+      if (!disabled) {
+        setStep("hours");
+        setPendingHours(hours);
+        setIsOpen(true);
+      }
+    },
+  }), [disabled, hours]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -71,7 +86,7 @@ export function DurationPicker({
     }
   };
 
-  const hourOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const hourOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9]; // Phone keypad layout (0 separate)
   const minuteOptions = [0, 15, 30, 45];
 
   return (
@@ -114,7 +129,7 @@ export function DurationPicker({
               <div className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2 px-1">
                 Select hours
               </div>
-              <div className="grid grid-cols-5 gap-1">
+              <div className="grid grid-cols-3 gap-1">
                 {hourOptions.map((h) => (
                   <button
                     key={h}
@@ -132,6 +147,23 @@ export function DurationPicker({
                     {h}
                   </button>
                 ))}
+                {/* Zero centered below */}
+                <div />
+                <button
+                  type="button"
+                  onClick={() => handleSelectHours(0)}
+                  className={`
+                    py-2 rounded text-sm font-medium
+                    transition-all duration-150
+                    ${0 === hours
+                      ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                      : "bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                    }
+                  `}
+                >
+                  0
+                </button>
+                <div />
               </div>
             </div>
           ) : (
@@ -151,7 +183,7 @@ export function DurationPicker({
                   {pendingHours}h — Select minutes
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-1">
+              <div className="grid grid-cols-3 gap-1">
                 {minuteOptions.map((m) => (
                   <button
                     key={m}
@@ -176,4 +208,4 @@ export function DurationPicker({
       )}
     </div>
   );
-}
+});

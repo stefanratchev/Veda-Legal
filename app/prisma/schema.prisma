@@ -82,8 +82,6 @@ model TimeEntry {
   date          DateTime  @db.Date
   hours         Decimal   @db.Decimal(4, 2)
   description   String
-  billable      Boolean   @default(true)
-  rate          Decimal?  @db.Decimal(10, 2)
 
   // Relations
   userId        String

@@ -33,8 +33,8 @@ function LoginContent() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-12 animate-fade-up">
-          <h1 className="font-display text-5xl font-semibold tracking-tight mb-2">
-            <span className="text-[var(--accent-gold)]">Veda</span>{" "}
+          <h1 className="font-heading text-5xl font-semibold tracking-tight mb-2">
+            <span className="text-[var(--accent-pink)]">Veda</span>{" "}
             <span className="text-[var(--text-primary)]">Legal</span>
           </h1>
           <p className="text-sm text-[var(--text-muted)] uppercase tracking-[3px]">
@@ -43,8 +43,8 @@ function LoginContent() {
         </div>
 
         {/* Login Card */}
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl p-8 animate-fade-up delay-1">
-          <h2 className="font-display text-2xl font-medium text-[var(--text-primary)] text-center mb-2">
+        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-8 animate-fade-up delay-1">
+          <h2 className="font-heading text-2xl font-medium text-[var(--text-primary)] text-center mb-2">
             Welcome back
           </h2>
           <p className="text-sm text-[var(--text-secondary)] text-center mb-8">
@@ -53,7 +53,7 @@ function LoginContent() {
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-[var(--danger-bg)] border border-[rgba(199,90,90,0.3)] rounded-xl">
+            <div className="mb-6 p-4 bg-[var(--danger-bg)] border border-[rgba(199,90,90,0.3)] rounded">
               <p className="text-sm text-[var(--danger)]">
                 {error === "OAuthSignin" && "Error starting sign in. Please try again."}
                 {error === "OAuthCallback" && "Error during sign in. Please try again."}
@@ -70,7 +70,7 @@ function LoginContent() {
             onClick={handleMicrosoftSignIn}
             className="
               w-full flex items-center justify-center gap-3
-              px-6 py-4 rounded-xl
+              px-6 py-4 rounded
               bg-[var(--bg-surface)] border border-[var(--border-subtle)]
               text-[var(--text-primary)] font-medium
               hover:border-[var(--border-accent)] hover:bg-[var(--bg-hover)]

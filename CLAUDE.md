@@ -55,9 +55,17 @@ npm run db:studio    # Open Prisma Studio
 
 ## Database Setup
 
-**Development database:** Prisma dev server (embedded PostgreSQL on port 51214)
+**Development database:** Local PostgreSQL 17 (Homebrew)
 
-The database runs via `prisma dev` process. It starts automatically and persists data locally.
+PostgreSQL runs as a background service via Homebrew (auto-starts at login, runs continuously). Data persists in `/opt/homebrew/var/postgresql@17`. The idle footprint is minimal (~20-50MB RAM, negligible CPU/battery impact).
+
+### Prerequisites
+
+```bash
+brew install postgresql@17
+brew services start postgresql@17
+/opt/homebrew/opt/postgresql@17/bin/createdb veda_legal_dev
+```
 
 ### Schema Changes Workflow
 
@@ -70,23 +78,26 @@ After modifying `prisma/schema.prisma`:
 ### Troubleshooting
 
 - **"Column does not exist" errors:** Restart the dev server after `db:generate`
-- **"Can't reach database":** Check if `prisma dev` process is running (`lsof -i :51214`)
+- **"Can't reach database":** Check if PostgreSQL is running: `brew services list | grep postgresql`
+- **Start PostgreSQL:** `brew services start postgresql@17`
+- **Stop PostgreSQL:** `brew services stop postgresql@17`
+- **Connect directly:** `/opt/homebrew/opt/postgresql@17/bin/psql veda_legal_dev`
 
 ## Design System
 
-Dark theme with gold accent. Key CSS variables in `app/src/app/globals.css`:
+Dark theme aligned with veda.uk branding. Key CSS variables in `app/src/app/globals.css`:
 
 | Variable | Value | Use |
 |----------|-------|-----|
-| `--bg-deep` | #0f0f0f | Page background |
-| `--bg-elevated` | #1a1a1a | Sidebar, cards |
-| `--bg-surface` | #232323 | Inputs, nested elements |
-| `--accent-gold` | #d4a853 | Primary brand accent |
-| `--text-primary` | #f5f4f0 | Headings |
-| `--text-secondary` | #a8a8a4 | Body text |
-| `--text-muted` | #6b6b68 | Labels, captions |
+| `--bg-deep` | #151515 | Page background |
+| `--bg-elevated` | #1c1c1c | Sidebar, cards |
+| `--bg-surface` | #383838 | Inputs, nested elements |
+| `--accent-pink` | #c97b98 | Primary brand accent (Dusty Rose) |
+| `--text-primary` | #ffffff | Headings |
+| `--text-secondary` | #d1d1d1 | Body text |
+| `--text-muted` | #888888 | Labels, captions |
 
-**Typography:** Cormorant Garamond (display/headings) + DM Sans (body)
+**Typography:** Roboto Condensed (headings) + Roboto (body) — matching veda.uk
 
 ## Database Models
 

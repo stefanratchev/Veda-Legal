@@ -3,12 +3,12 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { ClientsContent } from "@/components/clients/ClientsContent";
+import { TimesheetsContent } from "@/components/timesheets/TimesheetsContent";
 
-export default async function ClientsPage() {
+export default async function TimesheetsPage() {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user) {
+  if (!session?.user?.email) {
     redirect("/login");
   }
 
@@ -23,41 +23,44 @@ export default async function ClientsPage() {
       .slice(0, 2);
   };
 
+  // Get user from database
+  const dbUser = await db.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true, name: true, role: true },
+  });
+
+  if (!dbUser) {
+    // User should be auto-created on login via auth callback
+    // If they're here without a DB record, something went wrong - redirect to re-login
+    redirect("/login");
+  }
+
   const user = {
-    name: session.user.name || "User",
-    role: "Employee", // This would come from the database in a real app
-    initials: getInitials(session.user.name),
+    name: dbUser.name || session.user.name || "User",
+    role: dbUser.role,
+    initials: getInitials(dbUser.name || session.user.name),
   };
 
-  // Fetch clients from database
+  // Fetch active clients for the dropdown
   const clients = await db.client.findMany({
+    where: { status: "ACTIVE" },
     select: {
       id: true,
       name: true,
       timesheetCode: true,
-      invoicedName: true,
-      invoiceAttn: true,
-      email: true,
-      hourlyRate: true,
-      status: true,
-      createdAt: true,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: { name: "asc" },
   });
-
-  // Convert for client component (Decimal to number, Date to string)
-  const serializedClients = clients.map((client) => ({
-    ...client,
-    hourlyRate: client.hourlyRate ? Number(client.hourlyRate) : null,
-    createdAt: client.createdAt.toISOString(),
-  }));
 
   return (
     <div className="flex min-h-screen">
       <Sidebar user={user} />
       <main className="flex-1 ml-[240px]">
         <div className="px-6 py-5">
-          <ClientsContent initialClients={serializedClients} />
+          <TimesheetsContent
+            userId={dbUser.id}
+            clients={clients}
+          />
         </div>
       </main>
     </div>

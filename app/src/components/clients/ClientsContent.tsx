@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { ClientStatus } from "@prisma/client";
+import { DataTable } from "@/components/ui/DataTable";
+import { TableFilters } from "@/components/ui/TableFilters";
+import { ColumnDef } from "@/components/ui/table-types";
 
 interface Client {
   id: string;
@@ -41,6 +44,11 @@ const initialFormData: FormData = {
   status: "ACTIVE",
 };
 
+const statusStyles: Record<ClientStatus, { dotColor: string; dotOpacity: string; textColor: string; label: string }> = {
+  ACTIVE: { dotColor: "var(--accent-pink)", dotOpacity: "1", textColor: "var(--text-secondary)", label: "Active" },
+  INACTIVE: { dotColor: "var(--text-muted)", dotOpacity: "0.5", textColor: "var(--text-muted)", label: "Inactive" },
+};
+
 export function ClientsContent({ initialClients }: ClientsContentProps) {
   const [clients, setClients] = useState<Client[]>(initialClients);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -48,6 +56,30 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | ClientStatus>("ALL");
+
+  // Filtered clients
+  const filteredClients = useMemo(() => {
+    return clients.filter((client) => {
+      // Status filter
+      if (statusFilter !== "ALL" && client.status !== statusFilter) {
+        return false;
+      }
+
+      // Search filter (name or email)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = client.name.toLowerCase().includes(query);
+        const matchesEmail = client.email?.toLowerCase().includes(query) ?? false;
+        return matchesName || matchesEmail;
+      }
+
+      return true;
+    });
+  }, [clients, searchQuery, statusFilter]);
 
   const openCreateModal = useCallback(() => {
     setFormData(initialFormData);
@@ -168,10 +200,101 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
     }
   };
 
-  const statusStyles: Record<ClientStatus, { dotColor: string; dotOpacity: string; textColor: string; label: string }> = {
-    ACTIVE: { dotColor: "var(--accent-pink)", dotOpacity: "1", textColor: "var(--text-secondary)", label: "Active" },
-    INACTIVE: { dotColor: "var(--text-muted)", dotOpacity: "0.5", textColor: "var(--text-muted)", label: "Inactive" },
-  };
+  // Column definitions
+  const columns: ColumnDef<Client>[] = useMemo(
+    () => [
+      {
+        id: "name",
+        header: "Name",
+        accessor: (client) => client.name,
+        cell: (client) => (
+          <span className="font-medium text-[13px] text-[var(--text-primary)]">
+            {client.name}
+          </span>
+        ),
+      },
+      {
+        id: "email",
+        header: "Email",
+        accessor: (client) => client.email || "",
+        cell: (client) => (
+          <span className="text-[13px] text-[var(--text-secondary)]">
+            {client.email || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "hourlyRate",
+        header: "Hourly Rate",
+        accessor: (client) => client.hourlyRate ?? 0,
+        cell: (client) => (
+          <span className="text-[13px] text-[var(--text-secondary)]">
+            {client.hourlyRate ? `€${client.hourlyRate.toFixed(2)}` : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        accessor: (client) => client.status,
+        cell: (client) => {
+          const style = statusStyles[client.status];
+          return (
+            <span
+              className="flex items-center gap-2 text-xs font-medium"
+              style={{ color: style.textColor }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                style={{
+                  backgroundColor: style.dotColor,
+                  opacity: style.dotOpacity,
+                }}
+              />
+              {style.label}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        accessor: () => null,
+        sortable: false,
+        align: "right",
+        cell: (client) => (
+          <div className="flex items-center justify-end gap-1">
+            <button
+              onClick={() => openEditModal(client)}
+              className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+              title="Edit client"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => openDeleteModal(client)}
+              className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-colors"
+              title="Delete client"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [openEditModal, openDeleteModal]
+  );
+
+  // Empty state icon
+  const emptyIcon = (
+    <svg className="w-6 h-6 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  );
 
   return (
     <div className="space-y-4">
@@ -202,99 +325,30 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
         </button>
       </div>
 
+      {/* Filters */}
+      <TableFilters
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by name or email..."
+        filterOptions={[
+          { value: "ALL", label: "All Status" },
+          { value: "ACTIVE", label: "Active" },
+          { value: "INACTIVE", label: "Inactive" },
+        ]}
+        filterValue={statusFilter}
+        onFilterChange={(value) => setStatusFilter(value as "ALL" | ClientStatus)}
+        resultCount={filteredClients.length}
+      />
+
       {/* Table */}
-      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded overflow-hidden">
-        {clients.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="w-12 h-12 rounded bg-[var(--bg-surface)] flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <p className="text-[var(--text-secondary)] text-[13px] mb-0.5">No clients yet</p>
-            <p className="text-[12px] text-[var(--text-muted)]">Add your first client to get started</p>
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[var(--border-subtle)]">
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                  Email
-                </th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                  Hourly Rate
-                </th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {clients.map((client) => (
-                <tr
-                  key={client.id}
-                  className="border-b border-[var(--border-subtle)] last:border-b-0 hover:bg-[var(--bg-hover)] transition-colors"
-                >
-                  <td className="px-4 py-2.5">
-                    <span className="font-medium text-[13px] text-[var(--text-primary)]">
-                      {client.name}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-[13px] text-[var(--text-secondary)]">
-                    {client.email || "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-[13px] text-[var(--text-secondary)]">
-                    {client.hourlyRate ? `€${client.hourlyRate.toFixed(2)}` : "—"}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className="flex items-center gap-2 text-xs font-medium"
-                      style={{ color: statusStyles[client.status].textColor }}
-                    >
-                      <span
-                        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                        style={{
-                          backgroundColor: statusStyles[client.status].dotColor,
-                          opacity: statusStyles[client.status].dotOpacity,
-                        }}
-                      />
-                      {statusStyles[client.status].label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => openEditModal(client)}
-                        className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
-                        title="Edit client"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => openDeleteModal(client)}
-                        className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-colors"
-                        title="Delete client"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <DataTable
+        data={filteredClients}
+        columns={columns}
+        getRowKey={(client) => client.id}
+        pageSize={25}
+        emptyMessage={clients.length === 0 ? "No clients yet" : "No matching clients"}
+        emptyIcon={emptyIcon}
+      />
 
       {/* Modal */}
       {modalMode && (

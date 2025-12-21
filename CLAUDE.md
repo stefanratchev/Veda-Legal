@@ -98,6 +98,17 @@ npm run db:generate && npm run db:migrate
 - "Column does not exist" → Restart dev server after `db:generate`
 - "Can't reach database" → Check `brew services list | grep postgresql`
 
+## Git Worktrees
+
+Feature development uses git worktrees in `.worktrees/` for isolation.
+
+**After merging a feature branch to main:**
+```bash
+npm install   # Sync node_modules with merged package.json
+```
+
+`node_modules/` is not committed, so dependencies added in a worktree won't exist in main until `npm install` is run.
+
 ## Design System
 
 Dark theme with CSS variables in `globals.css`:

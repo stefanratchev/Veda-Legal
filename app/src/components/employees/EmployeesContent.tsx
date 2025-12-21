@@ -18,6 +18,7 @@ interface Employee {
 
 interface EmployeesContentProps {
   initialEmployees: Employee[];
+  currentUserId: string;
   readOnly?: boolean;
 }
 
@@ -110,6 +111,7 @@ function formatAbsoluteTime(dateStr: string | null): string {
 
 export function EmployeesContent({
   initialEmployees,
+  currentUserId,
   readOnly = false,
 }: EmployeesContentProps) {
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
@@ -252,6 +254,58 @@ export function EmployeesContent({
     }
   }, [formData, closeModal]);
 
+  // Deactivate handler
+  const handleDeactivate = useCallback(async (employee: Employee) => {
+    if (!confirm(`Deactivate ${employee.name || employee.email}? They will no longer be able to log in.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/employees", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: employee.id }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to deactivate employee");
+        return;
+      }
+
+      const updated = await response.json();
+      setEmployees((prev) =>
+        prev.map((e) => (e.id === employee.id ? updated : e))
+      );
+    } catch {
+      alert("Failed to deactivate employee");
+    }
+  }, []);
+
+  // Reactivate handler
+  const handleReactivate = useCallback(async (employee: Employee) => {
+    try {
+      const response = await fetch("/api/employees", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: employee.id, status: "ACTIVE" }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to reactivate employee");
+        return;
+      }
+
+      const updated = await response.json();
+      setEmployees((prev) =>
+        prev.map((e) => (e.id === employee.id ? updated : e))
+      );
+    } catch {
+      alert("Failed to reactivate employee");
+    }
+  }, []);
+
   // Column definitions
   const columns: ColumnDef<Employee>[] = useMemo(() => {
     const baseColumns: ColumnDef<Employee>[] = [
@@ -345,34 +399,85 @@ export function EmployeesContent({
         accessor: () => null,
         sortable: false,
         align: "right",
-        cell: (employee) => (
-          <div className="flex items-center justify-end gap-1">
-            <button
-              onClick={() => openEditModal(employee)}
-              className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
-              title="Edit employee"
-            >
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+        cell: (employee) => {
+          const isSelf = employee.id === currentUserId;
+          const isInactive = employee.status === "INACTIVE";
+
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <button
+                onClick={() => openEditModal(employee)}
+                className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                title="Edit employee"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.5"
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
-            </button>
-          </div>
-        ),
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+              </button>
+              {isInactive ? (
+                <button
+                  onClick={() => handleReactivate(employee)}
+                  className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-surface)] transition-colors"
+                  title="Reactivate employee"
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleDeactivate(employee)}
+                  disabled={isSelf}
+                  className={`p-1.5 rounded-sm transition-colors ${
+                    isSelf
+                      ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
+                      : "text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--bg-surface)]"
+                  }`}
+                  title={isSelf ? "You cannot deactivate yourself" : "Deactivate employee"}
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
+          );
+        },
       });
     }
 
     return baseColumns;
-  }, [readOnly, openEditModal]);
+  }, [readOnly, openEditModal, currentUserId, handleDeactivate, handleReactivate]);
 
   // Empty state icon
   const emptyIcon = (

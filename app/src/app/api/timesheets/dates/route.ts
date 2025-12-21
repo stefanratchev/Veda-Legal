@@ -1,42 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { getToken } from "next-auth/jwt";
-
-async function requireAuth(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (session?.user) {
-    return { session };
-  }
-
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-  if (token) {
-    return { session: { user: { name: token.name, email: token.email } } };
-  }
-
-  return { error: "Unauthorized", status: 401 };
-}
-
-async function getUserFromSession(email: string | null | undefined) {
-  if (!email) return null;
-
-  return db.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
-}
+import { Prisma } from "@prisma/client";
+import { requireAuth, isAdmin, errorResponse, successResponse } from "@/lib/auth-utils";
 
 // GET /api/timesheets/dates?year=2024&month=12 - Get dates with entries for a month
+// ADMIN: sees all dates with entries, EMPLOYEE: sees only dates with own entries
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
-
-  const user = await getUserFromSession(auth.session.user?.email);
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return errorResponse(auth.error, auth.status);
   }
 
   const { searchParams } = new URL(request.url);
@@ -44,44 +16,42 @@ export async function GET(request: NextRequest) {
   const monthParam = searchParams.get("month");
 
   if (!yearParam || !monthParam) {
-    return NextResponse.json({ error: "Year and month parameters are required" }, { status: 400 });
+    return errorResponse("Year and month parameters are required", 400);
   }
 
   const year = parseInt(yearParam, 10);
   const month = parseInt(monthParam, 10);
 
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-    return NextResponse.json({ error: "Invalid year or month" }, { status: 400 });
+    return errorResponse("Invalid year or month", 400);
   }
 
-  // Get first and last day of the month
   const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0); // Last day of month
+  const endDate = new Date(year, month, 0);
 
   try {
+    // ADMIN sees all dates with entries, EMPLOYEE sees only their own
+    const whereClause: Prisma.TimeEntryWhereInput = {
+      date: {
+        gte: startDate,
+        lte: endDate,
+      },
+    };
+    if (!isAdmin(auth.user.role)) {
+      whereClause.userId = auth.user.id;
+    }
+
     const entries = await db.timeEntry.findMany({
-      where: {
-        userId: user.id,
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: {
-        date: true,
-      },
+      where: whereClause,
+      select: { date: true },
       distinct: ["date"],
     });
 
-    // Return array of date strings (YYYY-MM-DD)
     const dates = entries.map((e) => e.date.toISOString().split("T")[0]);
 
-    return NextResponse.json(dates);
+    return successResponse(dates);
   } catch (error) {
     console.error("Database error fetching dates:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch dates" },
-      { status: 500 }
-    );
+    return errorResponse("Failed to fetch dates", 500);
   }
 }

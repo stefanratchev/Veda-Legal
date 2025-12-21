@@ -1,8 +1,16 @@
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/user";
 import { ClientsContent } from "@/components/clients/ClientsContent";
 
 export default async function ClientsPage() {
-  // Fetch clients from database
+  const user = await getCurrentUser();
+
+  // Only ADMIN can access clients page
+  if (user.role !== "ADMIN") {
+    redirect("/timesheets");
+  }
+
   const clients = await db.client.findMany({
     select: {
       id: true,

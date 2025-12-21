@@ -245,6 +245,20 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
         ),
       },
       {
+        id: "createdAt",
+        header: "Created",
+        accessor: (client) => client.createdAt,
+        cell: (client) => (
+          <span className="text-[13px] text-[var(--text-secondary)]">
+            {new Date(client.createdAt).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+        ),
+      },
+      {
         id: "status",
         header: "Status",
         accessor: (client) => client.status,

@@ -183,3 +183,49 @@ export async function POST(request: NextRequest) {
     return errorResponse("Failed to create employee", 500);
   }
 }
+
+// DELETE /api/employees - Deactivate employee (soft delete)
+// Only ADMIN can deactivate
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if ("error" in auth) {
+    return errorResponse(auth.error, auth.status);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON", 400);
+  }
+
+  const { id } = body;
+
+  if (!id || typeof id !== "string") {
+    return errorResponse("Employee ID is required", 400);
+  }
+
+  // Prevent self-deactivation
+  if (id === auth.user.id) {
+    return errorResponse("You cannot deactivate yourself", 400);
+  }
+
+  try {
+    const employee = await db.user.update({
+      where: { id },
+      data: { status: "INACTIVE" },
+      select: EMPLOYEE_SELECT,
+    });
+
+    return successResponse(serializeEmployee(employee));
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return errorResponse("Employee not found", 404);
+    }
+    console.error("Database error deactivating employee:", error);
+    return errorResponse("Failed to deactivate employee", 500);
+  }
+}

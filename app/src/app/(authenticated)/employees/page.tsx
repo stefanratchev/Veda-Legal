@@ -30,6 +30,7 @@ export default async function EmployeesPage() {
   return (
     <EmployeesContent
       initialEmployees={serializedEmployees}
+      currentUserId={user.id}
       readOnly={user.role !== "ADMIN"}
     />
   );

@@ -7,6 +7,10 @@ import {
   getWeekDays,
   isSameDay,
   isFutureDate,
+  getMonthRange,
+  getPreviousPeriod,
+  getPreviousYear,
+  formatMonthShort,
 } from "./date-utils";
 
 describe("date-utils", () => {
@@ -104,6 +108,50 @@ describe("date-utils", () => {
       const date = new Date("2024-12-20");
       const today = new Date("2024-12-20");
       expect(isFutureDate(date, today)).toBe(false);
+    });
+  });
+
+  describe("getMonthRange", () => {
+    it("returns first and last day of month", () => {
+      const date = new Date(2025, 11, 15); // December 15, 2025 (month is 0-indexed)
+      const { start, end } = getMonthRange(date);
+      expect(formatDateISO(start)).toBe("2025-12-01");
+      expect(formatDateISO(end)).toBe("2025-12-31");
+    });
+  });
+
+  describe("getPreviousPeriod", () => {
+    it("returns previous month for monthly range", () => {
+      const start = new Date(2025, 11, 1); // December 1, 2025
+      const end = new Date(2025, 11, 31); // December 31, 2025
+      const { start: prevStart, end: prevEnd } = getPreviousPeriod(start, end);
+      expect(formatDateISO(prevStart)).toBe("2025-11-01");
+      expect(formatDateISO(prevEnd)).toBe("2025-11-30");
+    });
+
+    it("returns same-length period for custom range", () => {
+      const start = new Date(2025, 11, 10); // December 10, 2025
+      const end = new Date(2025, 11, 20); // December 20, 2025
+      const { start: prevStart, end: prevEnd } = getPreviousPeriod(start, end);
+      expect(formatDateISO(prevStart)).toBe("2025-11-29");
+      expect(formatDateISO(prevEnd)).toBe("2025-12-09");
+    });
+  });
+
+  describe("getPreviousYear", () => {
+    it("returns same dates one year ago", () => {
+      const start = new Date(2025, 11, 1); // December 1, 2025
+      const end = new Date(2025, 11, 31); // December 31, 2025
+      const { start: prevStart, end: prevEnd } = getPreviousYear(start, end);
+      expect(formatDateISO(prevStart)).toBe("2024-12-01");
+      expect(formatDateISO(prevEnd)).toBe("2024-12-31");
+    });
+  });
+
+  describe("formatMonthShort", () => {
+    it("formats date as short month and year", () => {
+      const date = new Date(2025, 11, 15); // December 15, 2025
+      expect(formatMonthShort(date)).toBe("Dec 2025");
     });
   });
 });

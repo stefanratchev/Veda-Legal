@@ -24,22 +24,21 @@ export const authOptions: NextAuthOptions = {
 
       if (email) {
         try {
-          const existingUser = await db.user.findUnique({
+          await db.user.upsert({
             where: { email },
+            update: {
+              lastLogin: new Date(),
+            },
+            create: {
+              email,
+              name: user.name || azureProfile?.name,
+              image: user.image,
+              role: "EMPLOYEE",
+              lastLogin: new Date(),
+            },
           });
-
-          if (!existingUser) {
-            await db.user.create({
-              data: {
-                email,
-                name: user.name || azureProfile?.name,
-                image: user.image,
-                role: "EMPLOYEE",
-              },
-            });
-          }
         } catch (error) {
-          console.error("Error creating user on sign in:", error);
+          console.error("Error updating user on sign in:", error);
         }
       }
       return true;

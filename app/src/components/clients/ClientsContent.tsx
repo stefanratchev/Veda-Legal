@@ -5,6 +5,7 @@ import { ClientStatus } from "@prisma/client";
 import { DataTable } from "@/components/ui/DataTable";
 import { TableFilters } from "@/components/ui/TableFilters";
 import { ColumnDef } from "@/components/ui/table-types";
+import { ClientModal } from "./ClientModal";
 
 interface Client {
   id: string;
@@ -64,23 +65,20 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
   // Filtered clients
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
-      // Status filter
       if (statusFilter !== "ALL" && client.status !== statusFilter) {
         return false;
       }
-
-      // Search filter (name or email)
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const matchesName = client.name.toLowerCase().includes(query);
         const matchesEmail = client.email?.toLowerCase().includes(query) ?? false;
         return matchesName || matchesEmail;
       }
-
       return true;
     });
   }, [clients, searchQuery, statusFilter]);
 
+  // Modal handlers
   const openCreateModal = useCallback(() => {
     setFormData(initialFormData);
     setSelectedClient(null);
@@ -115,7 +113,12 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
     setError(null);
   }, []);
 
-  const handleCreate = async () => {
+  const handleFormChange = useCallback((updates: Partial<FormData>) => {
+    setFormData((prev) => ({ ...prev, ...updates }));
+  }, []);
+
+  // CRUD handlers
+  const handleCreate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -140,9 +143,9 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [formData, closeModal]);
 
-  const handleUpdate = async () => {
+  const handleUpdate = useCallback(async () => {
     if (!selectedClient) return;
 
     setIsLoading(true);
@@ -162,18 +165,16 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
         return;
       }
 
-      setClients((prev) =>
-        prev.map((c) => (c.id === selectedClient.id ? data : c))
-      );
+      setClients((prev) => prev.map((c) => (c.id === selectedClient.id ? data : c)));
       closeModal();
     } catch {
       setError("Failed to update client");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedClient, formData, closeModal]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!selectedClient) return;
 
     setIsLoading(true);
@@ -198,7 +199,17 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedClient, closeModal]);
+
+  const handleSubmit = useCallback(() => {
+    if (modalMode === "create") {
+      handleCreate();
+    } else if (modalMode === "edit") {
+      handleUpdate();
+    } else if (modalMode === "delete") {
+      handleDelete();
+    }
+  }, [modalMode, handleCreate, handleUpdate, handleDelete]);
 
   // Column definitions
   const columns: ColumnDef<Client>[] = useMemo(
@@ -352,273 +363,16 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
 
       {/* Modal */}
       {modalMode && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={closeModal}
-        >
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-          {/* Modal Content */}
-          <div
-            className="relative bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded w-full max-w-md mx-4 animate-fade-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
-              <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)]">
-                {modalMode === "create" && "Add New Client"}
-                {modalMode === "edit" && "Edit Client"}
-                {modalMode === "delete" && "Delete Client"}
-              </h2>
-            </div>
-
-            {/* Body */}
-            <div className="p-5">
-              {modalMode === "delete" ? (
-                <div>
-                  <p className="text-[var(--text-secondary)] text-[13px]">
-                    Are you sure you want to delete{" "}
-                    <span className="font-medium text-[var(--text-primary)]">
-                      {selectedClient?.name}
-                    </span>
-                    ? This action cannot be undone.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {/* Name */}
-                  <div>
-                    <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
-                      Client Name <span className="text-[var(--danger)]">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, name: e.target.value }))
-                      }
-                      className="
-                        w-full px-3 py-2 rounded text-[13px]
-                        bg-[var(--bg-surface)] border border-[var(--border-subtle)]
-                        text-[var(--text-primary)] placeholder-[var(--text-muted)]
-                        focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
-                        focus:outline-none transition-all duration-200
-                      "
-                      placeholder="Enter client name"
-                      autoFocus
-                    />
-                  </div>
-
-                  {/* Timesheet Code */}
-                  <div>
-                    <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
-                      Timesheet Code <span className="text-[var(--danger)]">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.timesheetCode}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, timesheetCode: e.target.value }))
-                      }
-                      className="
-                        w-full px-3 py-2 rounded text-[13px]
-                        bg-[var(--bg-surface)] border border-[var(--border-subtle)]
-                        text-[var(--text-primary)] placeholder-[var(--text-muted)]
-                        focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
-                        focus:outline-none transition-all duration-200
-                      "
-                      placeholder="e.g., ACME-001"
-                    />
-                  </div>
-
-                  {/* Invoiced Name */}
-                  <div>
-                    <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
-                      Invoiced Name
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.invoicedName}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, invoicedName: e.target.value }))
-                      }
-                      className="
-                        w-full px-3 py-2 rounded text-[13px]
-                        bg-[var(--bg-surface)] border border-[var(--border-subtle)]
-                        text-[var(--text-primary)] placeholder-[var(--text-muted)]
-                        focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
-                        focus:outline-none transition-all duration-200
-                      "
-                      placeholder="Name for outgoing invoices"
-                    />
-                  </div>
-
-                  {/* Invoice Attn */}
-                  <div>
-                    <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
-                      Invoice Attn
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.invoiceAttn}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, invoiceAttn: e.target.value }))
-                      }
-                      className="
-                        w-full px-3 py-2 rounded text-[13px]
-                        bg-[var(--bg-surface)] border border-[var(--border-subtle)]
-                        text-[var(--text-primary)] placeholder-[var(--text-muted)]
-                        focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
-                        focus:outline-none transition-all duration-200
-                      "
-                      placeholder="Contact person for invoices"
-                    />
-                  </div>
-
-                  {/* Email */}
-                  <div>
-                    <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, email: e.target.value }))
-                      }
-                      className="
-                        w-full px-3 py-2 rounded text-[13px]
-                        bg-[var(--bg-surface)] border border-[var(--border-subtle)]
-                        text-[var(--text-primary)] placeholder-[var(--text-muted)]
-                        focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
-                        focus:outline-none transition-all duration-200
-                      "
-                      placeholder="client@example.com"
-                    />
-                  </div>
-
-                  {/* Hourly Rate */}
-                  <div>
-                    <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
-                      Hourly Rate (EUR)
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-[13px]">
-                        €
-                      </span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.hourlyRate}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            hourlyRate: e.target.value,
-                          }))
-                        }
-                        className="
-                          w-full pl-7 pr-3 py-2 rounded text-[13px]
-                          bg-[var(--bg-surface)] border border-[var(--border-subtle)]
-                          text-[var(--text-primary)] placeholder-[var(--text-muted)]
-                          focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
-                          focus:outline-none transition-all duration-200
-                        "
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Status */}
-                  <div>
-                    <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
-                      Status
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          status: e.target.value as ClientStatus,
-                        }))
-                      }
-                      className="
-                        w-full px-3 py-2 rounded text-[13px]
-                        bg-[var(--bg-surface)] border border-[var(--border-subtle)]
-                        text-[var(--text-primary)]
-                        focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
-                        focus:outline-none transition-all duration-200
-                        cursor-pointer
-                      "
-                    >
-                      <option value="ACTIVE">Active</option>
-                      <option value="INACTIVE">Inactive</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {error && (
-                <div className="mt-3 px-3 py-2 rounded bg-[var(--danger-bg)] text-[var(--danger)] text-[13px]">
-                  {error}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-5 py-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-2">
-              <button
-                onClick={closeModal}
-                disabled={isLoading}
-                className="
-                  px-3 py-1.5 rounded
-                  bg-[var(--bg-surface)] border border-[var(--border-subtle)]
-                  text-[var(--text-secondary)] text-[13px] font-medium
-                  hover:border-[var(--border-accent)] hover:text-[var(--text-primary)]
-                  transition-all duration-200
-                  disabled:opacity-50
-                "
-              >
-                Cancel
-              </button>
-              {modalMode === "delete" ? (
-                <button
-                  onClick={handleDelete}
-                  disabled={isLoading}
-                  className="
-                    px-3 py-1.5 rounded
-                    bg-[var(--danger)] text-white text-[13px] font-medium
-                    hover:opacity-90
-                    transition-all duration-200
-                    disabled:opacity-50
-                  "
-                >
-                  {isLoading ? "Deleting..." : "Delete"}
-                </button>
-              ) : (
-                <button
-                  onClick={modalMode === "create" ? handleCreate : handleUpdate}
-                  disabled={isLoading || !formData.name.trim() || !formData.timesheetCode.trim()}
-                  className="
-                    px-3 py-1.5 rounded
-                    bg-[var(--accent-pink)] text-[var(--bg-deep)] text-[13px] font-medium
-                    hover:bg-[var(--accent-pink-dim)]
-                    transition-all duration-200
-                    disabled:opacity-50
-                  "
-                >
-                  {isLoading
-                    ? "Saving..."
-                    : modalMode === "create"
-                    ? "Create Client"
-                    : "Save Changes"}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <ClientModal
+          mode={modalMode}
+          formData={formData}
+          selectedClientName={selectedClient?.name}
+          isLoading={isLoading}
+          error={error}
+          onFormChange={handleFormChange}
+          onSubmit={handleSubmit}
+          onClose={closeModal}
+        />
       )}
     </div>
   );

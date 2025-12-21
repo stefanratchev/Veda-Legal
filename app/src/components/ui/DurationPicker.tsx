@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useState, useRef, forwardRef, useImperativeHandle, useCallback } from "react";
+import { useClickOutside } from "@/hooks/useClickOutside";
 
 interface DurationPickerProps {
   hours: number;
@@ -38,16 +39,11 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
   }), [disabled, hours]);
 
   // Close dropdown on outside click
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        setStep("hours");
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+  const handleClickOutside = useCallback(() => {
+    setIsOpen(false);
+    setStep("hours");
   }, []);
+  useClickOutside(dropdownRef, handleClickOutside, isOpen);
 
   // Handle toggle - reset state when opening
   const handleToggle = () => {

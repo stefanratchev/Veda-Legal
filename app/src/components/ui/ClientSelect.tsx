@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useClickOutside } from "@/hooks/useClickOutside";
 
 interface Client {
   id: string;
@@ -48,16 +49,11 @@ export function ClientSelect({
   }, [clients, search]);
 
   // Close dropdown on outside click
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        setSearch("");
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+  const handleClickOutside = useCallback(() => {
+    setIsOpen(false);
+    setSearch("");
   }, []);
+  useClickOutside(dropdownRef, handleClickOutside, isOpen);
 
   // Focus search input when opened
   useEffect(() => {

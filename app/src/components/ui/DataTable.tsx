@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { SortState, DataTableProps } from "./table-types";
 
 export function DataTable<TData>({
@@ -14,30 +14,19 @@ export function DataTable<TData>({
   // Sorting state
   const [sortState, setSortState] = useState<SortState | null>(null);
 
-  // Pagination state with data length tracking for reset
-  const [paginationState, setPaginationState] = useState({
-    currentPage: 1,
-    dataLength: data.length,
-  });
+  // Pagination state - simple current page tracking
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Derive current page, resetting if data length changed
-  const currentPage =
-    data.length !== paginationState.dataLength ? 1 : paginationState.currentPage;
+  // Track previous data length to detect changes and reset pagination
+  const prevDataLengthRef = useRef(data.length);
 
-  // Update state if we detected a data length change
-  if (data.length !== paginationState.dataLength) {
-    setPaginationState({ currentPage: 1, dataLength: data.length });
-  }
-
-  const setCurrentPage = useCallback((pageOrUpdater: number | ((p: number) => number)) => {
-    setPaginationState((prev) => ({
-      ...prev,
-      currentPage:
-        typeof pageOrUpdater === "function"
-          ? pageOrUpdater(prev.currentPage)
-          : pageOrUpdater,
-    }));
-  }, []);
+  // Reset to page 1 when data length changes (e.g., filter applied)
+  useEffect(() => {
+    if (data.length !== prevDataLengthRef.current) {
+      prevDataLengthRef.current = data.length;
+      setCurrentPage(1);
+    }
+  }, [data.length]);
 
   // Sort handler
   const handleSort = useCallback((columnId: string) => {
@@ -88,11 +77,8 @@ export function DataTable<TData>({
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
 
-  // Clamp current page to valid range (computed, not via effect)
+  // Clamp current page to valid range (derived state, no useEffect needed)
   const validCurrentPage = Math.min(currentPage, totalPages);
-  if (validCurrentPage !== currentPage) {
-    setCurrentPage(validCurrentPage);
-  }
 
   // Paginated data (use validCurrentPage)
   const paginatedData = useMemo(() => {

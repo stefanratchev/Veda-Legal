@@ -14,124 +14,116 @@ Veda Legal Timesheets - A Next.js application for legal practice management and 
 - **Styling:** Tailwind CSS v4 with custom dark theme design system
 - **Auth:** NextAuth.js with Microsoft 365 (Azure AD) SSO
 - **Database:** PostgreSQL with Prisma ORM v7
-- **Hosting target:** Azure (EU region, with future on-prem migration capability)
+- **Testing:** Vitest + React Testing Library
+- **Hosting target:** Azure (EU region)
+
+## Commands
+
+All commands run from the `app/` directory:
+
+```bash
+npm run dev            # Start development server (localhost:3000)
+npm run build          # Build for production
+npm run lint           # Run ESLint
+npm run test           # Run tests in watch mode
+npm run test:coverage  # Run tests with coverage report
+npm run db:generate    # Generate Prisma client
+npm run db:migrate     # Run database migrations
+npm run db:studio      # Open Prisma Studio
+```
 
 ## Project Structure
 
 ```
-app/                        # Next.js application
-├── src/
-│   ├── app/               # App Router pages
-│   │   ├── api/auth/      # NextAuth API routes
-│   │   ├── login/         # Login page
-│   │   ├── page.tsx       # Dashboard (protected)
-│   │   ├── layout.tsx     # Root layout with fonts
-│   │   └── globals.css    # Design system CSS variables
-│   ├── components/
-│   │   ├── layout/        # Sidebar, Header
-│   │   ├── dashboard/     # Dashboard components
-│   │   └── Providers.tsx  # Session provider
-│   ├── lib/
-│   │   ├── auth.ts        # NextAuth configuration
-│   │   └── db.ts          # Prisma client
-│   └── middleware.ts      # Auth route protection
-├── prisma/
-│   └── schema.prisma      # Database schema
-├── .env.example           # Environment template
-└── package.json
+app/src/
+├── app/                    # Next.js App Router
+│   ├── (authenticated)/   # Protected route group (requires login)
+│   │   ├── clients/       # Client management
+│   │   ├── timesheets/    # Time entry page
+│   │   ├── error.tsx      # Error boundary
+│   │   └── page.tsx       # Dashboard
+│   ├── api/               # API routes
+│   │   ├── clients/       # Client CRUD
+│   │   └── timesheets/    # Time entry CRUD + /dates endpoint
+│   └── login/             # Public login page
+├── components/
+│   ├── layout/            # Sidebar, Header
+│   ├── clients/           # Client list, modal
+│   ├── timesheets/        # WeekStrip, EntryForm, EntryCard
+│   └── ui/                # DataTable, DurationPicker, ClientSelect
+├── hooks/                 # Custom React hooks (useClickOutside)
+├── lib/                   # Utilities
+│   ├── api-utils.ts       # Auth helpers, validation functions
+│   ├── date-utils.ts      # Date formatting utilities
+│   ├── auth.ts            # NextAuth configuration
+│   └── db.ts              # Prisma client singleton
+├── types/                 # Shared TypeScript types
+└── test/                  # Test setup
 ```
-
-## Commands
-
-```bash
-cd app
-npm run dev          # Start development server (localhost:3000)
-npm run build        # Build for production
-npm run lint         # Run ESLint
-npm run db:generate  # Generate Prisma client
-npm run db:migrate   # Run database migrations
-npm run db:studio    # Open Prisma Studio
-```
-
-## Database Setup
-
-**Development database:** Local PostgreSQL 17 (Homebrew)
-
-PostgreSQL runs as a background service via Homebrew (auto-starts at login, runs continuously). Data persists in `/opt/homebrew/var/postgresql@17`. The idle footprint is minimal (~20-50MB RAM, negligible CPU/battery impact).
-
-### Prerequisites
-
-```bash
-brew install postgresql@17
-brew services start postgresql@17
-/opt/homebrew/opt/postgresql@17/bin/createdb veda_legal_dev
-```
-
-### Schema Changes Workflow
-
-After modifying `prisma/schema.prisma`:
-
-1. **Generate Prisma client:** `npm run db:generate`
-2. **Apply migration:** `npm run db:migrate` (or `npx prisma db push` for quick dev iterations)
-3. **Restart dev server:** Required for Prisma client changes to take effect
-
-### Troubleshooting
-
-- **"Column does not exist" errors:** Restart the dev server after `db:generate`
-- **"Can't reach database":** Check if PostgreSQL is running: `brew services list | grep postgresql`
-- **Start PostgreSQL:** `brew services start postgresql@17`
-- **Stop PostgreSQL:** `brew services stop postgresql@17`
-- **Connect directly:** `/opt/homebrew/opt/postgresql@17/bin/psql veda_legal_dev`
-
-## Design System
-
-Dark theme aligned with veda.uk branding. Key CSS variables in `app/src/app/globals.css`:
-
-| Variable | Value | Use |
-|----------|-------|-----|
-| `--bg-deep` | #151515 | Page background |
-| `--bg-elevated` | #1c1c1c | Sidebar, cards |
-| `--bg-surface` | #383838 | Inputs, nested elements |
-| `--accent-pink` | #c97b98 | Primary brand accent (Dusty Rose) |
-| `--text-primary` | #ffffff | Headings |
-| `--text-secondary` | #d1d1d1 | Body text |
-| `--text-muted` | #888888 | Labels, captions |
-
-**Typography:** Roboto Condensed (headings) + Roboto (body) — matching veda.uk
-
-**Animations:** No entrance animations on page navigation — pages should render instantly. Use `animate-fade-up` only for interactive elements that appear on user action (dropdowns, modals, popovers).
-
-## Database Models
-
-- **User** - Employees linked to MS365 SSO (roles: ADMIN, PARTNER, ASSOCIATE, PARALEGAL, EMPLOYEE)
-- **Client** - Client records with timesheetCode, practice area, and status (ACTIVE/INACTIVE)
-- **TimeEntry** - Billable hours logged against clients
 
 ## Architecture Patterns
 
-- **Server Components** fetch data directly via Prisma, serialize for client components
+### Data Flow
+- **Server Components** fetch data via Prisma, serialize Decimal fields to numbers
 - **Client Components** (`"use client"`) handle interactivity, call API routes for mutations
-- **API Routes** (`app/api/`) use `requireAuth()` and `requireWriteAccess()` helpers for auth
-- **Role-based access:** ADMIN, PARTNER, ASSOCIATE have write access; others read-only
+- **API Routes** use shared helpers from `lib/api-utils.ts`:
+  - `requireAuth()` - Validates session (supports both server session and JWT)
+  - `requireWriteAccess()` - Checks user has ADMIN, PARTNER, or ASSOCIATE role
+
+### Shared Code
+- **Types:** Import from `@/types` for Client, TimeEntry, FormData interfaces
+- **Hooks:** `useClickOutside` for dropdown/modal close behavior
+- **Validation:** Use `isValidEmail`, `isValidHours`, `isValidDescription` from api-utils
+
+### Role-Based Access
+| Role | Read | Write |
+|------|------|-------|
+| ADMIN, PARTNER, ASSOCIATE | Yes | Yes |
+| PARALEGAL, EMPLOYEE | Yes | No |
+
+## Database
+
+**Development:** Local PostgreSQL 17 via Homebrew
+
+```bash
+# Start PostgreSQL
+brew services start postgresql@17
+
+# After schema changes
+npm run db:generate && npm run db:migrate
+# Then restart dev server
+```
+
+**Troubleshooting:**
+- "Column does not exist" → Restart dev server after `db:generate`
+- "Can't reach database" → Check `brew services list | grep postgresql`
+
+## Design System
+
+Dark theme with CSS variables in `globals.css`:
+- `--bg-deep` (#151515) - Page background
+- `--bg-elevated` (#1c1c1c) - Cards, sidebar
+- `--bg-surface` (#383838) - Inputs
+- `--accent-pink` (#c97b98) - Primary accent (Dusty Rose)
+
+**Typography:** Roboto Condensed (headings) + Roboto (body)
+
+**Animation rule:** No page entrance animations. Use `animate-fade-up` only for interactive elements (dropdowns, modals, popovers).
 
 ## Environment Variables
 
 Required in `app/.env`:
 ```
+DATABASE_URL=postgresql://...
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=<openssl rand -base64 32>
 AZURE_AD_CLIENT_ID=<from Azure Portal>
 AZURE_AD_CLIENT_SECRET=<from Azure Portal>
 AZURE_AD_TENANT_ID=<from Azure Portal>
-DATABASE_URL=postgresql://...
 ```
 
 ## Domain Terminology
 
-- **Client**: External party receiving legal services
-- **Employee**: Internal staff (partners, associates, paralegals)
-- **Case/Matter**: Legal matter being handled
-- **Timesheet**: Record of billable/non-billable hours
-- **Billable Hours**: Time chargeable to clients
-- **Practice Area**: Legal specialty (Corporate, Family, IP, etc.)
-
+- **Client**: External party receiving legal services (not to be confused with client-side code)
+- **TimeEntry**: Billable hours logged against a client
+- **timesheetCode**: Unique short code for each client (e.g., "VED001")

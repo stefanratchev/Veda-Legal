@@ -28,9 +28,6 @@ model User {
 
 enum UserRole {
   ADMIN
-  PARTNER
-  ASSOCIATE
-  PARALEGAL
   EMPLOYEE
 }
 

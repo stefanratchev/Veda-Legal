@@ -17,31 +17,48 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, profile }) {
-      // Create user in database on first login
+      // Whitelist check: only allow users already in the database
       // Azure AD may provide email in different fields depending on configuration
       const azureProfile = profile as { email?: string; preferred_username?: string; name?: string } | undefined;
       const email = user.email || azureProfile?.email || azureProfile?.preferred_username;
 
-      if (email) {
-        try {
-          await db.user.upsert({
-            where: { email },
-            update: {
-              lastLogin: new Date(),
-            },
-            create: {
-              email,
-              name: user.name || azureProfile?.name,
-              image: user.image,
-              role: "EMPLOYEE",
-              lastLogin: new Date(),
-            },
-          });
-        } catch (error) {
-          console.error("Error updating user on sign in:", error);
-        }
+      if (!email) {
+        return false;
       }
-      return true;
+
+      try {
+        // Check if user exists in whitelist
+        const existingUser = await db.user.findUnique({
+          where: { email },
+          select: { id: true, status: true },
+        });
+
+        // Not in whitelist - block login
+        if (!existingUser) {
+          return "/login?error=NotAuthorized";
+        }
+
+        // Deactivated - block login
+        if (existingUser.status === "INACTIVE") {
+          return "/login?error=AccountDeactivated";
+        }
+
+        // PENDING or ACTIVE - allow login, update info from Azure AD
+        await db.user.update({
+          where: { id: existingUser.id },
+          data: {
+            status: "ACTIVE",
+            name: user.name || azureProfile?.name,
+            image: user.image,
+            lastLogin: new Date(),
+          },
+        });
+
+        return true;
+      } catch (error) {
+        console.error("Error during sign in check:", error);
+        return false;
+      }
     },
     async jwt({ token, account, profile, user }) {
       // Persist the Azure AD access token to the JWT

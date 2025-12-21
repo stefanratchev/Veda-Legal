@@ -1,9 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
-import { getToken } from "next-auth/jwt";
+import { requireAdmin, errorResponse, successResponse } from "@/lib/auth-utils";
 
 const CLIENT_SELECT = {
   id: true,
@@ -17,63 +15,18 @@ const CLIENT_SELECT = {
   createdAt: true,
 } as const;
 
-// Roles that can modify client data
-const WRITE_ROLES = ["ADMIN", "PARTNER", "ASSOCIATE"];
-
-async function requireAuth(request: NextRequest) {
-  // Try getServerSession first
-  const session = await getServerSession(authOptions);
-  if (session?.user) {
-    return { session };
-  }
-
-  // Fallback: check JWT token directly (works better with chunked cookies)
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-  if (token) {
-    return { session: { user: { name: token.name, email: token.email } } };
-  }
-
-  return { error: "Unauthorized", status: 401 };
-}
-
-async function requireWriteAccess(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if ("error" in auth) return auth;
-
-  const userEmail = auth.session.user?.email;
-
-  // If user has email, check their role in the database
-  if (userEmail) {
-    const user = await db.user.findUnique({
-      where: { email: userEmail },
-      select: { role: true },
-    });
-
-    // If user exists in DB and doesn't have write role, deny access
-    if (user && !WRITE_ROLES.includes(user.role)) {
-      return { error: "Insufficient permissions", status: 403 };
-    }
-  }
-
-  // Allow access if: authenticated via SSO (even without email in session)
-  // or user doesn't exist in DB yet (new SSO user)
-  return { session: auth.session };
-}
-
-function serializeClient<T extends { hourlyRate: Prisma.Decimal | null }>(
-  client: T
-) {
+function serializeClient<T extends { hourlyRate: Prisma.Decimal | null }>(client: T) {
   return {
     ...client,
     hourlyRate: client.hourlyRate ? Number(client.hourlyRate) : null,
   };
 }
 
-// GET /api/clients - List all clients
+// GET /api/clients - List all clients (ADMIN only)
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    return errorResponse(auth.error, auth.status);
   }
 
   try {
@@ -82,65 +35,55 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(clients.map(serializeClient));
+    return successResponse(clients.map(serializeClient));
   } catch (error) {
     console.error("Database error fetching clients:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch clients" },
-      { status: 500 }
-    );
+    return errorResponse("Failed to fetch clients", 500);
   }
 }
 
-// POST /api/clients - Create client
+// POST /api/clients - Create client (ADMIN only)
 export async function POST(request: NextRequest) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    return errorResponse(auth.error, auth.status);
   }
 
   let body;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return errorResponse("Invalid JSON", 400);
   }
 
   const { name, timesheetCode, invoicedName, invoiceAttn, email, hourlyRate, status } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    return errorResponse("Name is required", 400);
   }
 
   if (!timesheetCode || typeof timesheetCode !== "string" || timesheetCode.trim().length === 0) {
-    return NextResponse.json({ error: "Timesheet code is required" }, { status: 400 });
+    return errorResponse("Timesheet code is required", 400);
   }
 
-  // Check if timesheetCode is unique
   const existingClient = await db.client.findUnique({
     where: { timesheetCode: timesheetCode.trim() },
   });
   if (existingClient) {
-    return NextResponse.json({ error: "Timesheet code already exists" }, { status: 400 });
+    return errorResponse("Timesheet code already exists", 400);
   }
 
   if (email && typeof email === "string" && email.length > 0) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: "Invalid email format" },
-        { status: 400 }
-      );
+      return errorResponse("Invalid email format", 400);
     }
   }
 
   if (hourlyRate !== undefined && hourlyRate !== null && hourlyRate !== "") {
     const rate = Number(hourlyRate);
     if (isNaN(rate) || rate < 0) {
-      return NextResponse.json(
-        { error: "Hourly rate must be a positive number" },
-        { status: 400 }
-      );
+      return errorResponse("Hourly rate must be a positive number", 400);
     }
   }
 
@@ -158,54 +101,41 @@ export async function POST(request: NextRequest) {
       select: CLIENT_SELECT,
     });
 
-    return NextResponse.json(serializeClient(client));
+    return successResponse(serializeClient(client));
   } catch (error) {
     console.error("Database error creating client:", error);
-    return NextResponse.json(
-      { error: "Failed to create client" },
-      { status: 500 }
-    );
+    return errorResponse("Failed to create client", 500);
   }
 }
 
-// PATCH /api/clients - Update client
+// PATCH /api/clients - Update client (ADMIN only)
 export async function PATCH(request: NextRequest) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    return errorResponse(auth.error, auth.status);
   }
 
   let body;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return errorResponse("Invalid JSON", 400);
   }
 
   const { id, name, timesheetCode, invoicedName, invoiceAttn, email, hourlyRate, status } = body;
 
   if (!id) {
-    return NextResponse.json(
-      { error: "Client ID is required" },
-      { status: 400 }
-    );
+    return errorResponse("Client ID is required", 400);
   }
 
-  if (
-    name !== undefined &&
-    (typeof name !== "string" || name.trim().length === 0)
-  ) {
-    return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
+  if (name !== undefined && (typeof name !== "string" || name.trim().length === 0)) {
+    return errorResponse("Name cannot be empty", 400);
   }
 
-  if (
-    timesheetCode !== undefined &&
-    (typeof timesheetCode !== "string" || timesheetCode.trim().length === 0)
-  ) {
-    return NextResponse.json({ error: "Timesheet code cannot be empty" }, { status: 400 });
+  if (timesheetCode !== undefined && (typeof timesheetCode !== "string" || timesheetCode.trim().length === 0)) {
+    return errorResponse("Timesheet code cannot be empty", 400);
   }
 
-  // Check if timesheetCode is unique (if being changed)
   if (timesheetCode !== undefined) {
     const existingClient = await db.client.findFirst({
       where: {
@@ -214,27 +144,21 @@ export async function PATCH(request: NextRequest) {
       },
     });
     if (existingClient) {
-      return NextResponse.json({ error: "Timesheet code already exists" }, { status: 400 });
+      return errorResponse("Timesheet code already exists", 400);
     }
   }
 
   if (email && typeof email === "string" && email.length > 0) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: "Invalid email format" },
-        { status: 400 }
-      );
+      return errorResponse("Invalid email format", 400);
     }
   }
 
   if (hourlyRate !== undefined && hourlyRate !== null && hourlyRate !== "") {
     const rate = Number(hourlyRate);
     if (isNaN(rate) || rate < 0) {
-      return NextResponse.json(
-        { error: "Hourly rate must be a positive number" },
-        { status: 400 }
-      );
+      return errorResponse("Hourly rate must be a positive number", 400);
     }
   }
 
@@ -256,42 +180,31 @@ export async function PATCH(request: NextRequest) {
       select: CLIENT_SELECT,
     });
 
-    return NextResponse.json(serializeClient(client));
+    return successResponse(serializeClient(client));
   } catch (error) {
-    // Check for Prisma "Record not found" error
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
-      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return errorResponse("Client not found", 404);
     }
     console.error("Database error updating client:", error);
-    return NextResponse.json(
-      { error: "Failed to update client" },
-      { status: 500 }
-    );
+    return errorResponse("Failed to update client", 500);
   }
 }
 
-// DELETE /api/clients - Delete client
+// DELETE /api/clients - Delete client (ADMIN only)
 export async function DELETE(request: NextRequest) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    return errorResponse(auth.error, auth.status);
   }
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
   if (!id) {
-    return NextResponse.json(
-      { error: "Client ID is required" },
-      { status: 400 }
-    );
+    return errorResponse("Client ID is required", 400);
   }
 
   try {
-    // Use transaction to prevent race condition between check and delete
     await db.$transaction(async (tx) => {
       const client = await tx.client.findUnique({
         where: { id },
@@ -309,26 +222,17 @@ export async function DELETE(request: NextRequest) {
       await tx.client.delete({ where: { id } });
     });
 
-    return NextResponse.json({ success: true });
+    return successResponse({ success: true });
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === "NOT_FOUND") {
-        return NextResponse.json(
-          { error: "Client not found" },
-          { status: 404 }
-        );
+        return errorResponse("Client not found", 404);
       }
       if (error.message === "HAS_TIME_ENTRIES") {
-        return NextResponse.json(
-          { error: "Cannot delete client with existing time entries" },
-          { status: 400 }
-        );
+        return errorResponse("Cannot delete client with existing time entries", 400);
       }
     }
     console.error("Database error deleting client:", error);
-    return NextResponse.json(
-      { error: "Failed to delete client" },
-      { status: 500 }
-    );
+    return errorResponse("Failed to delete client", 500);
   }
 }

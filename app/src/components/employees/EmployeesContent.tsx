@@ -45,6 +45,27 @@ const roleStyles: Record<
   },
 };
 
+const statusStyles: Record<
+  UserStatus,
+  { bgColor: string; textColor: string; label: string }
+> = {
+  PENDING: {
+    bgColor: "rgba(234, 179, 8, 0.15)",
+    textColor: "#eab308",
+    label: "Invited",
+  },
+  ACTIVE: {
+    bgColor: "rgba(34, 197, 94, 0.15)",
+    textColor: "#22c55e",
+    label: "Active",
+  },
+  INACTIVE: {
+    bgColor: "rgba(107, 114, 128, 0.15)",
+    textColor: "#6b7280",
+    label: "Deactivated",
+  },
+};
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "Never";
   const date = new Date(dateStr);
@@ -216,6 +237,22 @@ export function EmployeesContent({
                 className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: style.dotColor }}
               />
+              {style.label}
+            </span>
+          );
+        },
+      },
+      {
+        id: "status",
+        header: "Status",
+        accessor: (employee) => employee.status,
+        cell: (employee) => {
+          const style = statusStyles[employee.status];
+          return (
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium"
+              style={{ backgroundColor: style.bgColor, color: style.textColor }}
+            >
               {style.label}
             </span>
           );

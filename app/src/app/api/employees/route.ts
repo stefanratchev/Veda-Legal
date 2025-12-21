@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { Prisma, UserRole, UserStatus } from "@prisma/client";
 import {
@@ -7,6 +7,7 @@ import {
   errorResponse,
   successResponse,
 } from "@/lib/auth-utils";
+import { isValidEmail } from "@/lib/api-utils";
 
 // Valid roles for the simplified two-role system
 const VALID_ROLES: UserRole[] = ["ADMIN", "EMPLOYEE"];
@@ -113,5 +114,72 @@ export async function PATCH(request: NextRequest) {
     }
     console.error("Database error updating employee:", error);
     return errorResponse("Failed to update employee", 500);
+  }
+}
+
+// POST /api/employees - Create new employee
+// Only ADMIN can create
+export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if ("error" in auth) {
+    return errorResponse(auth.error, auth.status);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON", 400);
+  }
+
+  const { email, name, role } = body;
+
+  // Validate email
+  if (!email || typeof email !== "string") {
+    return errorResponse("Email is required", 400);
+  }
+  if (!isValidEmail(email.trim())) {
+    return errorResponse("Invalid email format", 400);
+  }
+
+  // Validate role
+  if (!role || !VALID_ROLES.includes(role)) {
+    return errorResponse("Valid role is required (ADMIN or EMPLOYEE)", 400);
+  }
+
+  // Validate name if provided
+  if (name !== undefined && name !== null) {
+    if (typeof name !== "string") {
+      return errorResponse("Name must be a string", 400);
+    }
+    if (name.trim().length > MAX_NAME_LENGTH) {
+      return errorResponse(`Name cannot exceed ${MAX_NAME_LENGTH} characters`, 400);
+    }
+  }
+
+  try {
+    // Check for existing user
+    const existing = await db.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+
+    if (existing) {
+      return errorResponse("An employee with this email already exists", 409);
+    }
+
+    const employee = await db.user.create({
+      data: {
+        email: email.trim().toLowerCase(),
+        name: name?.trim() || null,
+        role,
+        status: "PENDING",
+      },
+      select: EMPLOYEE_SELECT,
+    });
+
+    return NextResponse.json(serializeEmployee(employee), { status: 201 });
+  } catch (error) {
+    console.error("Database error creating employee:", error);
+    return errorResponse("Failed to create employee", 500);
   }
 }

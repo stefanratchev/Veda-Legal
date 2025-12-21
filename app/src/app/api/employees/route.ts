@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { Prisma, UserRole } from "@prisma/client";
+import { Prisma, UserRole, UserStatus } from "@prisma/client";
 import {
   requireAuth,
   requireAdmin,
@@ -18,6 +18,7 @@ const EMPLOYEE_SELECT = {
   name: true,
   email: true,
   role: true,
+  status: true,
   createdAt: true,
   lastLogin: true,
 } as const;
@@ -38,8 +39,14 @@ export async function GET(request: NextRequest) {
     return errorResponse(auth.error, auth.status);
   }
 
+  const { searchParams } = new URL(request.url);
+  const includeInactive = searchParams.get("includeInactive") === "true";
+
   try {
     const employees = await db.user.findMany({
+      where: includeInactive
+        ? undefined
+        : { status: { in: ["PENDING", "ACTIVE"] } },
       select: EMPLOYEE_SELECT,
       orderBy: { createdAt: "desc" },
     });

@@ -33,3 +33,6 @@ app/src/generated/
 # Misc
 *.pem
 *.log
+
+# Worktrees
+.worktrees/

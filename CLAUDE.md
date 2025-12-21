@@ -26,6 +26,7 @@ npm run dev            # Start development server (localhost:3000)
 npm run build          # Build for production
 npm run lint           # Run ESLint
 npm run test           # Run tests in watch mode
+npm run test -- file   # Run specific test file
 npm run test:coverage  # Run tests with coverage report
 npm run db:generate    # Generate Prisma client
 npm run db:migrate     # Run database migrations
@@ -38,17 +39,23 @@ npm run db:studio      # Open Prisma Studio
 app/src/
 ├── app/                    # Next.js App Router
 │   ├── (authenticated)/   # Protected route group (requires login)
+│   │   ├── billing/       # Billing/invoicing
 │   │   ├── clients/       # Client management
+│   │   ├── employees/     # Employee management
+│   │   ├── reports/       # Reports & analytics
 │   │   ├── timesheets/    # Time entry page
-│   │   ├── error.tsx      # Error boundary
 │   │   └── page.tsx       # Dashboard
 │   ├── api/               # API routes
 │   │   ├── clients/       # Client CRUD
+│   │   ├── employees/     # Employee CRUD
+│   │   ├── reports/       # Aggregated report data
 │   │   └── timesheets/    # Time entry CRUD + /dates endpoint
 │   └── login/             # Public login page
 ├── components/
 │   ├── layout/            # Sidebar, Header
 │   ├── clients/           # Client list, modal
+│   ├── employees/         # Employee list, modal
+│   ├── reports/           # Charts (Recharts), tabs, date pickers
 │   ├── timesheets/        # WeekStrip, EntryForm, EntryCard
 │   └── ui/                # DataTable, DurationPicker, ClientSelect
 ├── hooks/                 # Custom React hooks (useClickOutside)
@@ -76,10 +83,14 @@ app/src/
 - **Validation:** Use `isValidEmail`, `isValidHours`, `isValidDescription` from api-utils
 
 ### Role-Based Access
+Current schema has `ADMIN` and `EMPLOYEE` roles. The `api-utils.ts` WRITE_ROLES array determines write access:
+
 | Role | Read | Write |
 |------|------|-------|
-| ADMIN, PARTNER, ASSOCIATE | Yes | Yes |
-| PARALEGAL, EMPLOYEE | Yes | No |
+| ADMIN | Yes | Yes |
+| EMPLOYEE | Yes | No |
+
+**Note:** Code references PARTNER/ASSOCIATE roles for future expansion; add to schema when needed.
 
 ## Database
 

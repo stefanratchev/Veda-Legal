@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { SortState, DataTableProps } from "./table-types";
 
 export function DataTable<TData>({
@@ -16,17 +16,6 @@ export function DataTable<TData>({
 
   // Pagination state - simple current page tracking
   const [currentPage, setCurrentPage] = useState(1);
-
-  // Track previous data length to detect changes and reset pagination
-  const prevDataLengthRef = useRef(data.length);
-
-  // Reset to page 1 when data length changes (e.g., filter applied)
-  useEffect(() => {
-    if (data.length !== prevDataLengthRef.current) {
-      prevDataLengthRef.current = data.length;
-      setCurrentPage(1);
-    }
-  }, [data.length]);
 
   // Sort handler
   const handleSort = useCallback((columnId: string) => {

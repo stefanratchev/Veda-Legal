@@ -53,14 +53,16 @@ function LoginContent() {
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-[var(--danger-bg)] border border-[rgba(199,90,90,0.3)] rounded">
+            <div role="alert" className="mb-6 p-4 bg-[var(--danger-bg)] border border-[rgba(199,90,90,0.3)] rounded">
               <p className="text-sm text-[var(--danger)]">
+                {error === "NotAuthorized" && "Your account is not authorized to access this application. Please contact your administrator."}
+                {error === "AccountDeactivated" && "Your account has been deactivated. Please contact your administrator."}
                 {error === "OAuthSignin" && "Error starting sign in. Please try again."}
                 {error === "OAuthCallback" && "Error during sign in. Please try again."}
                 {error === "OAuthCreateAccount" && "Could not create account. Contact admin."}
                 {error === "Callback" && "Sign in failed. Please try again."}
                 {error === "AccessDenied" && "Access denied. Contact your administrator."}
-                {!["OAuthSignin", "OAuthCallback", "OAuthCreateAccount", "Callback", "AccessDenied"].includes(error) && "An error occurred. Please try again."}
+                {!["NotAuthorized", "AccountDeactivated", "OAuthSignin", "OAuthCallback", "OAuthCreateAccount", "Callback", "AccessDenied"].includes(error) && "An error occurred. Please try again."}
               </p>
             </div>
           )}

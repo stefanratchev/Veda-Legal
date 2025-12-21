@@ -13,6 +13,7 @@ export default async function EmployeesPage() {
       name: true,
       email: true,
       role: true,
+      status: true,
       createdAt: true,
       lastLogin: true,
     },

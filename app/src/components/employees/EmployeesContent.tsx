@@ -3,7 +3,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { UserRole, UserStatus } from "@prisma/client";
 import { DataTable } from "@/components/ui/DataTable";
-import { TableFilters } from "@/components/ui/TableFilters";
 import { ColumnDef } from "@/components/ui/table-types";
 import { EmployeeModal } from "./EmployeeModal";
 
@@ -127,23 +126,32 @@ export function EmployeesContent({
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | UserRole>("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL_ACTIVE" | "PENDING" | "INCLUDE_INACTIVE">("ALL_ACTIVE");
 
   // Filtered employees
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
+      // Status filter
+      if (statusFilter === "ALL_ACTIVE" && employee.status === "INACTIVE") {
+        return false;
+      }
+      if (statusFilter === "PENDING" && employee.status !== "PENDING") {
+        return false;
+      }
+      // Role filter
       if (roleFilter !== "ALL" && employee.role !== roleFilter) {
         return false;
       }
+      // Search
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        const matchesName =
-          employee.name?.toLowerCase().includes(query) ?? false;
+        const matchesName = employee.name?.toLowerCase().includes(query) ?? false;
         const matchesEmail = employee.email.toLowerCase().includes(query);
         return matchesName || matchesEmail;
       }
       return true;
     });
-  }, [employees, searchQuery, roleFilter]);
+  }, [employees, searchQuery, roleFilter, statusFilter]);
 
   // Modal handlers
   const openEditModal = useCallback((employee: Employee) => {
@@ -354,19 +362,78 @@ export function EmployeesContent({
       </div>
 
       {/* Filters */}
-      <TableFilters
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
-        searchPlaceholder="Search by name or email..."
-        filterOptions={[
-          { value: "ALL", label: "All Roles" },
-          { value: "ADMIN", label: "Admin" },
-          { value: "EMPLOYEE", label: "Employee" },
-        ]}
-        filterValue={roleFilter}
-        onFilterChange={(value) => setRoleFilter(value as "ALL" | UserRole)}
-        resultCount={filteredEmployees.length}
-      />
+      <div className="flex items-center gap-3 mb-4">
+        {/* Search Input */}
+        <div className="flex-1 max-w-md relative">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.5"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by name or email..."
+            className="
+              w-full pl-10 pr-3 py-2 rounded text-[13px]
+              bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+              text-[var(--text-primary)] placeholder-[var(--text-muted)]
+              focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+              focus:outline-none transition-all duration-200
+            "
+          />
+        </div>
+
+        {/* Role Filter */}
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value as "ALL" | UserRole)}
+          className="
+            px-3 py-2 rounded text-[13px]
+            bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+            text-[var(--text-primary)]
+            focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+            focus:outline-none transition-all duration-200
+            cursor-pointer
+          "
+        >
+          <option value="ALL">All Roles</option>
+          <option value="ADMIN">Admin</option>
+          <option value="EMPLOYEE">Employee</option>
+        </select>
+
+        {/* Status Filter */}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          className="
+            px-3 py-2 rounded text-[13px]
+            bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+            text-[var(--text-primary)]
+            focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+            focus:outline-none transition-all duration-200
+            cursor-pointer
+          "
+        >
+          <option value="ALL_ACTIVE">All Active</option>
+          <option value="PENDING">Pending Only</option>
+          <option value="INCLUDE_INACTIVE">Include Deactivated</option>
+        </select>
+
+        {/* Result Count */}
+        <div className="text-[13px] text-[var(--text-muted)]">
+          {filteredEmployees.length} {filteredEmployees.length === 1 ? "result" : "results"}
+        </div>
+      </div>
 
       {/* Table */}
       <DataTable

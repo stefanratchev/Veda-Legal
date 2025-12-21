@@ -13,6 +13,7 @@ interface Employee {
   email: string;
   role: UserRole;
   createdAt: string;
+  lastLogin: string | null;
 }
 
 interface EmployeesContentProps {
@@ -50,6 +51,37 @@ function formatDate(dateStr: string | null): string {
     day: "numeric",
     month: "short",
     year: "numeric",
+  });
+}
+
+function formatRelativeTime(dateStr: string | null): string {
+  if (!dateStr) return "Never";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? "" : "s"} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  if (diffDays < 30) return `${diffWeeks} week${diffWeeks === 1 ? "" : "s"} ago`;
+  return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
+}
+
+function formatAbsoluteTime(dateStr: string | null): string {
+  if (!dateStr) return "Never logged in";
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -195,6 +227,19 @@ export function EmployeesContent({
         cell: (employee) => (
           <span className="text-[13px] text-[var(--text-secondary)]">
             {formatDate(employee.createdAt)}
+          </span>
+        ),
+      },
+      {
+        id: "lastLogin",
+        header: "Last Login",
+        accessor: (employee) => employee.lastLogin || "",
+        cell: (employee) => (
+          <span
+            className="text-[13px] text-[var(--text-secondary)]"
+            title={formatAbsoluteTime(employee.lastLogin)}
+          >
+            {formatRelativeTime(employee.lastLogin)}
           </span>
         ),
       },

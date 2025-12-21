@@ -14,6 +14,7 @@ export default async function EmployeesPage() {
       email: true,
       role: true,
       createdAt: true,
+      lastLogin: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -22,6 +23,7 @@ export default async function EmployeesPage() {
   const serializedEmployees = employees.map((employee) => ({
     ...employee,
     createdAt: employee.createdAt.toISOString(),
+    lastLogin: employee.lastLogin?.toISOString() ?? null,
   }));
 
   return (

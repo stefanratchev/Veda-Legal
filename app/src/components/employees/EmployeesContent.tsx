@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { UserRole } from "@prisma/client";
+import { UserRole, UserStatus } from "@prisma/client";
 import { DataTable } from "@/components/ui/DataTable";
 import { TableFilters } from "@/components/ui/TableFilters";
 import { ColumnDef } from "@/components/ui/table-types";
@@ -12,6 +12,7 @@ interface Employee {
   name: string | null;
   email: string;
   role: UserRole;
+  status: UserStatus;
   createdAt: string;
   lastLogin: string | null;
 }

@@ -12,6 +12,9 @@ import { isValidEmail } from "@/lib/api-utils";
 // Valid roles for the simplified two-role system
 const VALID_ROLES: UserRole[] = ["ADMIN", "EMPLOYEE"];
 
+// Valid statuses for admin updates (PENDING is only for newly created users)
+const VALID_STATUSES: UserStatus[] = ["ACTIVE", "INACTIVE"];
+
 const MAX_NAME_LENGTH = 100;
 
 const EMPLOYEE_SELECT = {
@@ -74,7 +77,7 @@ export async function PATCH(request: NextRequest) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { id, name, role } = body;
+  const { id, name, role, status } = body;
 
   if (!id) {
     return errorResponse("Employee ID is required", 400);
@@ -93,9 +96,19 @@ export async function PATCH(request: NextRequest) {
     return errorResponse("Invalid role value", 400);
   }
 
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
+    return errorResponse("Invalid status value", 400);
+  }
+
+  // Prevent self-deactivation via PATCH
+  if (status === "INACTIVE" && id === auth.user.id) {
+    return errorResponse("You cannot deactivate yourself", 400);
+  }
+
   const updateData: Prisma.UserUpdateInput = {};
   if (name !== undefined) updateData.name = name.trim();
   if (role !== undefined) updateData.role = role;
+  if (status !== undefined) updateData.status = status;
 
   try {
     const employee = await db.user.update({

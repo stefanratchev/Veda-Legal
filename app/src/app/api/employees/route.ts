@@ -19,14 +19,12 @@ const EMPLOYEE_SELECT = {
   email: true,
   role: true,
   createdAt: true,
-  lastLogin: true,
 } as const;
 
-function serializeEmployee<T extends { createdAt: Date; lastLogin: Date | null }>(employee: T) {
+function serializeEmployee<T extends { createdAt: Date }>(employee: T) {
   return {
     ...employee,
     createdAt: employee.createdAt.toISOString(),
-    lastLogin: employee.lastLogin?.toISOString() ?? null,
   };
 }
 

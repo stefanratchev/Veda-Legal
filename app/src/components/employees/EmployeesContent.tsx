@@ -13,7 +13,6 @@ interface Employee {
   email: string;
   role: UserRole;
   createdAt: string;
-  lastLogin: string | null;
 }
 
 interface EmployeesContentProps {
@@ -54,17 +53,6 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return "Never";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function EmployeesContent({
   initialEmployees,
@@ -207,16 +195,6 @@ export function EmployeesContent({
         cell: (employee) => (
           <span className="text-[13px] text-[var(--text-secondary)]">
             {formatDate(employee.createdAt)}
-          </span>
-        ),
-      },
-      {
-        id: "lastLogin",
-        header: "Last Login",
-        accessor: (employee) => employee.lastLogin || "",
-        cell: (employee) => (
-          <span className="text-[13px] text-[var(--text-secondary)]">
-            {formatDateTime(employee.lastLogin)}
           </span>
         ),
       },

@@ -21,9 +21,10 @@ interface EmployeesContentProps {
   readOnly?: boolean;
 }
 
-type ModalMode = "edit" | null;
+type ModalMode = "create" | "edit" | null;
 
 interface FormData {
+  email: string;
   name: string;
   role: UserRole;
 }
@@ -117,6 +118,7 @@ export function EmployeesContent({
     null
   );
   const [formData, setFormData] = useState<FormData>({
+    email: "",
     name: "",
     role: "EMPLOYEE",
   });
@@ -154,8 +156,20 @@ export function EmployeesContent({
   }, [employees, searchQuery, roleFilter, statusFilter]);
 
   // Modal handlers
+  const openCreateModal = useCallback(() => {
+    setFormData({
+      email: "",
+      name: "",
+      role: "EMPLOYEE",
+    });
+    setSelectedEmployee(null);
+    setError(null);
+    setModalMode("create");
+  }, []);
+
   const openEditModal = useCallback((employee: Employee) => {
     setFormData({
+      email: employee.email,
       name: employee.name || "",
       role: employee.role,
     });
@@ -205,6 +219,38 @@ export function EmployeesContent({
       setIsLoading(false);
     }
   }, [selectedEmployee, formData, closeModal]);
+
+  // Create handler
+  const handleCreate = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          name: formData.name || undefined,
+          role: formData.role,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Failed to create employee");
+        return;
+      }
+
+      setEmployees((prev) => [data, ...prev]);
+      closeModal();
+    } catch {
+      setError("Failed to create employee");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [formData, closeModal]);
 
   // Column definitions
   const columns: ColumnDef<Employee>[] = useMemo(() => {
@@ -359,6 +405,17 @@ export function EmployeesContent({
               : "Manage your team members and their permissions"}
           </p>
         </div>
+        {!readOnly && (
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 px-3 py-1.5 rounded bg-[var(--accent-pink)] text-[var(--bg-deep)] text-[13px] font-medium hover:bg-[var(--accent-pink-dim)] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Employee
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -448,14 +505,15 @@ export function EmployeesContent({
       />
 
       {/* Modal - only shown when not in readOnly mode */}
-      {!readOnly && modalMode === "edit" && selectedEmployee && (
+      {!readOnly && modalMode && (
         <EmployeeModal
+          mode={modalMode}
           formData={formData}
-          selectedEmployeeName={selectedEmployee.name || selectedEmployee.email}
+          selectedEmployeeName={selectedEmployee?.name || selectedEmployee?.email}
           isLoading={isLoading}
           error={error}
           onFormChange={handleFormChange}
-          onSubmit={handleUpdate}
+          onSubmit={modalMode === "create" ? handleCreate : handleUpdate}
           onClose={closeModal}
         />
       )}

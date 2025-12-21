@@ -8,7 +8,9 @@ interface EmployeeStats {
   name: string;
   totalHours: number;
   clientCount: number;
-  topClient: string | null;
+  topClient: { name: string; hours: number } | null;
+  clients: { id: string; name: string; hours: number }[];
+  dailyHours: { date: string; hours: number }[];
 }
 
 interface Entry {
@@ -263,7 +265,9 @@ export function ByEmployeeTab({
                   {employee.clientCount}
                 </td>
                 <td className="px-4 py-3 text-[var(--text-muted)]">
-                  {employee.topClient ?? "—"}
+                  {employee.topClient
+                    ? `${employee.topClient.name} (${formatHours(employee.topClient.hours)})`
+                    : "—"}
                 </td>
               </tr>
             ))}

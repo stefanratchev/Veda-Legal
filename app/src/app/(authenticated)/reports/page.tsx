@@ -6,7 +6,6 @@ import {
   formatDateISO,
   getPreviousPeriod,
 } from "@/lib/date-utils";
-import { Decimal } from "@prisma/client/runtime/library";
 
 interface GetReportDataParams {
   startDate: Date;
@@ -82,16 +81,10 @@ async function getReportData({
 
   // Process each entry
   for (const entry of entries) {
-    const hours =
-      entry.hours instanceof Decimal
-        ? entry.hours.toNumber()
-        : Number(entry.hours);
-    const hourlyRate =
-      entry.client.hourlyRate instanceof Decimal
-        ? entry.client.hourlyRate.toNumber()
-        : entry.client.hourlyRate
-          ? Number(entry.client.hourlyRate)
-          : null;
+    const hours = Number(entry.hours);
+    const hourlyRate = entry.client.hourlyRate
+      ? Number(entry.client.hourlyRate)
+      : null;
     const dateStr = formatDateISO(entry.date);
 
     totalHours += hours;
@@ -233,10 +226,7 @@ async function getReportData({
   const transformedEntries = entries.map((entry) => ({
     id: entry.id,
     date: formatDateISO(entry.date),
-    hours:
-      entry.hours instanceof Decimal
-        ? entry.hours.toNumber()
-        : Number(entry.hours),
+    hours: Number(entry.hours),
     description: entry.description,
     userId: entry.user.id,
     userName: entry.user.name || "Unknown",

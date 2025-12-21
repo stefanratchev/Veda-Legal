@@ -15,7 +15,6 @@ model User {
   name          String?
   image         String?
   role          UserRole  @default(EMPLOYEE)
-  hourlyRate    Decimal?  @db.Decimal(10, 2)
   lastLogin     DateTime?
 
   // Relations

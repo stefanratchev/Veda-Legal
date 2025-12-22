@@ -299,14 +299,177 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
     [effectiveSelectedTopicId]
   );
 
-  // Separate active and inactive for both panels
-  const activeTopics = topics.filter((t) => t.status === "ACTIVE");
-  const inactiveTopics = topics.filter((t) => t.status === "INACTIVE");
+  // Reorder topic handler
+  const moveTopicInDirection = useCallback(
+    async (topic: Topic, direction: "up" | "down") => {
+      // Get topics in the same status group, sorted by displayOrder
+      const sameStatusTopics = topics
+        .filter((t) => t.status === topic.status)
+        .sort((a, b) => a.displayOrder - b.displayOrder);
 
-  const activeSubtopics =
-    selectedTopic?.subtopics.filter((s) => s.status === "ACTIVE") || [];
-  const inactiveSubtopics =
-    selectedTopic?.subtopics.filter((s) => s.status === "INACTIVE") || [];
+      const currentIndex = sameStatusTopics.findIndex((t) => t.id === topic.id);
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+      if (targetIndex < 0 || targetIndex >= sameStatusTopics.length) return;
+
+      const targetTopic = sameStatusTopics[targetIndex];
+      const currentOrder = topic.displayOrder;
+      const targetOrder = targetTopic.displayOrder;
+
+      // Optimistically update UI
+      setTopics((prev) =>
+        prev.map((t) => {
+          if (t.id === topic.id) return { ...t, displayOrder: targetOrder };
+          if (t.id === targetTopic.id) return { ...t, displayOrder: currentOrder };
+          return t;
+        })
+      );
+
+      try {
+        // Update both topics in parallel
+        const [res1, res2] = await Promise.all([
+          fetch(`/api/topics/${topic.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ displayOrder: targetOrder }),
+          }),
+          fetch(`/api/topics/${targetTopic.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ displayOrder: currentOrder }),
+          }),
+        ]);
+
+        if (!res1.ok || !res2.ok) {
+          // Revert on failure
+          setTopics((prev) =>
+            prev.map((t) => {
+              if (t.id === topic.id) return { ...t, displayOrder: currentOrder };
+              if (t.id === targetTopic.id) return { ...t, displayOrder: targetOrder };
+              return t;
+            })
+          );
+          setError("Failed to reorder topic");
+        }
+      } catch {
+        // Revert on failure
+        setTopics((prev) =>
+          prev.map((t) => {
+            if (t.id === topic.id) return { ...t, displayOrder: currentOrder };
+            if (t.id === targetTopic.id) return { ...t, displayOrder: targetOrder };
+            return t;
+          })
+        );
+        setError("Failed to reorder topic");
+      }
+    },
+    [topics]
+  );
+
+  // Reorder subtopic handler
+  const moveSubtopicInDirection = useCallback(
+    async (subtopic: Subtopic, direction: "up" | "down") => {
+      if (!selectedTopic) return;
+
+      // Get subtopics in the same status group, sorted by displayOrder
+      const sameStatusSubtopics = selectedTopic.subtopics
+        .filter((s) => s.status === subtopic.status)
+        .sort((a, b) => a.displayOrder - b.displayOrder);
+
+      const currentIndex = sameStatusSubtopics.findIndex((s) => s.id === subtopic.id);
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+      if (targetIndex < 0 || targetIndex >= sameStatusSubtopics.length) return;
+
+      const targetSubtopic = sameStatusSubtopics[targetIndex];
+      const currentOrder = subtopic.displayOrder;
+      const targetOrder = targetSubtopic.displayOrder;
+
+      // Optimistically update UI
+      setTopics((prev) =>
+        prev.map((t) =>
+          t.id === effectiveSelectedTopicId
+            ? {
+                ...t,
+                subtopics: t.subtopics.map((s) => {
+                  if (s.id === subtopic.id) return { ...s, displayOrder: targetOrder };
+                  if (s.id === targetSubtopic.id) return { ...s, displayOrder: currentOrder };
+                  return s;
+                }),
+              }
+            : t
+        )
+      );
+
+      try {
+        // Update both subtopics in parallel
+        const [res1, res2] = await Promise.all([
+          fetch(`/api/subtopics/${subtopic.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ displayOrder: targetOrder }),
+          }),
+          fetch(`/api/subtopics/${targetSubtopic.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ displayOrder: currentOrder }),
+          }),
+        ]);
+
+        if (!res1.ok || !res2.ok) {
+          // Revert on failure
+          setTopics((prev) =>
+            prev.map((t) =>
+              t.id === effectiveSelectedTopicId
+                ? {
+                    ...t,
+                    subtopics: t.subtopics.map((s) => {
+                      if (s.id === subtopic.id) return { ...s, displayOrder: currentOrder };
+                      if (s.id === targetSubtopic.id) return { ...s, displayOrder: targetOrder };
+                      return s;
+                    }),
+                  }
+                : t
+            )
+          );
+          setError("Failed to reorder subtopic");
+        }
+      } catch {
+        // Revert on failure
+        setTopics((prev) =>
+          prev.map((t) =>
+            t.id === effectiveSelectedTopicId
+              ? {
+                  ...t,
+                  subtopics: t.subtopics.map((s) => {
+                    if (s.id === subtopic.id) return { ...s, displayOrder: currentOrder };
+                    if (s.id === targetSubtopic.id) return { ...s, displayOrder: targetOrder };
+                    return s;
+                  }),
+                }
+              : t
+          )
+        );
+        setError("Failed to reorder subtopic");
+      }
+    },
+    [selectedTopic, effectiveSelectedTopicId]
+  );
+
+  // Separate active and inactive for both panels, sorted by displayOrder
+  const activeTopics = topics
+    .filter((t) => t.status === "ACTIVE")
+    .sort((a, b) => a.displayOrder - b.displayOrder);
+  const inactiveTopics = topics
+    .filter((t) => t.status === "INACTIVE")
+    .sort((a, b) => a.displayOrder - b.displayOrder);
+
+  const activeSubtopics = (
+    selectedTopic?.subtopics.filter((s) => s.status === "ACTIVE") || []
+  ).sort((a, b) => a.displayOrder - b.displayOrder);
+  const inactiveSubtopics = (
+    selectedTopic?.subtopics.filter((s) => s.status === "INACTIVE") || []
+  ).sort((a, b) => a.displayOrder - b.displayOrder);
 
   return (
     <div className="space-y-4">
@@ -358,7 +521,7 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
             </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
-              {activeTopics.map((topic) => (
+              {activeTopics.map((topic, index) => (
                 <TopicRow
                   key={topic.id}
                   topic={topic}
@@ -367,6 +530,10 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                   onEdit={() => openEditTopic(topic)}
                   onToggleStatus={() => toggleTopicStatus(topic)}
                   onDelete={() => deleteTopic(topic)}
+                  onMoveUp={() => moveTopicInDirection(topic, "up")}
+                  onMoveDown={() => moveTopicInDirection(topic, "down")}
+                  isFirst={index === 0}
+                  isLast={index === activeTopics.length - 1}
                 />
               ))}
 
@@ -376,7 +543,7 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                   <div className="px-4 py-2 bg-[var(--bg-surface)] text-[var(--text-muted)] text-xs font-medium">
                     Inactive ({inactiveTopics.length})
                   </div>
-                  {inactiveTopics.map((topic) => (
+                  {inactiveTopics.map((topic, index) => (
                     <TopicRow
                       key={topic.id}
                       topic={topic}
@@ -385,6 +552,10 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                       onEdit={() => openEditTopic(topic)}
                       onToggleStatus={() => toggleTopicStatus(topic)}
                       onDelete={() => deleteTopic(topic)}
+                      onMoveUp={() => moveTopicInDirection(topic, "up")}
+                      onMoveDown={() => moveTopicInDirection(topic, "down")}
+                      isFirst={index === 0}
+                      isLast={index === inactiveTopics.length - 1}
                       isInactive
                     />
                   ))}
@@ -434,13 +605,17 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
             </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
-              {activeSubtopics.map((subtopic) => (
+              {activeSubtopics.map((subtopic, index) => (
                 <SubtopicRow
                   key={subtopic.id}
                   subtopic={subtopic}
                   onEdit={() => openEditSubtopic(subtopic)}
                   onToggleStatus={() => toggleSubtopicStatus(subtopic)}
                   onDelete={() => deleteSubtopic(subtopic)}
+                  onMoveUp={() => moveSubtopicInDirection(subtopic, "up")}
+                  onMoveDown={() => moveSubtopicInDirection(subtopic, "down")}
+                  isFirst={index === 0}
+                  isLast={index === activeSubtopics.length - 1}
                 />
               ))}
 
@@ -450,13 +625,17 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                   <div className="px-4 py-2 bg-[var(--bg-surface)] text-[var(--text-muted)] text-xs font-medium">
                     Inactive ({inactiveSubtopics.length})
                   </div>
-                  {inactiveSubtopics.map((subtopic) => (
+                  {inactiveSubtopics.map((subtopic, index) => (
                     <SubtopicRow
                       key={subtopic.id}
                       subtopic={subtopic}
                       onEdit={() => openEditSubtopic(subtopic)}
                       onToggleStatus={() => toggleSubtopicStatus(subtopic)}
                       onDelete={() => deleteSubtopic(subtopic)}
+                      onMoveUp={() => moveSubtopicInDirection(subtopic, "up")}
+                      onMoveDown={() => moveSubtopicInDirection(subtopic, "down")}
+                      isFirst={index === 0}
+                      isLast={index === inactiveSubtopics.length - 1}
                       isInactive
                     />
                   ))}
@@ -495,6 +674,10 @@ interface TopicRowProps {
   onEdit: () => void;
   onToggleStatus: () => void;
   onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
   isInactive?: boolean;
 }
 
@@ -505,6 +688,10 @@ function TopicRow({
   onEdit,
   onToggleStatus,
   onDelete,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
   isInactive,
 }: TopicRowProps) {
   return (
@@ -530,6 +717,30 @@ function TopicRow({
         className="flex items-center gap-1 shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          onClick={onMoveUp}
+          disabled={isFirst}
+          className={`p-1.5 text-xs transition-colors ${
+            isFirst
+              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          }`}
+          title="Move up"
+        >
+          <ChevronUpIcon />
+        </button>
+        <button
+          onClick={onMoveDown}
+          disabled={isLast}
+          className={`p-1.5 text-xs transition-colors ${
+            isLast
+              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          }`}
+          title="Move down"
+        >
+          <ChevronDownIcon />
+        </button>
         <button
           onClick={onEdit}
           className="p-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
@@ -566,6 +777,10 @@ interface SubtopicRowProps {
   onEdit: () => void;
   onToggleStatus: () => void;
   onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
   isInactive?: boolean;
 }
 
@@ -574,6 +789,10 @@ function SubtopicRow({
   onEdit,
   onToggleStatus,
   onDelete,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
   isInactive,
 }: SubtopicRowProps) {
   return (
@@ -596,6 +815,30 @@ function SubtopicRow({
         )}
       </div>
       <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={onMoveUp}
+          disabled={isFirst}
+          className={`p-1.5 text-xs transition-colors ${
+            isFirst
+              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          }`}
+          title="Move up"
+        >
+          <ChevronUpIcon />
+        </button>
+        <button
+          onClick={onMoveDown}
+          disabled={isLast}
+          className={`p-1.5 text-xs transition-colors ${
+            isLast
+              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          }`}
+          title="Move down"
+        >
+          <ChevronDownIcon />
+        </button>
         <button
           onClick={onEdit}
           className="p-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
@@ -627,6 +870,42 @@ function SubtopicRow({
 }
 
 // Icons
+function ChevronUpIcon() {
+  return (
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M5 15l7-7 7 7"
+      />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 9l-7 7-7-7"
+      />
+    </svg>
+  );
+}
+
 function EditIcon() {
   return (
     <svg

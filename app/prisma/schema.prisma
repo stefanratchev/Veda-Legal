@@ -67,6 +67,26 @@ enum ClientStatus {
   INACTIVE
 }
 
+enum TopicStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Topic {
+  id           String      @id @default(cuid())
+  name         String
+  code         String      @unique
+  displayOrder Int         @default(0)
+  status       TopicStatus @default(ACTIVE)
+
+  timeEntries  TimeEntry[]
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("topics")
+}
+
 enum PracticeArea {
   CORPORATE
   FAMILY_LAW
@@ -92,12 +112,15 @@ model TimeEntry {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   clientId      String
   client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  topicId       String?
+  topic         Topic?    @relation(fields: [topicId], references: [id])
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   @@index([userId])
   @@index([clientId])
+  @@index([topicId])
   @@index([date])
   @@map("time_entries")
 }

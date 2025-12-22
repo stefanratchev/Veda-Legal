@@ -10,6 +10,12 @@ interface Client {
   timesheetCode: string;
 }
 
+interface Topic {
+  id: string;
+  name: string;
+  code: string;
+}
+
 interface TimeEntry {
   id: string;
   date: string;
@@ -21,10 +27,17 @@ interface TimeEntry {
     name: string;
     timesheetCode: string;
   };
+  topicId?: string | null;
+  topic?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
 }
 
 interface FormData {
   clientId: string;
+  topicId: string;
   hours: number;
   minutes: number;
   description: string;
@@ -33,6 +46,7 @@ interface FormData {
 interface EntriesListProps {
   entries: TimeEntry[];
   clients: Client[];
+  topics: Topic[];
   isLoadingEntries: boolean;
   isToday: boolean;
   editingId: string | null;
@@ -48,6 +62,7 @@ interface EntriesListProps {
 export function EntriesList({
   entries,
   clients,
+  topics,
   isLoadingEntries,
   isToday,
   editingId,
@@ -95,6 +110,7 @@ export function EntriesList({
               key={entry.id}
               entry={entry}
               clients={clients}
+              topics={topics}
               isEditing={editingId === entry.id}
               editFormData={editFormData}
               isLoading={isLoading}

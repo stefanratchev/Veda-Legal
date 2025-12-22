@@ -10,14 +10,15 @@ import {
 import { WeekStrip } from "./WeekStrip";
 import { EntryForm } from "./EntryForm";
 import { EntriesList } from "./EntriesList";
-import type { Client, TimeEntry, FormData } from "@/types";
+import type { Client, Topic, TimeEntry, FormData } from "@/types";
 import { initialFormData } from "@/types";
 
 interface TimesheetsContentProps {
   clients: Client[];
+  topics: Topic[];
 }
 
-export function TimesheetsContent({ clients }: TimesheetsContentProps) {
+export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   const today = useMemo(() => new Date(), []);
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -95,7 +96,7 @@ export function TimesheetsContent({ clients }: TimesheetsContentProps) {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!formData.clientId || formData.description.trim().length < 10) return;
+    if (!formData.clientId || !formData.topicId) return;
     if (formData.hours === 0 && formData.minutes === 0) return;
 
     setIsLoading(true);
@@ -110,6 +111,7 @@ export function TimesheetsContent({ clients }: TimesheetsContentProps) {
         body: JSON.stringify({
           date: formatDateISO(selectedDate),
           clientId: formData.clientId,
+          topicId: formData.topicId,
           hours: totalHours,
           description: formData.description.trim(),
         }),
@@ -124,10 +126,11 @@ export function TimesheetsContent({ clients }: TimesheetsContentProps) {
 
       setEntries((prev) => [data, ...prev]);
       setDatesWithEntries((prev) => new Set([...prev, formatDateISO(selectedDate)]));
-      // Keep client selected, only reset duration and description
+      // Keep client and topic selected, only reset duration and description
       setFormData((prev) => ({
         ...initialFormData,
         clientId: prev.clientId,
+        topicId: prev.topicId,
       }));
     } catch {
       setError("Failed to create entry");
@@ -141,6 +144,7 @@ export function TimesheetsContent({ clients }: TimesheetsContentProps) {
     const { hours, minutes } = parseHoursToComponents(entry.hours);
     setEditFormData({
       clientId: entry.clientId,
+      topicId: entry.topicId || "",
       hours,
       minutes,
       description: entry.description,
@@ -158,7 +162,6 @@ export function TimesheetsContent({ clients }: TimesheetsContentProps) {
   }, []);
 
   const saveEdit = useCallback(async (entryId: string) => {
-    if (editFormData.description.trim().length < 10) return;
     if (editFormData.hours === 0 && editFormData.minutes === 0) return;
 
     setIsLoading(true);
@@ -173,6 +176,7 @@ export function TimesheetsContent({ clients }: TimesheetsContentProps) {
         body: JSON.stringify({
           id: entryId,
           clientId: editFormData.clientId,
+          topicId: editFormData.topicId,
           hours: totalHours,
           description: editFormData.description.trim(),
         }),
@@ -239,6 +243,7 @@ export function TimesheetsContent({ clients }: TimesheetsContentProps) {
       {/* Entry Form */}
       <EntryForm
         clients={clients}
+        topics={topics}
         formData={formData}
         isLoading={isLoading}
         error={error}
@@ -250,6 +255,7 @@ export function TimesheetsContent({ clients }: TimesheetsContentProps) {
       <EntriesList
         entries={entries}
         clients={clients}
+        topics={topics}
         isLoadingEntries={isLoadingEntries}
         isToday={isSameDay(selectedDate, today)}
         editingId={editingId}

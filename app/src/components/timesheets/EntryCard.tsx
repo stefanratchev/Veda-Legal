@@ -19,6 +19,12 @@ interface TimeEntry {
     name: string;
     timesheetCode: string;
   };
+  topicId?: string | null;
+  topic?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
 }
 
 interface FormData {
@@ -207,9 +213,11 @@ export function EntryCard({
             <span className="text-[var(--accent-pink)] font-mono text-[11px] bg-[var(--accent-pink-glow)] px-1.5 py-0.5 rounded">
               {entry.client.timesheetCode}
             </span>
-            <span className="font-medium text-sm text-[var(--text-primary)]">
-              {entry.client.name}
-            </span>
+            {entry.topic && (
+              <span className="text-[var(--text-muted)] font-mono text-[11px] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded">
+                {entry.topic.code}
+              </span>
+            )}
             <span className="text-[13px] text-[var(--text-muted)]">
               {formatHours(entry.hours)}
             </span>

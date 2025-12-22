@@ -6,10 +6,8 @@ import {
   getUserFromSession,
   errorResponse,
   isValidHours,
-  isValidDescription,
   isNotFutureDate,
   MAX_HOURS_PER_ENTRY,
-  MIN_DESCRIPTION_LENGTH,
 } from "@/lib/api-utils";
 
 const TIMEENTRY_SELECT = {

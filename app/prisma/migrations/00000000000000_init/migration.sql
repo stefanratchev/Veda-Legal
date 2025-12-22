@@ -1,11 +1,20 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
-CREATE TYPE "UserRole" AS ENUM ('PARTNER', 'ASSOCIATE', 'PARALEGAL', 'EMPLOYEE');
+CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'EMPLOYEE');
+
+-- CreateEnum
+CREATE TYPE "UserStatus" AS ENUM ('PENDING', 'ACTIVE', 'INACTIVE');
 
 -- CreateEnum
 CREATE TYPE "ClientStatus" AS ENUM ('ACTIVE', 'INACTIVE');
 
 -- CreateEnum
 CREATE TYPE "TopicStatus" AS ENUM ('ACTIVE', 'INACTIVE');
+
+-- CreateEnum
+CREATE TYPE "SubtopicStatus" AS ENUM ('ACTIVE', 'INACTIVE');
 
 -- CreateEnum
 CREATE TYPE "PracticeArea" AS ENUM ('CORPORATE', 'FAMILY_LAW', 'IP_PATENT', 'REAL_ESTATE', 'LITIGATION', 'EMPLOYMENT', 'TAX', 'IMMIGRATION', 'CRIMINAL', 'OTHER');
@@ -17,7 +26,7 @@ CREATE TABLE "users" (
     "name" TEXT,
     "image" TEXT,
     "role" "UserRole" NOT NULL DEFAULT 'EMPLOYEE',
-    "hourlyRate" DECIMAL(10,2),
+    "status" "UserStatus" NOT NULL DEFAULT 'PENDING',
     "lastLogin" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -49,13 +58,26 @@ CREATE TABLE "clients" (
 CREATE TABLE "topics" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "code" TEXT NOT NULL,
     "displayOrder" INTEGER NOT NULL DEFAULT 0,
     "status" "TopicStatus" NOT NULL DEFAULT 'ACTIVE',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "topics_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "subtopics" (
+    "id" TEXT NOT NULL,
+    "topicId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "isPrefix" BOOLEAN NOT NULL DEFAULT false,
+    "displayOrder" INTEGER NOT NULL DEFAULT 0,
+    "status" "SubtopicStatus" NOT NULL DEFAULT 'ACTIVE',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "subtopics_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -66,7 +88,9 @@ CREATE TABLE "time_entries" (
     "description" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
-    "topicId" TEXT,
+    "subtopicId" TEXT,
+    "topicName" TEXT NOT NULL DEFAULT '',
+    "subtopicName" TEXT NOT NULL DEFAULT '',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -80,7 +104,7 @@ CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 CREATE UNIQUE INDEX "clients_timesheetCode_key" ON "clients"("timesheetCode");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "topics_code_key" ON "topics"("code");
+CREATE INDEX "subtopics_topicId_idx" ON "subtopics"("topicId");
 
 -- CreateIndex
 CREATE INDEX "time_entries_userId_idx" ON "time_entries"("userId");
@@ -89,10 +113,13 @@ CREATE INDEX "time_entries_userId_idx" ON "time_entries"("userId");
 CREATE INDEX "time_entries_clientId_idx" ON "time_entries"("clientId");
 
 -- CreateIndex
-CREATE INDEX "time_entries_topicId_idx" ON "time_entries"("topicId");
+CREATE INDEX "time_entries_subtopicId_idx" ON "time_entries"("subtopicId");
 
 -- CreateIndex
 CREATE INDEX "time_entries_date_idx" ON "time_entries"("date");
+
+-- AddForeignKey
+ALTER TABLE "subtopics" ADD CONSTRAINT "subtopics_topicId_fkey" FOREIGN KEY ("topicId") REFERENCES "topics"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "time_entries" ADD CONSTRAINT "time_entries_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -101,4 +128,5 @@ ALTER TABLE "time_entries" ADD CONSTRAINT "time_entries_userId_fkey" FOREIGN KEY
 ALTER TABLE "time_entries" ADD CONSTRAINT "time_entries_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "time_entries" ADD CONSTRAINT "time_entries_topicId_fkey" FOREIGN KEY ("topicId") REFERENCES "topics"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "time_entries" ADD CONSTRAINT "time_entries_subtopicId_fkey" FOREIGN KEY ("subtopicId") REFERENCES "subtopics"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+

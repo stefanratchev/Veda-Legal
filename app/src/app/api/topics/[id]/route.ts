@@ -1,29 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
-import { Prisma, TopicStatus } from "@prisma/client";
 
-interface RouteParams {
+interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
 // PATCH /api/topics/[id] - Update topic
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function PATCH(request: NextRequest, context: RouteContext) {
   const auth = await requireWriteAccess(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { id } = await params;
-
-  // Check topic exists
-  const existing = await db.topic.findUnique({
-    where: { id },
-    select: { id: true, code: true },
-  });
-  if (!existing) {
-    return errorResponse("Topic not found", 404);
-  }
+  const { id } = await context.params;
 
   let body;
   try {
@@ -32,13 +22,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { name, code, displayOrder, status } = body;
-  const updateData: Prisma.TopicUpdateInput = {};
+  const { name, displayOrder, status } = body;
 
-  // Validate and set name
+  const updateData: { name?: string; displayOrder?: number; status?: "ACTIVE" | "INACTIVE" } = {};
+
   if (name !== undefined) {
     if (typeof name !== "string" || name.trim().length === 0) {
-      return errorResponse("Name cannot be empty", 400);
+      return errorResponse("Name is required", 400);
     }
     if (name.trim().length > 100) {
       return errorResponse("Name must be 100 characters or less", 400);
@@ -46,67 +36,75 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updateData.name = name.trim();
   }
 
-  // Validate and set code
-  if (code !== undefined) {
-    if (typeof code !== "string" || code.trim().length === 0) {
-      return errorResponse("Code cannot be empty", 400);
-    }
-    if (code.trim().length > 10) {
-      return errorResponse("Code must be 10 characters or less", 400);
-    }
-    if (!/^[A-Z0-9]+$/.test(code.trim())) {
-      return errorResponse("Code must be uppercase letters and numbers only", 400);
-    }
-    // Check for duplicate code (excluding current topic)
-    if (code.trim() !== existing.code) {
-      const duplicate = await db.topic.findUnique({
-        where: { code: code.trim() },
-      });
-      if (duplicate) {
-        return errorResponse("A topic with this code already exists", 400);
-      }
-    }
-    updateData.code = code.trim();
-  }
-
-  // Validate and set displayOrder
   if (displayOrder !== undefined) {
     if (typeof displayOrder !== "number" || displayOrder < 0) {
-      return errorResponse("Display order must be a non-negative number", 400);
+      return errorResponse("Invalid display order", 400);
     }
     updateData.displayOrder = displayOrder;
   }
 
-  // Validate and set status
   if (status !== undefined) {
-    if (!["ACTIVE", "INACTIVE"].includes(status)) {
-      return errorResponse("Status must be ACTIVE or INACTIVE", 400);
+    if (status !== "ACTIVE" && status !== "INACTIVE") {
+      return errorResponse("Invalid status", 400);
     }
-    updateData.status = status as TopicStatus;
+    updateData.status = status;
   }
 
   try {
     const topic = await db.topic.update({
       where: { id },
       data: updateData,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        displayOrder: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
+      include: {
+        subtopics: {
+          orderBy: { displayOrder: "asc" },
+          select: {
+            id: true,
+            name: true,
+            isPrefix: true,
+            displayOrder: true,
+            status: true,
+          },
+        },
       },
     });
 
     return NextResponse.json({
-      ...topic,
-      createdAt: topic.createdAt.toISOString(),
-      updatedAt: topic.updatedAt.toISOString(),
+      id: topic.id,
+      name: topic.name,
+      displayOrder: topic.displayOrder,
+      status: topic.status,
+      subtopics: topic.subtopics,
     });
   } catch (error) {
     console.error("Database error updating topic:", error);
     return errorResponse("Failed to update topic", 500);
+  }
+}
+
+// DELETE /api/topics/[id] - Delete topic (only if no subtopics)
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const auth = await requireWriteAccess(request);
+  if ("error" in auth) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const { id } = await context.params;
+
+  try {
+    // Check if topic has subtopics
+    const subtopicCount = await db.subtopic.count({
+      where: { topicId: id },
+    });
+
+    if (subtopicCount > 0) {
+      return errorResponse("Cannot delete topic with subtopics. Delete subtopics first.", 400);
+    }
+
+    await db.topic.delete({ where: { id } });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Database error deleting topic:", error);
+    return errorResponse("Failed to delete topic", 500);
   }
 }

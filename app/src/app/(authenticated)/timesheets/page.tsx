@@ -13,5 +13,16 @@ export default async function TimesheetsPage() {
     orderBy: { name: "asc" },
   });
 
-  return <TimesheetsContent clients={clients} />;
+  // Fetch active topics for the dropdown
+  const topics = await db.topic.findMany({
+    where: { status: "ACTIVE" },
+    select: {
+      id: true,
+      name: true,
+      code: true,
+    },
+    orderBy: { displayOrder: "asc" },
+  });
+
+  return <TimesheetsContent clients={clients} topics={topics} />;
 }

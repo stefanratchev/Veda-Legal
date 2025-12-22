@@ -25,6 +25,14 @@ const TIMEENTRY_SELECT = {
       timesheetCode: true,
     },
   },
+  topicId: true,
+  topic: {
+    select: {
+      id: true,
+      name: true,
+      code: true,
+    },
+  },
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -101,7 +109,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { date, clientId, hours, description } = body;
+  const { date, clientId, topicId, hours, description } = body;
 
   // Validate date
   if (!date) {
@@ -132,6 +140,21 @@ export async function POST(request: NextRequest) {
     return errorResponse("Cannot log time for inactive clients", 400);
   }
 
+  // Validate topic (required for new entries)
+  if (!topicId) {
+    return errorResponse("Topic is required", 400);
+  }
+  const topic = await db.topic.findUnique({
+    where: { id: topicId },
+    select: { id: true, status: true },
+  });
+  if (!topic) {
+    return errorResponse("Topic not found", 404);
+  }
+  if (topic.status !== "ACTIVE") {
+    return errorResponse("Cannot log time with inactive topic", 400);
+  }
+
   // Validate hours
   if (hours === undefined || hours === null) {
     return errorResponse("Hours is required", 400);
@@ -141,12 +164,9 @@ export async function POST(request: NextRequest) {
     return errorResponse(`Hours must be between 0 and ${MAX_HOURS_PER_ENTRY}`, 400);
   }
 
-  // Validate description
-  if (!description || typeof description !== "string") {
-    return errorResponse("Description is required", 400);
-  }
-  if (!isValidDescription(description)) {
-    return errorResponse(`Description must be at least ${MIN_DESCRIPTION_LENGTH} characters`, 400);
+  // Validate description (no minimum length required)
+  if (description !== undefined && typeof description !== "string") {
+    return errorResponse("Description must be a string", 400);
   }
 
   try {
@@ -154,9 +174,10 @@ export async function POST(request: NextRequest) {
       data: {
         date: parsedDate,
         hours: new Prisma.Decimal(hoursNum),
-        description: description.trim(),
+        description: (description || "").trim(),
         userId: user.id,
         clientId: clientId,
+        topicId: topicId,
       },
       select: TIMEENTRY_SELECT,
     });
@@ -190,7 +211,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, clientId, hours, description } = body;
+  const { id, clientId, topicId, hours, description } = body;
 
   if (!id) {
     return NextResponse.json({ error: "Entry ID is required" }, { status: 400 });
@@ -228,6 +249,21 @@ export async function PATCH(request: NextRequest) {
     updateData.client = { connect: { id: clientId } };
   }
 
+  // Validate topic if provided
+  if (topicId !== undefined) {
+    const topic = await db.topic.findUnique({
+      where: { id: topicId },
+      select: { id: true, status: true },
+    });
+    if (!topic) {
+      return errorResponse("Topic not found", 404);
+    }
+    if (topic.status !== "ACTIVE") {
+      return errorResponse("Cannot log time with inactive topic", 400);
+    }
+    updateData.topic = { connect: { id: topicId } };
+  }
+
   // Validate hours if provided
   if (hours !== undefined) {
     const hoursNum = Number(hours);
@@ -237,10 +273,10 @@ export async function PATCH(request: NextRequest) {
     updateData.hours = new Prisma.Decimal(hoursNum);
   }
 
-  // Validate description if provided
+  // Validate description if provided (no minimum length required)
   if (description !== undefined) {
-    if (!isValidDescription(description)) {
-      return errorResponse(`Description must be at least ${MIN_DESCRIPTION_LENGTH} characters`, 400);
+    if (typeof description !== "string") {
+      return errorResponse("Description must be a string", 400);
     }
     updateData.description = description.trim();
   }

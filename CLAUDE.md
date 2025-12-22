@@ -49,7 +49,9 @@ app/src/
 │   │   ├── clients/       # Client CRUD
 │   │   ├── employees/     # Employee CRUD
 │   │   ├── reports/       # Aggregated report data
-│   │   └── timesheets/    # Time entry CRUD + /dates endpoint
+│   │   ├── timesheets/    # Time entry CRUD + /dates endpoint
+│   │   ├── topics/        # Topics CRUD + subtopics creation
+│   │   └── subtopics/     # Subtopics CRUD
 │   └── login/             # Public login page
 ├── components/
 │   ├── layout/            # Sidebar, Header
@@ -58,7 +60,8 @@ app/src/
 │   ├── employees/         # Employee list, modal
 │   ├── reports/           # Charts (Recharts), tabs, date pickers
 │   ├── timesheets/        # WeekStrip, EntryForm, EntryCard
-│   └── ui/                # DataTable, TableFilters, DurationPicker, ClientSelect
+│   ├── topics/            # TopicsContent, TopicModal, SubtopicModal
+│   └── ui/                # DataTable, TableFilters, DurationPicker, ClientSelect, TopicCascadeSelect
 ├── hooks/                 # Custom React hooks (useClickOutside)
 ├── lib/                   # Utilities
 │   ├── api-utils.ts       # Auth helpers, validation functions
@@ -92,6 +95,9 @@ Current schema has `ADMIN` and `EMPLOYEE` roles. The `api-utils.ts` WRITE_ROLES 
 | EMPLOYEE | Yes | No |
 
 **Note:** Code references PARTNER/ASSOCIATE roles for future expansion; add to schema when needed.
+
+### Time Entry Immutability
+Time entries cannot be edited after creation - only deleted and recreated. This ensures audit integrity. The `PATCH /api/timesheets/[id]` endpoint does not exist.
 
 ## Database
 
@@ -159,3 +165,18 @@ AZURE_AD_TENANT_ID=<from Azure Portal>
 - **Client**: External party receiving legal services (not to be confused with client-side code)
 - **TimeEntry**: Billable hours logged against a client
 - **timesheetCode**: Unique short code for each client (e.g., "VED001")
+- **Topic**: High-level work category (e.g., "Company Incorporation", "M&A Advisory")
+- **Subtopic**: Specific task type within a topic (e.g., "Client correspondence:", "Drafting documents:")
+- **isPrefix**: Subtopics ending with ":" are prefixes - user should add details after selecting
+
+## Topic/Subtopic Hierarchy
+
+TimeEntries reference a Subtopic, with denormalized `topicName` and `subtopicName` fields for immutability. When a subtopic is selected:
+- If `isPrefix` is true: pre-fill description with subtopic name, user adds specifics
+- If `isPrefix` is false: use subtopic name as the full description
+
+To update topics/subtopics, edit `prisma/seed-topics.ts` and run:
+```bash
+npx tsx prisma/seed-topics.ts  # Local
+DATABASE_URL="<prod-url>" npx tsx prisma/seed-topics.ts  # Production
+```

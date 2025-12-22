@@ -12,6 +12,15 @@ export interface Client {
 }
 
 /**
+ * Topic for categorizing time entries.
+ */
+export interface Topic {
+  id: string;
+  name: string;
+  code: string;
+}
+
+/**
  * Time entry with client information.
  */
 export interface TimeEntry {
@@ -25,6 +34,12 @@ export interface TimeEntry {
     name: string;
     timesheetCode: string;
   };
+  topicId?: string | null;
+  topic?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
 }
 
 /**
@@ -32,6 +47,7 @@ export interface TimeEntry {
  */
 export interface FormData {
   clientId: string;
+  topicId: string;
   hours: number;
   minutes: number;
   description: string;
@@ -42,6 +58,7 @@ export interface FormData {
  */
 export const initialFormData: FormData = {
   clientId: "",
+  topicId: "",
   hours: 1,
   minutes: 0,
   description: "",

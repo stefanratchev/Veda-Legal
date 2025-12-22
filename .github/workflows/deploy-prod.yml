@@ -27,10 +27,14 @@ jobs:
       - name: Generate Prisma client
         working-directory: ./app
         run: npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
       - name: Build application
         working-directory: ./app
         run: npm run build
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3

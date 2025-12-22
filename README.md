@@ -6,7 +6,7 @@ A modern timesheet management application for legal practice, built with Next.js
 
 - Microsoft 365 SSO authentication via Azure AD
 - Time entry management with client tracking
-- Role-based access control (Admin, Partner, Associate, Paralegal, Employee)
+- Role-based access control (Admin, Employee)
 - Dark theme UI aligned with Veda branding
 - Responsive design for desktop and mobile
 
@@ -16,6 +16,7 @@ A modern timesheet management application for legal practice, built with Next.js
 - **Styling:** Tailwind CSS v4 with custom design system
 - **Auth:** NextAuth.js with Azure AD
 - **Database:** PostgreSQL with Prisma ORM v7
+- **Testing:** Vitest + React Testing Library
 - **Target Platform:** Azure (EU region)
 
 ## Quick Start
@@ -63,9 +64,11 @@ veda-legal-timesheets/
 │   │   ├── components/    # React components
 │   │   ├── hooks/         # Custom React hooks
 │   │   ├── lib/           # Utilities and configurations
+│   │   ├── test/          # Test setup and utilities
 │   │   └── types/         # Shared TypeScript types
 │   ├── prisma/            # Database schema and migrations
 │   └── package.json
+├── docs/                   # Documentation and plans
 ├── CLAUDE.md              # AI assistant instructions
 └── README.md              # This file
 ```
@@ -75,12 +78,14 @@ veda-legal-timesheets/
 ```bash
 cd app
 
-npm run dev          # Start dev server
-npm run build        # Production build
-npm run lint         # Run ESLint
-npm run db:generate  # Generate Prisma client
-npm run db:migrate   # Run migrations
-npm run db:studio    # Open Prisma Studio
+npm run dev            # Start dev server
+npm run build          # Production build
+npm run lint           # Run ESLint
+npm run test           # Run tests (Vitest)
+npm run test:coverage  # Run tests with coverage
+npm run db:generate    # Generate Prisma client
+npm run db:migrate     # Run migrations
+npm run db:studio      # Open Prisma Studio
 ```
 
 ## Environment Variables
@@ -111,10 +116,7 @@ brew services start postgresql@17
 
 | Role | Permissions |
 |------|-------------|
-| ADMIN | Full access, user management |
-| PARTNER | Create/edit clients and time entries |
-| ASSOCIATE | Create/edit own time entries |
-| PARALEGAL | Create/edit own time entries |
+| ADMIN | Full access, user management, create/edit clients and time entries |
 | EMPLOYEE | Read-only access |
 
 ## License

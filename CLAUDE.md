@@ -53,11 +53,12 @@ app/src/
 │   └── login/             # Public login page
 ├── components/
 │   ├── layout/            # Sidebar, Header
+│   ├── dashboard/         # Dashboard-specific components
 │   ├── clients/           # Client list, modal
 │   ├── employees/         # Employee list, modal
 │   ├── reports/           # Charts (Recharts), tabs, date pickers
 │   ├── timesheets/        # WeekStrip, EntryForm, EntryCard
-│   └── ui/                # DataTable, DurationPicker, ClientSelect
+│   └── ui/                # DataTable, TableFilters, DurationPicker, ClientSelect
 ├── hooks/                 # Custom React hooks (useClickOutside)
 ├── lib/                   # Utilities
 │   ├── api-utils.ts       # Auth helpers, validation functions
@@ -127,10 +128,19 @@ Dark theme with CSS variables in `globals.css`:
 - `--bg-elevated` (#1c1c1c) - Cards, sidebar
 - `--bg-surface` (#383838) - Inputs
 - `--accent-pink` (#c97b98) - Primary accent (Dusty Rose)
+- Semantic colors: `--success`, `--warning`, `--danger`, `--info` (with matching `*-bg` variants)
 
 **Typography:** Roboto Condensed (headings) + Roboto (body)
 
 **Animation rule:** No page entrance animations. Use `animate-fade-up` only for interactive elements (dropdowns, modals, popovers).
+
+## Testing
+
+Tests are colocated with source files (e.g., `lib/date-utils.test.ts`). Run with:
+```bash
+npm run test              # Watch mode
+npm run test -- api-utils # Run specific file
+```
 
 ## Environment Variables
 

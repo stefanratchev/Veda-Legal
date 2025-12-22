@@ -23,14 +23,9 @@ const TIMEENTRY_SELECT = {
       timesheetCode: true,
     },
   },
-  topicId: true,
-  topic: {
-    select: {
-      id: true,
-      name: true,
-      code: true,
-    },
-  },
+  subtopicId: true,
+  topicName: true,
+  subtopicName: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -107,7 +102,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { date, clientId, topicId, hours, description } = body;
+  const { date, clientId, subtopicId, hours, description } = body;
 
   // Validate date
   if (!date) {
@@ -138,18 +133,25 @@ export async function POST(request: NextRequest) {
     return errorResponse("Cannot log time for inactive clients", 400);
   }
 
-  // Validate topic (required for new entries)
-  if (!topicId) {
-    return errorResponse("Topic is required", 400);
+  // Validate subtopic (required for new entries)
+  if (!subtopicId) {
+    return errorResponse("Subtopic is required", 400);
   }
-  const topic = await db.topic.findUnique({
-    where: { id: topicId },
-    select: { id: true, status: true },
+  const subtopic = await db.subtopic.findUnique({
+    where: { id: subtopicId },
+    include: {
+      topic: {
+        select: { name: true, status: true },
+      },
+    },
   });
-  if (!topic) {
-    return errorResponse("Topic not found", 404);
+  if (!subtopic) {
+    return errorResponse("Subtopic not found", 404);
   }
-  if (topic.status !== "ACTIVE") {
+  if (subtopic.status !== "ACTIVE") {
+    return errorResponse("Cannot log time with inactive subtopic", 400);
+  }
+  if (subtopic.topic.status !== "ACTIVE") {
     return errorResponse("Cannot log time with inactive topic", 400);
   }
 
@@ -175,7 +177,9 @@ export async function POST(request: NextRequest) {
         description: (description || "").trim(),
         userId: user.id,
         clientId: clientId,
-        topicId: topicId,
+        subtopicId: subtopicId,
+        topicName: subtopic.topic.name,
+        subtopicName: subtopic.name,
       },
       select: TIMEENTRY_SELECT,
     });
@@ -185,118 +189,6 @@ export async function POST(request: NextRequest) {
     console.error("Database error creating time entry:", error);
     return NextResponse.json(
       { error: "Failed to create time entry" },
-      { status: 500 }
-    );
-  }
-}
-
-// PATCH /api/timesheets - Update time entry
-export async function PATCH(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
-
-  const user = await getUserFromSession(auth.session.user?.email);
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const { id, clientId, topicId, hours, description } = body;
-
-  if (!id) {
-    return NextResponse.json({ error: "Entry ID is required" }, { status: 400 });
-  }
-
-  // Verify the entry exists and belongs to this user
-  const existingEntry = await db.timeEntry.findUnique({
-    where: { id },
-    select: { userId: true },
-  });
-
-  if (!existingEntry) {
-    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
-  }
-
-  if (existingEntry.userId !== user.id) {
-    return NextResponse.json({ error: "You can only edit your own entries" }, { status: 403 });
-  }
-
-  // Build update data
-  const updateData: Prisma.TimeEntryUpdateInput = {};
-
-  // Validate client if provided
-  if (clientId !== undefined) {
-    const client = await db.client.findUnique({
-      where: { id: clientId },
-      select: { id: true, status: true },
-    });
-    if (!client) {
-      return errorResponse("Client not found", 404);
-    }
-    if (client.status !== "ACTIVE") {
-      return errorResponse("Cannot log time for inactive clients", 400);
-    }
-    updateData.client = { connect: { id: clientId } };
-  }
-
-  // Validate topic if provided
-  if (topicId !== undefined) {
-    const topic = await db.topic.findUnique({
-      where: { id: topicId },
-      select: { id: true, status: true },
-    });
-    if (!topic) {
-      return errorResponse("Topic not found", 404);
-    }
-    if (topic.status !== "ACTIVE") {
-      return errorResponse("Cannot log time with inactive topic", 400);
-    }
-    updateData.topic = { connect: { id: topicId } };
-  }
-
-  // Validate hours if provided
-  if (hours !== undefined) {
-    const hoursNum = Number(hours);
-    if (!isValidHours(hoursNum)) {
-      return errorResponse(`Hours must be between 0 and ${MAX_HOURS_PER_ENTRY}`, 400);
-    }
-    updateData.hours = new Prisma.Decimal(hoursNum);
-  }
-
-  // Validate description if provided (no minimum length required)
-  if (description !== undefined) {
-    if (typeof description !== "string") {
-      return errorResponse("Description must be a string", 400);
-    }
-    updateData.description = description.trim();
-  }
-
-  try {
-    const entry = await db.timeEntry.update({
-      where: { id },
-      data: updateData,
-      select: TIMEENTRY_SELECT,
-    });
-
-    return NextResponse.json(serializeTimeEntry(entry));
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
-      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
-    }
-    console.error("Database error updating time entry:", error);
-    return NextResponse.json(
-      { error: "Failed to update time entry" },
       { status: 500 }
     );
   }

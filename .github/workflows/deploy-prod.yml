@@ -36,6 +36,12 @@ jobs:
         env:
           DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
+      - name: Prepare standalone deployment
+        working-directory: ./app
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -45,7 +51,7 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          package: ./app
+          package: ./app/.next/standalone
 
       - name: Run database migrations
         working-directory: ./app

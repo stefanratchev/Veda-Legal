@@ -12,16 +12,30 @@ export interface Client {
 }
 
 /**
- * Topic for categorizing time entries.
+ * Subtopic within a topic category.
+ */
+export interface Subtopic {
+  id: string;
+  name: string;
+  isPrefix: boolean;
+  displayOrder: number;
+  status: "ACTIVE" | "INACTIVE";
+}
+
+/**
+ * Topic category containing subtopics.
  */
 export interface Topic {
   id: string;
   name: string;
-  code: string;
+  displayOrder: number;
+  status: "ACTIVE" | "INACTIVE";
+  subtopics: Subtopic[];
 }
 
 /**
- * Time entry with client information.
+ * Time entry with client and topic information.
+ * Note: topicName and subtopicName are denormalized for immutability.
  */
 export interface TimeEntry {
   id: string;
@@ -34,20 +48,17 @@ export interface TimeEntry {
     name: string;
     timesheetCode: string;
   };
-  topicId?: string | null;
-  topic?: {
-    id: string;
-    name: string;
-    code: string;
-  } | null;
+  subtopicId?: string | null;
+  topicName: string;
+  subtopicName: string;
 }
 
 /**
- * Form data for creating/editing time entries.
+ * Form data for creating time entries.
  */
 export interface FormData {
   clientId: string;
-  topicId: string;
+  subtopicId: string;
   hours: number;
   minutes: number;
   description: string;
@@ -58,7 +69,7 @@ export interface FormData {
  */
 export const initialFormData: FormData = {
   clientId: "",
-  topicId: "",
+  subtopicId: "",
   hours: 1,
   minutes: 0,
   description: "",

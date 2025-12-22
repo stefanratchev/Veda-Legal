@@ -2,16 +2,16 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useClickOutside } from "@/hooks/useClickOutside";
-import { Topic } from "@/types";
+import { Subtopic } from "@/types";
 
-interface TopicModalProps {
-  topic: Topic | null;
+interface SubtopicModalProps {
+  subtopic: Subtopic | null;
   onSave: (data: { name: string }) => void;
   onClose: () => void;
 }
 
-export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
-  const [name, setName] = useState(topic?.name || "");
+export function SubtopicModal({ subtopic, onSave, onClose }: SubtopicModalProps) {
+  const [name, setName] = useState(subtopic?.name || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -32,6 +32,7 @@ export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
   };
 
   const canSubmit = name.trim().length > 0;
+  const isPrefix = name.trim().endsWith(":");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -41,7 +42,7 @@ export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
       >
         <div className="px-6 py-4 border-b border-[var(--border-subtle)]">
           <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)]">
-            {topic ? "Edit Topic" : "Add Topic"}
+            {subtopic ? "Edit Subtopic" : "Add Subtopic"}
           </h2>
         </div>
 
@@ -56,7 +57,7 @@ export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Client Meetings/Calls"
+                placeholder="e.g., Preparation of:"
                 className="
                   w-full px-4 py-2.5 rounded
                   bg-[var(--bg-surface)] border border-[var(--border-subtle)]
@@ -66,9 +67,34 @@ export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
                 "
               />
               <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-                Category for grouping related subtopics
+                End with &apos;:&apos; if lawyers should add specifics (e.g., &quot;Preparation of:&quot;)
               </p>
             </div>
+
+            {/* Prefix indicator */}
+            {name.trim().length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+                {isPrefix ? (
+                  <>
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-[var(--info-bg)] text-[var(--info)] rounded">
+                      prefix
+                    </span>
+                    <span className="text-[12px] text-[var(--text-secondary)]">
+                      Lawyers will add details after this text
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-[var(--bg-deep)] text-[var(--text-muted)] rounded">
+                      complete
+                    </span>
+                    <span className="text-[12px] text-[var(--text-secondary)]">
+                      This text will be used as-is
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="px-6 py-4 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
@@ -97,7 +123,7 @@ export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
                 transition-all
               "
             >
-              {isSubmitting ? "Saving..." : topic ? "Save Changes" : "Create Topic"}
+              {isSubmitting ? "Saving..." : subtopic ? "Save Changes" : "Create Subtopic"}
             </button>
           </div>
         </form>

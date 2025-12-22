@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, requireWriteAccess, errorResponse } from "@/lib/api-utils";
 
-// GET /api/topics - List topics
+// GET /api/topics - List topics with subtopics
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if ("error" in auth) {
@@ -15,23 +15,29 @@ export async function GET(request: NextRequest) {
   try {
     const topics = await db.topic.findMany({
       where: includeInactive ? {} : { status: "ACTIVE" },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        displayOrder: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
+      include: {
+        subtopics: {
+          where: includeInactive ? {} : { status: "ACTIVE" },
+          orderBy: { displayOrder: "asc" },
+          select: {
+            id: true,
+            name: true,
+            isPrefix: true,
+            displayOrder: true,
+            status: true,
+          },
+        },
       },
       orderBy: { displayOrder: "asc" },
     });
 
     return NextResponse.json(
       topics.map((t) => ({
-        ...t,
-        createdAt: t.createdAt.toISOString(),
-        updatedAt: t.updatedAt.toISOString(),
+        id: t.id,
+        name: t.name,
+        displayOrder: t.displayOrder,
+        status: t.status,
+        subtopics: t.subtopics,
       }))
     );
   } catch (error) {
@@ -54,33 +60,13 @@ export async function POST(request: NextRequest) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { name, code } = body;
+  const { name } = body;
 
-  // Validate name
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return errorResponse("Name is required", 400);
   }
   if (name.trim().length > 100) {
     return errorResponse("Name must be 100 characters or less", 400);
-  }
-
-  // Validate code
-  if (!code || typeof code !== "string" || code.trim().length === 0) {
-    return errorResponse("Code is required", 400);
-  }
-  if (code.trim().length > 10) {
-    return errorResponse("Code must be 10 characters or less", 400);
-  }
-  if (!/^[A-Z0-9]+$/.test(code.trim())) {
-    return errorResponse("Code must be uppercase letters and numbers only", 400);
-  }
-
-  // Check for duplicate code
-  const existing = await db.topic.findUnique({
-    where: { code: code.trim() },
-  });
-  if (existing) {
-    return errorResponse("A topic with this code already exists", 400);
   }
 
   // Get next display order
@@ -93,24 +79,28 @@ export async function POST(request: NextRequest) {
     const topic = await db.topic.create({
       data: {
         name: name.trim(),
-        code: code.trim(),
         displayOrder: nextOrder,
       },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        displayOrder: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
+      include: {
+        subtopics: {
+          orderBy: { displayOrder: "asc" },
+          select: {
+            id: true,
+            name: true,
+            isPrefix: true,
+            displayOrder: true,
+            status: true,
+          },
+        },
       },
     });
 
     return NextResponse.json({
-      ...topic,
-      createdAt: topic.createdAt.toISOString(),
-      updatedAt: topic.updatedAt.toISOString(),
+      id: topic.id,
+      name: topic.name,
+      displayOrder: topic.displayOrder,
+      status: topic.status,
+      subtopics: topic.subtopics,
     });
   } catch (error) {
     console.error("Database error creating topic:", error);

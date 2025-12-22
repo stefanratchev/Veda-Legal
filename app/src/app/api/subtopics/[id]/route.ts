@@ -6,7 +6,7 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// PATCH /api/topics/[id] - Update topic
+// PATCH /api/subtopics/[id] - Update subtopic
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const auth = await requireWriteAccess(request);
   if ("error" in auth) {
@@ -24,16 +24,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const { name, displayOrder, status } = body;
 
-  const updateData: { name?: string; displayOrder?: number; status?: "ACTIVE" | "INACTIVE" } = {};
+  const updateData: { name?: string; isPrefix?: boolean; displayOrder?: number; status?: "ACTIVE" | "INACTIVE" } = {};
 
   if (name !== undefined) {
     if (typeof name !== "string" || name.trim().length === 0) {
       return errorResponse("Name is required", 400);
     }
-    if (name.trim().length > 100) {
-      return errorResponse("Name must be 100 characters or less", 400);
+    if (name.trim().length > 200) {
+      return errorResponse("Name must be 200 characters or less", 400);
     }
     updateData.name = name.trim();
+    updateData.isPrefix = name.trim().endsWith(":");
   }
 
   if (displayOrder !== undefined) {
@@ -51,37 +52,26 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const topic = await db.topic.update({
+    const subtopic = await db.subtopic.update({
       where: { id },
       data: updateData,
-      include: {
-        subtopics: {
-          orderBy: { displayOrder: "asc" },
-          select: {
-            id: true,
-            name: true,
-            isPrefix: true,
-            displayOrder: true,
-            status: true,
-          },
-        },
+      select: {
+        id: true,
+        name: true,
+        isPrefix: true,
+        displayOrder: true,
+        status: true,
       },
     });
 
-    return NextResponse.json({
-      id: topic.id,
-      name: topic.name,
-      displayOrder: topic.displayOrder,
-      status: topic.status,
-      subtopics: topic.subtopics,
-    });
+    return NextResponse.json(subtopic);
   } catch (error) {
-    console.error("Database error updating topic:", error);
-    return errorResponse("Failed to update topic", 500);
+    console.error("Database error updating subtopic:", error);
+    return errorResponse("Failed to update subtopic", 500);
   }
 }
 
-// DELETE /api/topics/[id] - Delete topic (only if no subtopics)
+// DELETE /api/subtopics/[id] - Delete subtopic (only if no entries reference it)
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const auth = await requireWriteAccess(request);
   if ("error" in auth) {
@@ -91,20 +81,20 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    // Check if topic has subtopics
-    const subtopicCount = await db.subtopic.count({
-      where: { topicId: id },
+    // Check if any time entries reference this subtopic
+    const entryCount = await db.timeEntry.count({
+      where: { subtopicId: id },
     });
 
-    if (subtopicCount > 0) {
-      return errorResponse("Cannot delete topic with subtopics. Delete subtopics first.", 400);
+    if (entryCount > 0) {
+      return errorResponse("Cannot delete subtopic with time entries. Deactivate instead.", 400);
     }
 
-    await db.topic.delete({ where: { id } });
+    await db.subtopic.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Database error deleting topic:", error);
-    return errorResponse("Failed to delete topic", 500);
+    console.error("Database error deleting subtopic:", error);
+    return errorResponse("Failed to delete subtopic", 500);
   }
 }

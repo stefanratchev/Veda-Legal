@@ -1,11 +1,18 @@
 "use client";
 
 import { formatHours } from "@/lib/date-utils";
+import { TopicSelect } from "@/components/ui/TopicSelect";
 
 interface Client {
   id: string;
   name: string;
   timesheetCode: string;
+}
+
+interface Topic {
+  id: string;
+  name: string;
+  code: string;
 }
 
 interface TimeEntry {
@@ -29,6 +36,7 @@ interface TimeEntry {
 
 interface FormData {
   clientId: string;
+  topicId: string;
   hours: number;
   minutes: number;
   description: string;
@@ -37,6 +45,7 @@ interface FormData {
 interface EntryCardProps {
   entry: TimeEntry;
   clients: Client[];
+  topics: Topic[];
   isEditing: boolean;
   editFormData: FormData;
   isLoading: boolean;
@@ -50,6 +59,7 @@ interface EntryCardProps {
 export function EntryCard({
   entry,
   clients,
+  topics,
   isEditing,
   editFormData,
   isLoading,
@@ -60,7 +70,7 @@ export function EntryCard({
   onEditFormChange,
 }: EntryCardProps) {
   const canSave =
-    editFormData.description.trim().length >= 10 &&
+    editFormData.topicId &&
     (editFormData.hours > 0 || editFormData.minutes > 0);
 
   const incrementHours = () => {
@@ -106,6 +116,17 @@ export function EntryCard({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-[13px] font-medium text-[var(--text-secondary)] mb-1">
+              Topic
+            </label>
+            <TopicSelect
+              topics={topics}
+              value={editFormData.topicId}
+              onChange={(topicId) => onEditFormChange({ topicId })}
+            />
           </div>
 
           <div>

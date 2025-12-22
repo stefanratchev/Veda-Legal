@@ -1,29 +1,13 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { ClientSelect } from "@/components/ui/ClientSelect";
-import { TopicSelect, TopicSelectRef } from "@/components/ui/TopicSelect";
+import {
+  TopicCascadeSelect,
+  TopicCascadeSelectRef,
+} from "@/components/ui/TopicCascadeSelect";
 import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicker";
-
-interface Client {
-  id: string;
-  name: string;
-  timesheetCode: string;
-}
-
-interface Topic {
-  id: string;
-  name: string;
-  code: string;
-}
-
-interface FormData {
-  clientId: string;
-  topicId: string;
-  hours: number;
-  minutes: number;
-  description: string;
-}
+import type { Client, Topic, Subtopic, FormData } from "@/types";
 
 interface EntryFormProps {
   clients: Client[];
@@ -44,13 +28,22 @@ export function EntryForm({
   onFormChange,
   onSubmit,
 }: EntryFormProps) {
-  const topicSelectRef = useRef<TopicSelectRef>(null);
+  const topicSelectRef = useRef<TopicCascadeSelectRef>(null);
   const durationPickerRef = useRef<DurationPickerRef>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
+  const [highlightDescription, setHighlightDescription] = useState(false);
+
+  // Clear highlight after 1 second
+  useEffect(() => {
+    if (highlightDescription) {
+      const timer = setTimeout(() => setHighlightDescription(false), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightDescription]);
 
   const canSubmit =
     formData.clientId &&
-    formData.topicId &&
+    formData.subtopicId &&
     (formData.hours > 0 || formData.minutes > 0);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -58,6 +51,39 @@ export function EntryForm({
       e.preventDefault();
       onSubmit();
     }
+  };
+
+  const handleSubtopicSelect = (
+    subtopicId: string,
+    subtopic: Subtopic
+  ) => {
+    // Pre-fill description with subtopic name
+    const description = subtopic.isPrefix ? `${subtopic.name} ` : subtopic.name;
+    onFormChange({ subtopicId, description });
+
+    if (subtopic.isPrefix) {
+      // For prefix subtopics: highlight description and focus it for user to add details
+      setHighlightDescription(true);
+      setTimeout(() => {
+        descriptionInputRef.current?.focus();
+        // Place cursor at end of text
+        const input = descriptionInputRef.current;
+        if (input) {
+          input.setSelectionRange(input.value.length, input.value.length);
+        }
+      }, 0);
+    } else {
+      // For regular subtopics: auto-open duration picker
+      setTimeout(() => durationPickerRef.current?.open(), 0);
+    }
+  };
+
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Clear highlight when user starts typing
+    if (highlightDescription) {
+      setHighlightDescription(false);
+    }
+    onFormChange({ description: e.target.value });
   };
 
   return (
@@ -76,18 +102,14 @@ export function EntryForm({
           className="w-[220px] flex-shrink-0"
         />
 
-        {/* Topic Selector */}
-        <TopicSelect
+        {/* Topic/Subtopic Cascade Selector */}
+        <TopicCascadeSelect
           ref={topicSelectRef}
           topics={topics}
-          value={formData.topicId}
-          onChange={(topicId) => {
-            onFormChange({ topicId });
-            // Auto-open duration picker after topic selection
-            setTimeout(() => durationPickerRef.current?.open(), 0);
-          }}
+          value={formData.subtopicId}
+          onChange={handleSubtopicSelect}
           placeholder="Select topic..."
-          className="w-[220px] flex-shrink-0"
+          className="w-[260px] flex-shrink-0"
         />
 
         {/* Duration Picker */}
@@ -108,16 +130,17 @@ export function EntryForm({
           ref={descriptionInputRef}
           type="text"
           value={formData.description}
-          onChange={(e) => onFormChange({ description: e.target.value })}
+          onChange={handleDescriptionChange}
           onKeyDown={handleKeyDown}
           placeholder="What did you work on?"
-          className="
+          className={`
             flex-1 min-w-[200px] px-3 py-2 rounded text-sm
             bg-[var(--bg-surface)] border border-[var(--border-subtle)]
             text-[var(--text-primary)] placeholder-[var(--text-muted)]
             focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
             focus:outline-none transition-all duration-200
-          "
+            ${highlightDescription ? "ring-[2px] ring-[var(--accent-pink-glow)] border-[var(--border-accent)]" : ""}
+          `}
         />
 
         {/* Submit Button */}

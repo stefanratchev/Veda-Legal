@@ -13,13 +13,25 @@ export default async function TimesheetsPage() {
     orderBy: { name: "asc" },
   });
 
-  // Fetch active topics for the dropdown
+  // Fetch active topics with subtopics for the dropdown
   const topics = await db.topic.findMany({
     where: { status: "ACTIVE" },
     select: {
       id: true,
       name: true,
-      code: true,
+      displayOrder: true,
+      status: true,
+      subtopics: {
+        where: { status: "ACTIVE" },
+        select: {
+          id: true,
+          name: true,
+          isPrefix: true,
+          displayOrder: true,
+          status: true,
+        },
+        orderBy: { displayOrder: "asc" },
+      },
     },
     orderBy: { displayOrder: "asc" },
   });

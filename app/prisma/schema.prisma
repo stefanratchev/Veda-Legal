@@ -73,19 +73,41 @@ enum TopicStatus {
   INACTIVE
 }
 
+enum SubtopicStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model Topic {
   id           String      @id @default(cuid())
   name         String
-  code         String      @unique
   displayOrder Int         @default(0)
   status       TopicStatus @default(ACTIVE)
 
-  timeEntries  TimeEntry[]
+  subtopics    Subtopic[]
 
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
   @@map("topics")
+}
+
+model Subtopic {
+  id           String         @id @default(cuid())
+  topicId      String
+  topic        Topic          @relation(fields: [topicId], references: [id])
+  name         String
+  isPrefix     Boolean        @default(false)
+  displayOrder Int            @default(0)
+  status       SubtopicStatus @default(ACTIVE)
+
+  timeEntries  TimeEntry[]
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([topicId])
+  @@map("subtopics")
 }
 
 enum PracticeArea {
@@ -108,20 +130,23 @@ model TimeEntry {
   hours         Decimal   @db.Decimal(4, 2)
   description   String
 
-  // Relations
   userId        String
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   clientId      String
   client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  topicId       String?
-  topic         Topic?    @relation(fields: [topicId], references: [id])
+
+  // New: Subtopic reference + denormalized names for immutability
+  subtopicId    String?
+  subtopic      Subtopic? @relation(fields: [subtopicId], references: [id])
+  topicName     String    @default("")
+  subtopicName  String    @default("")
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   @@index([userId])
   @@index([clientId])
-  @@index([topicId])
+  @@index([subtopicId])
   @@index([date])
   @@map("time_entries")
 }

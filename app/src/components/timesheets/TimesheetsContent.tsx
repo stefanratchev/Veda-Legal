@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   formatDateISO,
-  parseHoursToComponents,
   toDecimalHours,
   isSameDay,
 } from "@/lib/date-utils";
@@ -27,8 +26,6 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFormData, setEditFormData] = useState<FormData>(initialFormData);
 
   // Fetch entries for selected date
   const fetchEntries = useCallback(async (date: Date) => {
@@ -96,7 +93,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!formData.clientId || !formData.topicId) return;
+    if (!formData.clientId || !formData.subtopicId) return;
     if (formData.hours === 0 && formData.minutes === 0) return;
 
     setIsLoading(true);
@@ -111,7 +108,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         body: JSON.stringify({
           date: formatDateISO(selectedDate),
           clientId: formData.clientId,
-          topicId: formData.topicId,
+          subtopicId: formData.subtopicId,
           hours: totalHours,
           description: formData.description.trim(),
         }),
@@ -126,11 +123,11 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
 
       setEntries((prev) => [data, ...prev]);
       setDatesWithEntries((prev) => new Set([...prev, formatDateISO(selectedDate)]));
-      // Keep client and topic selected, only reset duration and description
+      // Keep client and subtopic selected, only reset duration and description
       setFormData((prev) => ({
         ...initialFormData,
         clientId: prev.clientId,
-        topicId: prev.topicId,
+        subtopicId: prev.subtopicId,
       }));
     } catch {
       setError("Failed to create entry");
@@ -139,68 +136,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     }
   }, [formData, selectedDate]);
 
-  // Edit handlers
-  const startEdit = useCallback((entry: TimeEntry) => {
-    const { hours, minutes } = parseHoursToComponents(entry.hours);
-    setEditFormData({
-      clientId: entry.clientId,
-      topicId: entry.topicId || "",
-      hours,
-      minutes,
-      description: entry.description,
-    });
-    setEditingId(entry.id);
-  }, []);
-
-  const cancelEdit = useCallback(() => {
-    setEditingId(null);
-    setEditFormData(initialFormData);
-  }, []);
-
-  const handleEditFormChange = useCallback((updates: Partial<FormData>) => {
-    setEditFormData((prev) => ({ ...prev, ...updates }));
-  }, []);
-
-  const saveEdit = useCallback(async (entryId: string) => {
-    if (editFormData.hours === 0 && editFormData.minutes === 0) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    const totalHours = toDecimalHours(editFormData.hours, editFormData.minutes);
-
-    try {
-      const response = await fetch("/api/timesheets", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: entryId,
-          clientId: editFormData.clientId,
-          topicId: editFormData.topicId,
-          hours: totalHours,
-          description: editFormData.description.trim(),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Failed to update entry");
-        return;
-      }
-
-      setEntries((prev) => prev.map((e) => (e.id === entryId ? data : e)));
-      setEditingId(null);
-    } catch {
-      setError("Failed to update entry");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [editFormData]);
-
   const deleteEntry = useCallback(async (entryId: string) => {
-    if (!confirm("Delete this entry?")) return;
-
     setIsLoading(true);
     setError(null);
     try {
@@ -254,18 +190,9 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
       {/* Entries List */}
       <EntriesList
         entries={entries}
-        clients={clients}
-        topics={topics}
         isLoadingEntries={isLoadingEntries}
         isToday={isSameDay(selectedDate, today)}
-        editingId={editingId}
-        editFormData={editFormData}
-        isLoading={isLoading}
-        onStartEdit={startEdit}
-        onCancelEdit={cancelEdit}
-        onSaveEdit={saveEdit}
-        onDelete={deleteEntry}
-        onEditFormChange={handleEditFormChange}
+        onDeleteEntry={deleteEntry}
       />
     </div>
   );

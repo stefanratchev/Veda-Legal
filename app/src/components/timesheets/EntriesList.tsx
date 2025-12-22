@@ -3,76 +3,20 @@
 import { useMemo } from "react";
 import { formatHours } from "@/lib/date-utils";
 import { EntryCard } from "./EntryCard";
-
-interface Client {
-  id: string;
-  name: string;
-  timesheetCode: string;
-}
-
-interface Topic {
-  id: string;
-  name: string;
-  code: string;
-}
-
-interface TimeEntry {
-  id: string;
-  date: string;
-  hours: number;
-  description: string;
-  clientId: string;
-  client: {
-    id: string;
-    name: string;
-    timesheetCode: string;
-  };
-  topicId?: string | null;
-  topic?: {
-    id: string;
-    name: string;
-    code: string;
-  } | null;
-}
-
-interface FormData {
-  clientId: string;
-  topicId: string;
-  hours: number;
-  minutes: number;
-  description: string;
-}
+import type { TimeEntry } from "@/types";
 
 interface EntriesListProps {
   entries: TimeEntry[];
-  clients: Client[];
-  topics: Topic[];
   isLoadingEntries: boolean;
   isToday: boolean;
-  editingId: string | null;
-  editFormData: FormData;
-  isLoading: boolean;
-  onStartEdit: (entry: TimeEntry) => void;
-  onCancelEdit: () => void;
-  onSaveEdit: (entryId: string) => void;
-  onDelete: (entryId: string) => void;
-  onEditFormChange: (updates: Partial<FormData>) => void;
+  onDeleteEntry: (entryId: string) => void;
 }
 
 export function EntriesList({
   entries,
-  clients,
-  topics,
   isLoadingEntries,
   isToday,
-  editingId,
-  editFormData,
-  isLoading,
-  onStartEdit,
-  onCancelEdit,
-  onSaveEdit,
-  onDelete,
-  onEditFormChange,
+  onDeleteEntry,
 }: EntriesListProps) {
   const dailyTotal = useMemo(() => {
     return entries.reduce((sum, entry) => sum + entry.hours, 0);
@@ -109,16 +53,7 @@ export function EntriesList({
             <EntryCard
               key={entry.id}
               entry={entry}
-              clients={clients}
-              topics={topics}
-              isEditing={editingId === entry.id}
-              editFormData={editFormData}
-              isLoading={isLoading}
-              onStartEdit={() => onStartEdit(entry)}
-              onCancelEdit={onCancelEdit}
-              onSaveEdit={() => onSaveEdit(entry.id)}
-              onDelete={() => onDelete(entry.id)}
-              onEditFormChange={onEditFormChange}
+              onDelete={() => onDeleteEntry(entry.id)}
             />
           ))}
 

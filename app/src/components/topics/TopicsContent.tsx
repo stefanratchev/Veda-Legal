@@ -833,38 +833,47 @@ function SortableTopicRow({ id, disabled, ...props }: SortableTopicRowProps) {
   );
 }
 
-// Subtopic row component
-interface SubtopicRowProps {
+// Subtopic row component with drag handle
+interface SubtopicRowWithHandleProps {
   subtopic: Subtopic;
   onEdit: () => void;
   onToggleStatus: () => void;
   onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  isFirst: boolean;
-  isLast: boolean;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+  isDragging?: boolean;
   isInactive?: boolean;
+  disabled?: boolean;
 }
 
-function SubtopicRow({
+function SubtopicRowWithHandle({
   subtopic,
   onEdit,
   onToggleStatus,
   onDelete,
-  onMoveUp,
-  onMoveDown,
-  isFirst,
-  isLast,
+  dragHandleProps,
+  isDragging,
   isInactive,
-}: SubtopicRowProps) {
+  disabled,
+}: SubtopicRowWithHandleProps) {
   return (
     <div
       className={`
         p-3 flex items-center justify-between transition-colors hover:bg-[var(--bg-hover)]
         ${isInactive ? "opacity-60" : ""}
+        ${isDragging ? "shadow-lg bg-[var(--bg-elevated)] rounded" : ""}
       `}
     >
       <div className="flex items-center gap-2 min-w-0">
+        <button
+          {...dragHandleProps}
+          className={`p-1 -ml-1 transition-colors touch-none ${
+            disabled
+              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-grab active:cursor-grabbing"
+          }`}
+        >
+          <DragHandleIcon />
+        </button>
         <span
           className={`text-sm truncate ${isInactive ? "text-[var(--text-secondary)]" : "text-[var(--text-primary)]"}`}
         >
@@ -877,30 +886,6 @@ function SubtopicRow({
         )}
       </div>
       <div className="flex items-center gap-1 shrink-0">
-        <button
-          onClick={onMoveUp}
-          disabled={isFirst}
-          className={`p-1.5 text-xs transition-colors ${
-            isFirst
-              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
-              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-          }`}
-          title="Move up"
-        >
-          <ChevronUpIcon />
-        </button>
-        <button
-          onClick={onMoveDown}
-          disabled={isLast}
-          className={`p-1.5 text-xs transition-colors ${
-            isLast
-              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
-              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-          }`}
-          title="Move down"
-        >
-          <ChevronDownIcon />
-        </button>
         <button
           onClick={onEdit}
           className="p-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
@@ -927,6 +912,41 @@ function SubtopicRow({
           <DeleteIcon />
         </button>
       </div>
+    </div>
+  );
+}
+
+// Sortable wrapper for SubtopicRow
+interface SortableSubtopicRowProps extends Omit<SubtopicRowWithHandleProps, "dragHandleProps" | "isDragging"> {
+  id: string;
+  disabled?: boolean;
+}
+
+function SortableSubtopicRow({ id, disabled, ...props }: SortableSubtopicRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    position: isDragging ? "relative" as const : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <SubtopicRowWithHandle
+        {...props}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        isDragging={isDragging}
+        disabled={disabled}
+      />
     </div>
   );
 }

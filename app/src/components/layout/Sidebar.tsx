@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useClickOutside } from "@/hooks/useClickOutside";
@@ -106,13 +107,13 @@ export function Sidebar({ user, className }: SidebarProps) {
     <aside className={`fixed left-0 top-0 h-screen w-[240px] bg-[var(--bg-elevated)] border-r border-[var(--border-subtle)] flex flex-col ${className || ""}`}>
       {/* Logo */}
       <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
-        <h1 className="font-heading text-[22px] font-semibold tracking-tight">
-          <span className="text-[var(--accent-pink)]">VEDA</span>{" "}
-          <span className="text-[var(--text-primary)]">Legal</span>
-        </h1>
-        <p className="text-[10px] text-[var(--text-muted)] mt-0.5 tracking-wider uppercase">
-          Practice Management
-        </p>
+        <Image
+          src="/logo.svg"
+          alt="Veda Legal"
+          width={180}
+          height={72}
+          priority
+        />
       </div>
 
       {/* Navigation */}

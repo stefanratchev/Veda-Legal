@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, desc } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
+import { clients } from "@/lib/schema";
 import {
   requireAuth,
   requireWriteAccess,
@@ -14,20 +16,7 @@ import {
 // Valid status values
 const VALID_STATUS = ["ACTIVE", "INACTIVE"] as const;
 
-const CLIENT_SELECT = {
-  id: true,
-  name: true,
-  invoicedName: true,
-  invoiceAttn: true,
-  email: true,
-  secondaryEmails: true,
-  hourlyRate: true,
-  status: true,
-  notes: true,
-  createdAt: true,
-} as const;
-
-function serializeClient<T extends { hourlyRate: Prisma.Decimal | null }>(client: T) {
+function serializeClient<T extends { hourlyRate: string | null }>(client: T) {
   return {
     ...client,
     hourlyRate: serializeDecimal(client.hourlyRate),
@@ -42,12 +31,23 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const clients = await db.client.findMany({
-      select: CLIENT_SELECT,
-      orderBy: { createdAt: "desc" },
+    const allClients = await db.query.clients.findMany({
+      columns: {
+        id: true,
+        name: true,
+        invoicedName: true,
+        invoiceAttn: true,
+        email: true,
+        secondaryEmails: true,
+        hourlyRate: true,
+        status: true,
+        notes: true,
+        createdAt: true,
+      },
+      orderBy: [desc(clients.createdAt)],
     });
 
-    return NextResponse.json(clients.map(serializeClient));
+    return NextResponse.json(allClients.map(serializeClient));
   } catch (error) {
     console.error("Database error fetching clients:", error);
     return NextResponse.json(
@@ -103,18 +103,29 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const client = await db.client.create({
-      data: {
-        name: name.trim(),
-        invoicedName: invoicedName?.trim() || null,
-        invoiceAttn: invoiceAttn?.trim() || null,
-        email: email?.trim() || null,
-        secondaryEmails: secondaryEmails?.trim() || null,
-        hourlyRate: hourlyRate ? new Prisma.Decimal(hourlyRate) : null,
-        status: clientStatus,
-        notes: notes?.trim() || null,
-      },
-      select: CLIENT_SELECT,
+    const now = new Date().toISOString();
+    const [client] = await db.insert(clients).values({
+      id: createId(),
+      name: name.trim(),
+      invoicedName: invoicedName?.trim() || null,
+      invoiceAttn: invoiceAttn?.trim() || null,
+      email: email?.trim() || null,
+      secondaryEmails: secondaryEmails?.trim() || null,
+      hourlyRate: hourlyRate ? String(hourlyRate) : null,
+      status: clientStatus,
+      notes: notes?.trim() || null,
+      updatedAt: now,
+    }).returning({
+      id: clients.id,
+      name: clients.name,
+      invoicedName: clients.invoicedName,
+      invoiceAttn: clients.invoiceAttn,
+      email: clients.email,
+      secondaryEmails: clients.secondaryEmails,
+      hourlyRate: clients.hourlyRate,
+      status: clients.status,
+      notes: clients.notes,
+      createdAt: clients.createdAt,
     });
 
     return NextResponse.json(serializeClient(client));
@@ -180,34 +191,44 @@ export async function PATCH(request: NextRequest) {
     return errorResponse("Invalid status value", 400);
   }
 
-  const updateData: Prisma.ClientUpdateInput = {};
+  // Build update object - always set updatedAt
+  const updateData: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
   if (name !== undefined) updateData.name = name.trim();
   if (invoicedName !== undefined) updateData.invoicedName = invoicedName?.trim() || null;
   if (invoiceAttn !== undefined) updateData.invoiceAttn = invoiceAttn?.trim() || null;
   if (email !== undefined) updateData.email = email?.trim() || null;
   if (secondaryEmails !== undefined) updateData.secondaryEmails = secondaryEmails?.trim() || null;
   if (hourlyRate !== undefined) {
-    updateData.hourlyRate = hourlyRate ? new Prisma.Decimal(hourlyRate) : null;
+    updateData.hourlyRate = hourlyRate ? String(hourlyRate) : null;
   }
   if (status !== undefined) updateData.status = status;
   if (notes !== undefined) updateData.notes = notes?.trim() || null;
 
   try {
-    const client = await db.client.update({
-      where: { id },
-      data: updateData,
-      select: CLIENT_SELECT,
-    });
+    const [updatedClient] = await db.update(clients)
+      .set(updateData)
+      .where(eq(clients.id, id))
+      .returning({
+        id: clients.id,
+        name: clients.name,
+        invoicedName: clients.invoicedName,
+        invoiceAttn: clients.invoiceAttn,
+        email: clients.email,
+        secondaryEmails: clients.secondaryEmails,
+        hourlyRate: clients.hourlyRate,
+        status: clients.status,
+        notes: clients.notes,
+        createdAt: clients.createdAt,
+      });
 
-    return NextResponse.json(serializeClient(client));
-  } catch (error) {
-    // Check for Prisma "Record not found" error
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    if (!updatedClient) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
+
+    return NextResponse.json(serializeClient(updatedClient));
+  } catch (error) {
     console.error("Database error updating client:", error);
     return NextResponse.json(
       { error: "Failed to update client" },
@@ -234,40 +255,30 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    // Use transaction to prevent race condition between check and delete
-    await db.$transaction(async (tx) => {
-      const client = await tx.client.findUnique({
-        where: { id },
-        include: { _count: { select: { timeEntries: true } } },
-      });
-
-      if (!client) {
-        throw new Error("NOT_FOUND");
-      }
-
-      if (client._count.timeEntries > 0) {
-        throw new Error("HAS_TIME_ENTRIES");
-      }
-
-      await tx.client.delete({ where: { id } });
+    // Check if client exists and has time entries
+    const clientWithEntries = await db.query.clients.findFirst({
+      where: eq(clients.id, id),
+      with: { timeEntries: { columns: { id: true }, limit: 1 } },
     });
+
+    if (!clientWithEntries) {
+      return NextResponse.json(
+        { error: "Client not found" },
+        { status: 404 }
+      );
+    }
+
+    if (clientWithEntries.timeEntries.length > 0) {
+      return NextResponse.json(
+        { error: "Cannot delete client with existing time entries" },
+        { status: 400 }
+      );
+    }
+
+    await db.delete(clients).where(eq(clients.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message === "NOT_FOUND") {
-        return NextResponse.json(
-          { error: "Client not found" },
-          { status: 404 }
-        );
-      }
-      if (error.message === "HAS_TIME_ENTRIES") {
-        return NextResponse.json(
-          { error: "Cannot delete client with existing time entries" },
-          { status: 400 }
-        );
-      }
-    }
     console.error("Database error deleting client:", error);
     return NextResponse.json(
       { error: "Failed to delete client" },

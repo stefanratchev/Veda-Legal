@@ -25,29 +25,30 @@ export function EntryCard({ entry, onDelete }: EntryCardProps) {
     setShowConfirm(false);
   };
 
-  // Truncate subtopic name for display
-  const displaySubtopic = entry.subtopicName.length > 30
-    ? entry.subtopicName.slice(0, 30) + "..."
-    : entry.subtopicName;
-
+  // Build full topic path for display
   const fullTopicPath = entry.topicName && entry.subtopicName
     ? `${entry.topicName} > ${entry.subtopicName}`
-    : null;
+    : entry.subtopicName || entry.topicName || null;
+
+  // Truncate for display
+  const displayTopicPath = fullTopicPath && fullTopicPath.length > 40
+    ? fullTopicPath.slice(0, 40) + "..."
+    : fullTopicPath;
 
   return (
     <div className="p-4 hover:bg-[var(--bg-hover)] transition-colors">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-[var(--accent-pink)] font-mono text-[11px] bg-[var(--accent-pink-glow)] px-1.5 py-0.5 rounded">
-              {entry.client.timesheetCode}
+            <span className="text-[var(--accent-pink)] text-[11px] font-medium bg-[var(--accent-pink-glow)] px-1.5 py-0.5 rounded">
+              {entry.client.name}
             </span>
-            {entry.subtopicName && (
+            {displayTopicPath && (
               <span
-                className="text-[var(--text-muted)] text-[11px] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded truncate max-w-[200px]"
+                className="text-[var(--text-muted)] text-[11px] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded truncate max-w-[280px]"
                 title={fullTopicPath || undefined}
               >
-                {displaySubtopic}
+                {displayTopicPath}
               </span>
             )}
             <span className="text-[13px] text-[var(--text-muted)]">

@@ -48,6 +48,9 @@ export interface DataTableProps<TData> {
 
   /** Icon shown in empty state */
   emptyIcon?: ReactNode;
+
+  /** Callback when a row is clicked */
+  onRowClick?: (row: TData) => void;
 }
 
 export interface TableFiltersProps {

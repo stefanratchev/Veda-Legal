@@ -13,7 +13,7 @@ import { Prisma } from "@prisma/client";
 const ADMIN_POSITIONS = ["ADMIN", "PARTNER"] as const;
 
 // All positions can write (log time entries)
-const WRITE_POSITIONS = ["ADMIN", "PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE"] as const;
+const WRITE_POSITIONS = ["ADMIN", "PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE", "CONSULTANT"] as const;
 
 /**
  * Check if a position has admin-level access.

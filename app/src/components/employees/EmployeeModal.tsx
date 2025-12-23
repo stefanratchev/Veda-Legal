@@ -24,6 +24,7 @@ const positionOptions: Array<{ value: Position; label: string; description: stri
   { value: "PARTNER", label: "Partner", description: "Full system access, can manage clients and billing" },
   { value: "SENIOR_ASSOCIATE", label: "Senior Associate", description: "Can log time entries" },
   { value: "ASSOCIATE", label: "Associate", description: "Can log time entries" },
+  { value: "CONSULTANT", label: "Consultant", description: "Can log time entries" },
 ];
 
 export function EmployeeModal({

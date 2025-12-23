@@ -1,7 +1,10 @@
 "use client";
 
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
+import { useClickOutside } from "@/hooks/useClickOutside";
 
 interface NavItem {
   name: string;
@@ -58,6 +61,7 @@ interface SidebarProps {
     name: string;
     role: string;
     initials: string;
+    image?: string | null;
   };
   className?: string;
 }
@@ -65,6 +69,10 @@ interface SidebarProps {
 export function Sidebar({ user, className }: SidebarProps) {
   const pathname = usePathname();
   const isAdmin = user?.role === "ADMIN";
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside(userMenuRef, () => setShowUserMenu(false), showUserMenu);
 
   // Filter nav items based on role
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
@@ -118,17 +126,54 @@ export function Sidebar({ user, className }: SidebarProps) {
 
       {/* User Profile Footer */}
       {user && (
-        <div className="p-3 border-t border-[var(--border-subtle)]">
-          <div className="flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--bg-hover)] transition-colors cursor-pointer">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--accent-pink)] to-[var(--accent-pink-dim)] flex items-center justify-center text-[var(--bg-deep)] font-heading font-semibold text-xs">
-              {user.initials}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
-                {user.name}
-              </p>
-              <p className="text-[11px] text-[var(--text-muted)] leading-tight">{user.role}</p>
-            </div>
+        <div className="p-3 border-t border-[var(--border-subtle)]" ref={userMenuRef}>
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+            >
+              {user.image ? (
+                /* eslint-disable-next-line @next/next/no-img-element -- base64 data URL doesn't benefit from next/image optimization */
+                <img
+                  src={user.image}
+                  alt={user.name}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--accent-pink)] to-[var(--accent-pink-dim)] flex items-center justify-center text-[var(--bg-deep)] font-heading font-semibold text-xs">
+                  {user.initials}
+                </div>
+              )}
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
+                  {user.name}
+                </p>
+                <p className="text-[11px] text-[var(--text-muted)] leading-tight">{user.role}</p>
+              </div>
+              <svg
+                className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Dropdown Menu */}
+            {showUserMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg shadow-lg overflow-hidden animate-fade-up">
+                <button
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
           {/* Version indicator - admin only */}
           {isAdmin && (

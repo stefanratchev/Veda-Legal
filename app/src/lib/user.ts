@@ -10,6 +10,7 @@ export interface AuthenticatedUser {
   name: string;
   role: UserRole;
   initials: string;
+  image: string | null;
 }
 
 /**
@@ -35,7 +36,7 @@ export async function getAuthenticatedUser(
 ): Promise<AuthenticatedUser | null> {
   const dbUser = await db.user.findUnique({
     where: { email },
-    select: { id: true, name: true, role: true },
+    select: { id: true, name: true, role: true, image: true },
   });
 
   if (!dbUser) {
@@ -47,6 +48,7 @@ export async function getAuthenticatedUser(
     name: dbUser.name || "User",
     role: dbUser.role,
     initials: getInitials(dbUser.name),
+    image: dbUser.image,
   };
 }
 

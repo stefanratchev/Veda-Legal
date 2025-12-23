@@ -297,10 +297,27 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     }
   }, [data.id, isFinalized]);
 
-  // Export PDF (placeholder)
-  const handleExportPDF = useCallback(() => {
-    alert("PDF export functionality coming soon");
-  }, []);
+  // Export PDF
+  const handleExportPDF = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/billing/${data.id}/pdf`);
+      if (!response.ok) {
+        throw new Error("Failed to generate PDF");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Service_Description_${(data.client.invoicedName || data.client.name).replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("PDF export error:", error);
+      alert("Failed to export PDF. Please try again.");
+    }
+  }, [data.id, data.client.invoicedName, data.client.name]);
 
   return (
     <div className="space-y-6">

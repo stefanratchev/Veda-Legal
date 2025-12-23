@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { timeEntries, users } from "@/lib/schema";
 import { requireAuth } from "@/lib/api-utils";
-import { Prisma } from "@prisma/client";
 
 interface EmployeeStats {
   id: string;
@@ -49,9 +50,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const user = await db.user.findUnique({
-    where: { email: auth.session.user?.email || "" },
-    select: { id: true, email: true, name: true, position: true },
+  const user = await db.query.users.findFirst({
+    where: eq(users.email, auth.session.user?.email || ""),
+    columns: { id: true, email: true, name: true, position: true },
   });
 
   if (!user) {
@@ -83,26 +84,34 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch time entries for the period
-    const whereClause: Prisma.TimeEntryWhereInput = {
-      date: { gte: start, lte: end },
-      // Non-admins only see their own data
-      ...(!isAdmin && { userId: user.id }),
-    };
+    // Format dates as YYYY-MM-DD strings for Drizzle comparison
+    const startStr = start.toISOString().split("T")[0];
+    const endStr = end.toISOString().split("T")[0];
 
-    const entries = await db.timeEntry.findMany({
+    // Build where clause conditionally for non-admins
+    const whereClause = isAdmin
+      ? and(gte(timeEntries.date, startStr), lte(timeEntries.date, endStr))
+      : and(
+          gte(timeEntries.date, startStr),
+          lte(timeEntries.date, endStr),
+          eq(timeEntries.userId, user.id)
+        );
+
+    const entries = await db.query.timeEntries.findMany({
       where: whereClause,
-      select: {
+      columns: {
         id: true,
         date: true,
         hours: true,
         description: true,
         userId: true,
-        user: { select: { id: true, name: true } },
         clientId: true,
-        client: { select: { id: true, name: true, hourlyRate: true } },
       },
-      orderBy: { date: "desc" },
+      with: {
+        user: { columns: { id: true, name: true } },
+        client: { columns: { id: true, name: true, hourlyRate: true } },
+      },
+      orderBy: [desc(timeEntries.date)],
     });
 
     // Aggregate by employee
@@ -151,8 +160,8 @@ export async function GET(request: NextRequest) {
       const emp = employeeMap.get(empId)!;
       emp.totalHours += hours;
 
-      const dateStr = entry.date.toISOString().split("T")[0];
-      emp.dailyHours.set(dateStr, (emp.dailyHours.get(dateStr) || 0) + hours);
+      // entry.date is already a YYYY-MM-DD string in Drizzle
+      emp.dailyHours.set(entry.date, (emp.dailyHours.get(entry.date) || 0) + hours);
 
       if (!emp.clients.has(entry.clientId)) {
         emp.clients.set(entry.clientId, { name: entry.client.name, hours: 0 });
@@ -223,7 +232,7 @@ export async function GET(request: NextRequest) {
       byClient: isAdmin ? byClient : byClient.map(c => ({ ...c, hourlyRate: null, revenue: null })),
       entries: entries.map((e) => ({
         id: e.id,
-        date: e.date.toISOString().split("T")[0],
+        date: e.date, // Already a YYYY-MM-DD string in Drizzle
         hours: Number(e.hours),
         description: e.description,
         userId: e.userId,

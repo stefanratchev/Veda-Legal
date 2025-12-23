@@ -1,39 +1,42 @@
-import { db } from "@/lib/db";
+import { eq, asc } from "drizzle-orm";
+import { db, clients, topics, subtopics } from "@/lib/db";
 import { TimesheetsContent } from "@/components/timesheets/TimesheetsContent";
 
 export default async function TimesheetsPage() {
   // Fetch active clients for the dropdown
-  const clients = await db.client.findMany({
-    where: { status: "ACTIVE" },
-    select: {
+  const clientsList = await db.query.clients.findMany({
+    where: eq(clients.status, "ACTIVE"),
+    columns: {
       id: true,
       name: true,
     },
-    orderBy: { name: "asc" },
+    orderBy: [asc(clients.name)],
   });
 
   // Fetch active topics with subtopics for the dropdown
-  const topics = await db.topic.findMany({
-    where: { status: "ACTIVE" },
-    select: {
+  const topicsList = await db.query.topics.findMany({
+    where: eq(topics.status, "ACTIVE"),
+    columns: {
       id: true,
       name: true,
       displayOrder: true,
       status: true,
+    },
+    with: {
       subtopics: {
-        where: { status: "ACTIVE" },
-        select: {
+        where: eq(subtopics.status, "ACTIVE"),
+        columns: {
           id: true,
           name: true,
           isPrefix: true,
           displayOrder: true,
           status: true,
         },
-        orderBy: { displayOrder: "asc" },
+        orderBy: [asc(subtopics.displayOrder)],
       },
     },
-    orderBy: { displayOrder: "asc" },
+    orderBy: [asc(topics.displayOrder)],
   });
 
-  return <TimesheetsContent clients={clients} topics={topics} />;
+  return <TimesheetsContent clients={clientsList} topics={topicsList} />;
 }

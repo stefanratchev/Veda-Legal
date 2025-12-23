@@ -1,4 +1,5 @@
-import { db } from "@/lib/db";
+import { desc } from "drizzle-orm";
+import { db, users } from "@/lib/db";
 import { getCurrentUser } from "@/lib/user";
 import { EmployeesContent } from "@/components/employees/EmployeesContent";
 
@@ -7,8 +8,8 @@ export default async function EmployeesPage() {
   const user = await getCurrentUser();
 
   // Fetch employees from database
-  const employees = await db.user.findMany({
-    select: {
+  const employees = await db.query.users.findMany({
+    columns: {
       id: true,
       name: true,
       email: true,
@@ -17,14 +18,14 @@ export default async function EmployeesPage() {
       createdAt: true,
       lastLogin: true,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [desc(users.createdAt)],
   });
 
-  // Convert for client component (Date to string)
+  // Convert for client component (timestamps already strings from Drizzle)
   const serializedEmployees = employees.map((employee) => ({
     ...employee,
-    createdAt: employee.createdAt.toISOString(),
-    lastLogin: employee.lastLogin?.toISOString() ?? null,
+    createdAt: employee.createdAt,
+    lastLogin: employee.lastLogin ?? null,
   }));
 
   return (

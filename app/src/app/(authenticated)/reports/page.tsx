@@ -1,11 +1,8 @@
-import { db } from "@/lib/db";
+import { and, eq, gte, lte, desc } from "drizzle-orm";
+import { db, timeEntries } from "@/lib/db";
 import { getCurrentUser } from "@/lib/user";
 import { ReportsContent, ReportData } from "@/components/reports/ReportsContent";
-import {
-  getMonthRange,
-  formatDateISO,
-  getPreviousPeriod,
-} from "@/lib/date-utils";
+import { getMonthRange, formatDateISO, getPreviousPeriod } from "@/lib/date-utils";
 
 interface GetReportDataParams {
   startDate: Date;
@@ -20,34 +17,41 @@ async function getReportData({
   userId,
   isAdmin,
 }: GetReportDataParams): Promise<ReportData> {
-  // Build where clause - filter by user if not admin
-  const whereClause = {
-    date: {
-      gte: startDate,
-      lte: endDate,
-    },
-    ...(isAdmin ? {} : { userId }),
-  };
+  // Convert dates to ISO strings for Drizzle date comparison
+  const startDateStr = formatDateISO(startDate);
+  const endDateStr = formatDateISO(endDate);
+
+  // Build where conditions - filter by user if not admin
+  const whereConditions = isAdmin
+    ? and(
+        gte(timeEntries.date, startDateStr),
+        lte(timeEntries.date, endDateStr)
+      )
+    : and(
+        gte(timeEntries.date, startDateStr),
+        lte(timeEntries.date, endDateStr),
+        eq(timeEntries.userId, userId)
+      );
 
   // Query entries with user and client relations
-  const entries = await db.timeEntry.findMany({
-    where: whereClause,
-    include: {
+  const entries = await db.query.timeEntries.findMany({
+    where: whereConditions,
+    with: {
       user: {
-        select: {
+        columns: {
           id: true,
           name: true,
         },
       },
       client: {
-        select: {
+        columns: {
           id: true,
           name: true,
           hourlyRate: true,
         },
       },
     },
-    orderBy: { date: "desc" },
+    orderBy: [desc(timeEntries.date)],
   });
 
   // Use Maps for efficient aggregation
@@ -83,7 +87,8 @@ async function getReportData({
     const hourlyRate = entry.client.hourlyRate
       ? Number(entry.client.hourlyRate)
       : null;
-    const dateStr = formatDateISO(entry.date);
+    // In Drizzle, date is already a string in YYYY-MM-DD format
+    const dateStr = entry.date;
 
     totalHours += hours;
     if (hourlyRate !== null) {
@@ -221,7 +226,8 @@ async function getReportData({
   // Transform entries for the response
   const transformedEntries = entries.map((entry) => ({
     id: entry.id,
-    date: formatDateISO(entry.date),
+    // In Drizzle, date is already a string in YYYY-MM-DD format
+    date: entry.date,
     hours: Number(entry.hours),
     description: entry.description,
     userId: entry.user.id,

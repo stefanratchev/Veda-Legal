@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { ClientStatus } from "@prisma/client";
+
+type ClientStatus = "ACTIVE" | "INACTIVE";
 
 interface FormData {
   name: string;

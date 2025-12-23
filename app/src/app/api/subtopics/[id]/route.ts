@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { subtopics, timeEntries } from "@/lib/schema";
 import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
 
 interface RouteContext {
@@ -52,17 +54,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const subtopic = await db.subtopic.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        isPrefix: true,
-        displayOrder: true,
-        status: true,
-      },
-    });
+    const [subtopic] = await db.update(subtopics)
+      .set({
+        ...updateData,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(subtopics.id, id))
+      .returning({
+        id: subtopics.id,
+        name: subtopics.name,
+        isPrefix: subtopics.isPrefix,
+        displayOrder: subtopics.displayOrder,
+        status: subtopics.status,
+      });
+
+    if (!subtopic) {
+      return errorResponse("Subtopic not found", 404);
+    }
 
     return NextResponse.json(subtopic);
   } catch (error) {
@@ -82,15 +90,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   try {
     // Check if any time entries reference this subtopic
-    const entryCount = await db.timeEntry.count({
-      where: { subtopicId: id },
+    const entriesWithSubtopic = await db.query.timeEntries.findFirst({
+      where: eq(timeEntries.subtopicId, id),
+      columns: { id: true },
     });
 
-    if (entryCount > 0) {
+    if (entriesWithSubtopic) {
       return errorResponse("Cannot delete subtopic with time entries. Deactivate instead.", 400);
     }
 
-    await db.subtopic.delete({ where: { id } });
+    await db.delete(subtopics).where(eq(subtopics.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error) {

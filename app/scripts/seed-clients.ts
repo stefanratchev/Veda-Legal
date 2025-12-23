@@ -1,11 +1,12 @@
-import { PrismaClient } from "@prisma/client";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { eq } from "drizzle-orm";
+import * as schema from "../src/lib/schema";
+import { createId } from "@paralleldrive/cuid2";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const db = drizzle(pool, { schema });
 
 interface ClientData {
   name: string;
@@ -127,35 +128,42 @@ async function main() {
   let updated = 0;
   let errors = 0;
 
+  const now = new Date().toISOString();
+
   for (const clientData of CLIENTS) {
     try {
-      // Find existing client by name, update if exists, create if not
-      const existing = await prisma.client.findFirst({
-        where: { name: clientData.name },
-      });
+      // Find existing client by name
+      const existingClients = await db
+        .select()
+        .from(schema.clients)
+        .where(eq(schema.clients.name, clientData.name));
 
-      if (existing) {
-        await prisma.client.update({
-          where: { id: existing.id },
-          data: {
+      if (existingClients.length > 0) {
+        // Update existing client
+        await db
+          .update(schema.clients)
+          .set({
             invoicedName: clientData.invoicedName,
             invoiceAttn: clientData.invoiceAttn,
-            hourlyRate: clientData.hourlyRate,
+            hourlyRate: clientData.hourlyRate?.toString() ?? null,
             email: clientData.email,
             status: clientData.status,
-          },
-        });
+            updatedAt: now,
+          })
+          .where(eq(schema.clients.id, existingClients[0].id));
         updated++;
       } else {
-        await prisma.client.create({
-          data: {
-            name: clientData.name,
-            invoicedName: clientData.invoicedName,
-            invoiceAttn: clientData.invoiceAttn,
-            hourlyRate: clientData.hourlyRate,
-            email: clientData.email,
-            status: clientData.status,
-          },
+        // Create new client
+        await db.insert(schema.clients).values({
+          id: createId(),
+          name: clientData.name,
+          invoicedName: clientData.invoicedName,
+          invoiceAttn: clientData.invoiceAttn,
+          hourlyRate: clientData.hourlyRate?.toString() ?? null,
+          email: clientData.email,
+          status: clientData.status,
+          createdAt: now,
+          updatedAt: now,
         });
         created++;
       }
@@ -177,6 +185,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
     await pool.end();
   });

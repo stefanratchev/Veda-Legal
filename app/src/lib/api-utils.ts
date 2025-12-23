@@ -7,7 +7,8 @@ import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
+import { eq } from 'drizzle-orm';
+import { users } from './schema';
 
 // Positions that have admin-level access (can manage clients, reports, billing)
 const ADMIN_POSITIONS = ["ADMIN", "PARTNER"] as const;
@@ -73,9 +74,9 @@ export async function requireWriteAccess(request: NextRequest): Promise<AuthResu
     return { error: "Email required for authorization", status: 403 };
   }
 
-  const user = await db.user.findUnique({
-    where: { email: userEmail },
-    select: { position: true },
+  const user = await db.query.users.findFirst({
+    where: eq(users.email, userEmail),
+    columns: { position: true },
   });
 
   // User must exist in database to have write access
@@ -97,16 +98,17 @@ export async function requireWriteAccess(request: NextRequest): Promise<AuthResu
 export async function getUserFromSession(email: string | null | undefined) {
   if (!email) return null;
 
-  return db.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, name: true },
+  return db.query.users.findFirst({
+    where: eq(users.email, email),
+    columns: { id: true, email: true, name: true },
   });
 }
 
 /**
- * Serialize Prisma Decimal to number for JSON response.
+ * Serialize numeric string to number for JSON response.
+ * Drizzle returns numeric fields as strings.
  */
-export function serializeDecimal(value: Prisma.Decimal | null): number | null {
+export function serializeDecimal(value: string | null): number | null {
   return value ? Number(value) : null;
 }
 

@@ -13,7 +13,7 @@ Veda Legal Timesheets - A Next.js application for legal practice management and 
 - **Framework:** Next.js 16 (App Router) with TypeScript
 - **Styling:** Tailwind CSS v4 with custom dark theme design system
 - **Auth:** NextAuth.js with Microsoft 365 (Azure AD) SSO
-- **Database:** PostgreSQL with Prisma ORM v7
+- **Database:** PostgreSQL with Drizzle ORM
 - **Testing:** Vitest + React Testing Library
 - **Hosting target:** Azure (EU region)
 
@@ -28,9 +28,10 @@ npm run lint           # Run ESLint
 npm run test           # Run tests in watch mode
 npm run test -- file   # Run specific test file
 npm run test:coverage  # Run tests with coverage report
-npm run db:generate    # Generate Prisma client
+npm run db:generate    # Generate Drizzle migrations
 npm run db:migrate     # Run database migrations
-npm run db:studio      # Open Prisma Studio
+npm run db:push        # Push schema changes (dev)
+npm run db:studio      # Open Drizzle Studio
 ```
 
 ## Project Structure
@@ -67,7 +68,8 @@ app/src/
 │   ├── api-utils.ts       # Auth helpers, validation functions
 │   ├── date-utils.ts      # Date formatting utilities
 │   ├── auth.ts            # NextAuth configuration
-│   └── db.ts              # Prisma client singleton
+│   ├── db.ts              # Drizzle client instance
+│   └── schema.ts          # Drizzle schema definitions
 ├── types/                 # Shared TypeScript types
 └── test/                  # Test setup
 ```
@@ -75,7 +77,7 @@ app/src/
 ## Architecture Patterns
 
 ### Data Flow
-- **Server Components** fetch data via Prisma, serialize Decimal fields to numbers
+- **Server Components** fetch data via Drizzle ORM
 - **Client Components** (`"use client"`) handle interactivity, call API routes for mutations
 - **API Routes** use shared helpers from `lib/api-utils.ts`:
   - `requireAuth()` - Validates session (supports both server session and JWT)
@@ -108,13 +110,14 @@ Time entries cannot be edited after creation - only deleted and recreated. This 
 brew services start postgresql@17
 
 # After schema changes
-npm run db:generate && npm run db:migrate
-# Then restart dev server
+npm run db:push        # Quick push for development
+# OR
+npm run db:generate && npm run db:migrate  # Generate and apply migration
 ```
 
 **Troubleshooting:**
-- "Column does not exist" → Restart dev server after `db:generate`
 - "Can't reach database" → Check `brew services list | grep postgresql`
+- Schema out of sync → Run `npm run db:push` to sync schema with database
 
 ## Git Worktrees
 
@@ -174,8 +177,8 @@ TimeEntries reference a Subtopic, with denormalized `topicName` and `subtopicNam
 - If `isPrefix` is true: pre-fill description with subtopic name, user adds specifics
 - If `isPrefix` is false: use subtopic name as the full description
 
-To update topics/subtopics, edit `prisma/seed-topics.ts` and run:
+To update topics/subtopics, edit `src/lib/seed-topics.ts` and run:
 ```bash
-npx tsx prisma/seed-topics.ts  # Local
-DATABASE_URL="<prod-url>" npx tsx prisma/seed-topics.ts  # Production
+npx tsx src/lib/seed-topics.ts  # Local
+DATABASE_URL="<prod-url>" npx tsx src/lib/seed-topics.ts  # Production
 ```

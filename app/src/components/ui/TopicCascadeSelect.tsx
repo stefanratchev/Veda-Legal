@@ -41,8 +41,10 @@ export const TopicCascadeSelect = forwardRef<
   const [isOpen, setIsOpen] = useState(false);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Expose open() method to parent
   useImperativeHandle(
@@ -53,6 +55,7 @@ export const TopicCascadeSelect = forwardRef<
           setIsOpen(true);
           setSelectedTopicId(null);
           setSearch("");
+          setHighlightedIndex(0);
         }
       },
     }),
@@ -86,11 +89,17 @@ export const TopicCascadeSelect = forwardRef<
     return topics.filter((t) => t.name.toLowerCase().includes(searchLower));
   })();
 
+  // Reset highlighted index when filtered list changes or view changes
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [filteredItems.length, search, selectedTopicId]);
+
   // Close dropdown on outside click
   const handleClickOutside = useCallback(() => {
     setIsOpen(false);
     setSelectedTopicId(null);
     setSearch("");
+    setHighlightedIndex(0);
   }, []);
   useClickOutside(dropdownRef, handleClickOutside, isOpen);
 
@@ -101,9 +110,20 @@ export const TopicCascadeSelect = forwardRef<
     }
   }, [isOpen, selectedTopicId]);
 
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (isOpen && listRef.current) {
+      const highlightedElement = listRef.current.children[highlightedIndex] as HTMLElement;
+      if (highlightedElement) {
+        highlightedElement.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [highlightedIndex, isOpen]);
+
   const handleTopicClick = (topicId: string) => {
     setSelectedTopicId(topicId);
     setSearch("");
+    setHighlightedIndex(0);
   };
 
   const handleSubtopicClick = (subtopic: Subtopic) => {
@@ -112,11 +132,13 @@ export const TopicCascadeSelect = forwardRef<
     setIsOpen(false);
     setSelectedTopicId(null);
     setSearch("");
+    setHighlightedIndex(0);
   };
 
   const handleBack = () => {
     setSelectedTopicId(null);
     setSearch("");
+    setHighlightedIndex(0);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -126,6 +148,35 @@ export const TopicCascadeSelect = forwardRef<
       } else {
         setIsOpen(false);
         setSearch("");
+        setHighlightedIndex(0);
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev < filteredItems.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : prev));
+    } else if (e.key === "ArrowLeft" && selectedTopicId) {
+      e.preventDefault();
+      handleBack();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filteredItems.length > 0 && filteredItems[highlightedIndex]) {
+        if (currentTopic) {
+          // We're in subtopic view - select the subtopic
+          handleSubtopicClick(filteredItems[highlightedIndex] as Subtopic);
+        } else {
+          // We're in topic view - drill into the topic
+          handleTopicClick((filteredItems[highlightedIndex] as Topic).id);
+        }
+      }
+    } else if (e.key === "ArrowRight" && !currentTopic) {
+      // In topic view, arrow right also drills into topic
+      e.preventDefault();
+      if (filteredItems.length > 0 && filteredItems[highlightedIndex]) {
+        handleTopicClick((filteredItems[highlightedIndex] as Topic).id);
       }
     }
   };
@@ -232,23 +283,25 @@ export const TopicCascadeSelect = forwardRef<
           </div>
 
           {/* List */}
-          <div className="max-h-56 overflow-y-auto">
+          <div ref={listRef} className="max-h-56 overflow-y-auto">
             {filteredItems.length === 0 ? (
               <div className="px-3 py-2 text-[13px] text-[var(--text-muted)]">
                 {currentTopic ? "No subtopics found" : "No topics found"}
               </div>
             ) : currentTopic ? (
               // Subtopic list
-              (filteredItems as Subtopic[]).map((subtopic) => (
+              (filteredItems as Subtopic[]).map((subtopic, index) => (
                 <button
                   key={subtopic.id}
                   type="button"
                   onClick={() => handleSubtopicClick(subtopic)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
                   className={`
                     w-full px-3 py-2 text-left text-sm
-                    hover:bg-[var(--bg-surface)] transition-colors
+                    transition-colors
                     flex items-center gap-2
-                    ${value === subtopic.id ? "bg-[var(--bg-surface)]" : ""}
+                    ${index === highlightedIndex ? "bg-[var(--bg-surface)]" : ""}
+                    ${value === subtopic.id ? "text-[var(--accent-pink)]" : ""}
                   `}
                 >
                   <span className="text-[var(--text-primary)]">
@@ -263,16 +316,18 @@ export const TopicCascadeSelect = forwardRef<
               ))
             ) : (
               // Topic list
-              (filteredItems as Topic[]).map((topic) => (
+              (filteredItems as Topic[]).map((topic, index) => (
                 <button
                   key={topic.id}
                   type="button"
                   onClick={() => handleTopicClick(topic.id)}
-                  className="
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  className={`
                     w-full px-3 py-2 text-left text-sm
-                    hover:bg-[var(--bg-surface)] transition-colors
+                    transition-colors
                     flex items-center justify-between
-                  "
+                    ${index === highlightedIndex ? "bg-[var(--bg-surface)]" : ""}
+                  `}
                 >
                   <span className="text-[var(--text-primary)]">
                     {topic.name}

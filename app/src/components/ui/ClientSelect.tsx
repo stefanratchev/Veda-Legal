@@ -27,8 +27,10 @@ export function ClientSelect({
 }: ClientSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Find selected client
   const selectedClient = useMemo(
@@ -43,10 +45,16 @@ export function ClientSelect({
     return clients.filter((c) => c.name.toLowerCase().includes(searchLower));
   }, [clients, search]);
 
+  // Reset highlighted index when filtered list changes
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [filteredClients.length, search]);
+
   // Close dropdown on outside click
   const handleClickOutside = useCallback(() => {
     setIsOpen(false);
     setSearch("");
+    setHighlightedIndex(0);
   }, []);
   useClickOutside(dropdownRef, handleClickOutside, isOpen);
 
@@ -57,16 +65,41 @@ export function ClientSelect({
     }
   }, [isOpen]);
 
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (isOpen && listRef.current) {
+      const highlightedElement = listRef.current.children[highlightedIndex] as HTMLElement;
+      if (highlightedElement) {
+        highlightedElement.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [highlightedIndex, isOpen]);
+
   const handleSelect = (clientId: string) => {
     onChange(clientId);
     setIsOpen(false);
     setSearch("");
+    setHighlightedIndex(0);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       setIsOpen(false);
       setSearch("");
+      setHighlightedIndex(0);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev < filteredClients.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : prev));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filteredClients.length > 0 && filteredClients[highlightedIndex]) {
+        handleSelect(filteredClients[highlightedIndex].id);
+      }
     }
   };
 
@@ -125,21 +158,23 @@ export function ClientSelect({
           </div>
 
           {/* Client List */}
-          <div className="max-h-56 overflow-y-auto">
+          <div ref={listRef} className="max-h-56 overflow-y-auto">
             {filteredClients.length === 0 ? (
               <div className="px-3 py-2 text-[13px] text-[var(--text-muted)]">
                 No clients found
               </div>
             ) : (
-              filteredClients.map((client) => (
+              filteredClients.map((client, index) => (
                 <button
                   key={client.id}
                   type="button"
                   onClick={() => handleSelect(client.id)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
                   className={`
                     w-full px-3 py-2 text-left text-sm
-                    hover:bg-[var(--bg-surface)] transition-colors
-                    ${value === client.id ? "bg-[var(--bg-surface)]" : ""}
+                    transition-colors
+                    ${index === highlightedIndex ? "bg-[var(--bg-surface)]" : ""}
+                    ${value === client.id ? "text-[var(--accent-pink)]" : ""}
                   `}
                 >
                   <span className="text-[var(--text-primary)] truncate">{client.name}</span>

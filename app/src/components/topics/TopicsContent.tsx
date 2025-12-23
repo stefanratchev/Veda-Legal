@@ -547,21 +547,30 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
             </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
-              {activeTopics.map((topic, index) => (
-                <TopicRow
-                  key={topic.id}
-                  topic={topic}
-                  isSelected={topic.id === effectiveSelectedTopicId}
-                  onSelect={() => setSelectedTopicId(topic.id)}
-                  onEdit={() => openEditTopic(topic)}
-                  onToggleStatus={() => toggleTopicStatus(topic)}
-                  onDelete={() => deleteTopic(topic)}
-                  onMoveUp={() => moveTopicInDirection(topic, "up")}
-                  onMoveDown={() => moveTopicInDirection(topic, "down")}
-                  isFirst={index === 0}
-                  isLast={index === activeTopics.length - 1}
-                />
-              ))}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => handleTopicDragEnd(event, "ACTIVE")}
+              >
+                <SortableContext
+                  items={activeTopics.map((t) => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {activeTopics.map((topic) => (
+                    <SortableTopicRow
+                      key={topic.id}
+                      id={topic.id}
+                      topic={topic}
+                      isSelected={topic.id === effectiveSelectedTopicId}
+                      onSelect={() => setSelectedTopicId(topic.id)}
+                      onEdit={() => openEditTopic(topic)}
+                      onToggleStatus={() => toggleTopicStatus(topic)}
+                      onDelete={() => deleteTopic(topic)}
+                      disabled={activeTopics.length <= 1}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
 
               {/* Inactive Topics */}
               {inactiveTopics.length > 0 && (
@@ -569,22 +578,31 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                   <div className="px-4 py-2 bg-[var(--bg-surface)] text-[var(--text-muted)] text-xs font-medium">
                     Inactive ({inactiveTopics.length})
                   </div>
-                  {inactiveTopics.map((topic, index) => (
-                    <TopicRow
-                      key={topic.id}
-                      topic={topic}
-                      isSelected={topic.id === effectiveSelectedTopicId}
-                      onSelect={() => setSelectedTopicId(topic.id)}
-                      onEdit={() => openEditTopic(topic)}
-                      onToggleStatus={() => toggleTopicStatus(topic)}
-                      onDelete={() => deleteTopic(topic)}
-                      onMoveUp={() => moveTopicInDirection(topic, "up")}
-                      onMoveDown={() => moveTopicInDirection(topic, "down")}
-                      isFirst={index === 0}
-                      isLast={index === inactiveTopics.length - 1}
-                      isInactive
-                    />
-                  ))}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(event) => handleTopicDragEnd(event, "INACTIVE")}
+                  >
+                    <SortableContext
+                      items={inactiveTopics.map((t) => t.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {inactiveTopics.map((topic) => (
+                        <SortableTopicRow
+                          key={topic.id}
+                          id={topic.id}
+                          topic={topic}
+                          isSelected={topic.id === effectiveSelectedTopicId}
+                          onSelect={() => setSelectedTopicId(topic.id)}
+                          onEdit={() => openEditTopic(topic)}
+                          onToggleStatus={() => toggleTopicStatus(topic)}
+                          onDelete={() => deleteTopic(topic)}
+                          isInactive
+                          disabled={inactiveTopics.length <= 1}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </>
               )}
             </div>

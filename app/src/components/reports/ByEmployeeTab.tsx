@@ -21,7 +21,6 @@ interface Entry {
   client: {
     id: string;
     name: string;
-    timesheetCode: string;
   };
   employee: {
     id: string;

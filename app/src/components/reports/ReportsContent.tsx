@@ -29,7 +29,6 @@ interface EmployeeStats {
 interface ClientStats {
   id: string;
   name: string;
-  timesheetCode: string;
   hourlyRate: number | null;
   totalHours: number;
   revenue: number | null;
@@ -44,7 +43,6 @@ interface Entry {
   client: {
     id: string;
     name: string;
-    timesheetCode: string;
   };
   employee: {
     id: string;
@@ -69,7 +67,6 @@ export interface ReportData {
     userName: string;
     clientId: string;
     clientName: string;
-    clientCode: string;
   }[];
 }
 
@@ -242,7 +239,6 @@ export function ReportsContent({
     client: {
       id: e.clientId,
       name: e.clientName,
-      timesheetCode: e.clientCode,
     },
     employee: {
       id: e.userId,

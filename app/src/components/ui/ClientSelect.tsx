@@ -6,7 +6,6 @@ import { useClickOutside } from "@/hooks/useClickOutside";
 interface Client {
   id: string;
   name: string;
-  timesheetCode: string;
 }
 
 interface ClientSelectProps {
@@ -41,11 +40,7 @@ export function ClientSelect({
   const filteredClients = useMemo(() => {
     if (!search.trim()) return clients;
     const searchLower = search.toLowerCase();
-    return clients.filter(
-      (c) =>
-        c.name.toLowerCase().includes(searchLower) ||
-        c.timesheetCode.toLowerCase().includes(searchLower)
-    );
+    return clients.filter((c) => c.name.toLowerCase().includes(searchLower));
   }, [clients, search]);
 
   // Close dropdown on outside click
@@ -93,9 +88,7 @@ export function ClientSelect({
         `}
       >
         <span className={`truncate ${selectedClient ? "" : "text-[var(--text-muted)]"}`}>
-          {selectedClient
-            ? `${selectedClient.timesheetCode} — ${selectedClient.name}`
-            : placeholder}
+          {selectedClient ? selectedClient.name : placeholder}
         </span>
         <svg
           className={`w-4 h-4 flex-shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
@@ -146,13 +139,9 @@ export function ClientSelect({
                   className={`
                     w-full px-3 py-2 text-left text-sm
                     hover:bg-[var(--bg-surface)] transition-colors
-                    flex items-center gap-2
                     ${value === client.id ? "bg-[var(--bg-surface)]" : ""}
                   `}
                 >
-                  <span className="text-[var(--accent-pink)] font-mono text-xs">
-                    {client.timesheetCode}
-                  </span>
                   <span className="text-[var(--text-primary)] truncate">{client.name}</span>
                 </button>
               ))

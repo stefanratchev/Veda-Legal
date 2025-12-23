@@ -8,7 +8,6 @@
 export interface Client {
   id: string;
   name: string;
-  timesheetCode: string;
 }
 
 /**
@@ -46,7 +45,6 @@ export interface TimeEntry {
   client: {
     id: string;
     name: string;
-    timesheetCode: string;
   };
   subtopicId?: string | null;
   topicName: string;

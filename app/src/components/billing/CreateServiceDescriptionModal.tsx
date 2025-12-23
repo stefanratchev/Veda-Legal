@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useClickOutside } from "@/hooks/useClickOutside";
+import { useState, useEffect } from "react";
 
 interface Client {
   id: string;
   name: string;
-  timesheetCode: string;
 }
 
 interface CreateServiceDescriptionModalProps {
@@ -34,15 +32,12 @@ export function CreateServiceDescriptionModal({
   onSubmit,
   onClose,
 }: CreateServiceDescriptionModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null);
   const lastMonth = getLastMonthRange();
 
   const [clientId, setClientId] = useState("");
   const [periodStart, setPeriodStart] = useState(lastMonth.start);
   const [periodEnd, setPeriodEnd] = useState(lastMonth.end);
   const [validationError, setValidationError] = useState<string | null>(null);
-
-  useClickOutside(modalRef, onClose);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -74,9 +69,8 @@ export function CreateServiceDescriptionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60" />
       <div
-        ref={modalRef}
         className="relative z-10 w-full max-w-md bg-[var(--bg-elevated)] rounded-lg shadow-xl animate-fade-up"
       >
         <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
@@ -112,7 +106,7 @@ export function CreateServiceDescriptionModal({
               <option value="">Select a client</option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
-                  {client.name} ({client.timesheetCode})
+                  {client.name}
                 </option>
               ))}
             </select>

@@ -6,7 +6,6 @@ import { formatHours } from "@/lib/date-utils";
 interface ClientStats {
   id: string;
   name: string;
-  timesheetCode: string;
   totalHours: number;
   revenue: number | null;
   employees: { id: string; name: string; hours: number }[];
@@ -20,7 +19,6 @@ interface Entry {
   client: {
     id: string;
     name: string;
-    timesheetCode: string;
   };
   employee: {
     id: string;
@@ -109,9 +107,6 @@ export function ByClientTab({
             <h3 className="text-[var(--text-primary)] font-medium">
               {selectedClient.name}
             </h3>
-            <span className="text-[var(--text-muted)] text-sm">
-              [{selectedClient.timesheetCode}]
-            </span>
           </div>
           {/* Empty state message */}
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -171,9 +166,6 @@ export function ByClientTab({
           <h3 className="text-[var(--text-primary)] font-medium">
             {selectedClient.name}
           </h3>
-          <span className="text-[var(--text-muted)] text-sm">
-            [{selectedClient.timesheetCode}]
-          </span>
           <span className="text-[var(--text-muted)] text-sm">
             {formatHours(selectedClient.totalHours)} total
           </span>
@@ -251,7 +243,6 @@ export function ByClientTab({
           <thead>
             <tr className="text-left text-[var(--text-muted)] text-[11px] uppercase tracking-wider border-b border-[var(--border-subtle)]">
               <th className="px-4 py-3 font-medium">Client</th>
-              <th className="px-4 py-3 font-medium">Code</th>
               <th className="px-4 py-3 font-medium text-right">Hours</th>
               {isAdmin && (
                 <th className="px-4 py-3 font-medium text-right">Revenue</th>
@@ -268,9 +259,6 @@ export function ByClientTab({
               >
                 <td className="px-4 py-3 text-[var(--text-primary)] font-medium">
                   {client.name}
-                </td>
-                <td className="px-4 py-3 text-[var(--text-muted)] font-mono text-xs">
-                  {client.timesheetCode}
                 </td>
                 <td className="px-4 py-3 text-[var(--text-secondary)] text-right">
                   {formatHours(client.totalHours)}

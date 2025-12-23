@@ -54,6 +54,11 @@ const positionStyles: Record<
     textColor: "var(--text-muted)",
     label: "Associate",
   },
+  CONSULTANT: {
+    dotColor: "var(--text-muted)",
+    textColor: "var(--text-muted)",
+    label: "Consultant",
+  },
 };
 
 const statusStyles: Record<

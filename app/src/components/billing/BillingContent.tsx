@@ -22,7 +22,6 @@ interface ServiceDescriptionListItem {
 interface Client {
   id: string;
   name: string;
-  timesheetCode: string;
 }
 
 interface BillingContentProps {

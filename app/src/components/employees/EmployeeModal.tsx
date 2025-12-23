@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Position } from "@prisma/client";
 
 interface FormData {
@@ -24,6 +25,7 @@ const positionOptions: Array<{ value: Position; label: string; description: stri
   { value: "PARTNER", label: "Partner", description: "Full system access, can manage clients and billing" },
   { value: "SENIOR_ASSOCIATE", label: "Senior Associate", description: "Can log time entries" },
   { value: "ASSOCIATE", label: "Associate", description: "Can log time entries" },
+  { value: "CONSULTANT", label: "Consultant", description: "Can log time entries" },
 ];
 
 export function EmployeeModal({
@@ -36,19 +38,26 @@ export function EmployeeModal({
   onSubmit,
   onClose,
 }: EmployeeModalProps) {
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
   const canSubmit = mode === "create"
     ? formData.email.trim().length > 0 && formData.position
     : formData.name.trim().length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Modal Content */}
       <div
         className="relative bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded w-full max-w-md mx-4 animate-fade-up"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-[var(--border-subtle)]">

@@ -51,7 +51,7 @@ const Icons = {
 const navItems: NavItem[] = [
   { name: "Clients", href: "/clients", icon: Icons.clients, adminOnly: true },
   { name: "Topics", href: "/topics", icon: Icons.topics, adminOnly: true },
-  { name: "Employees", href: "/employees", icon: Icons.employees },
+  { name: "Team", href: "/team", icon: Icons.employees },
   { name: "Timesheets", href: "/timesheets", icon: Icons.timesheets },
   { name: "Billing", href: "/billing", icon: Icons.billing, adminOnly: true },
   { name: "Reports", href: "/reports", icon: Icons.reports, adminOnly: true },

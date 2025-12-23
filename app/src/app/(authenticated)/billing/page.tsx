@@ -68,7 +68,7 @@ export default async function BillingPage() {
   // Fetch clients for the create modal
   const clients = await db.client.findMany({
     where: { status: "ACTIVE" },
-    select: { id: true, name: true, timesheetCode: true },
+    select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
 

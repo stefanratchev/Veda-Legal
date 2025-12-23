@@ -47,7 +47,6 @@ enum UserStatus {
 model Client {
   id            String        @id @default(cuid())
   name          String
-  timesheetCode String        @unique    // Code shown in employee timesheets
   invoicedName  String?                  // Name on outgoing invoices
   invoiceAttn   String?                  // Contact person for invoices
   email           String?

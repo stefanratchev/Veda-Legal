@@ -61,21 +61,12 @@ export function EntryForm({
     const description = subtopic.isPrefix ? `${subtopic.name} ` : subtopic.name;
     onFormChange({ subtopicId, description });
 
+    // Always open duration picker after subtopic selection
+    // For prefix subtopics, highlight description to indicate user should add details later
     if (subtopic.isPrefix) {
-      // For prefix subtopics: highlight description and focus it for user to add details
       setHighlightDescription(true);
-      setTimeout(() => {
-        descriptionInputRef.current?.focus();
-        // Place cursor at end of text
-        const input = descriptionInputRef.current;
-        if (input) {
-          input.setSelectionRange(input.value.length, input.value.length);
-        }
-      }, 0);
-    } else {
-      // For regular subtopics: auto-open duration picker
-      setTimeout(() => durationPickerRef.current?.open(), 0);
     }
+    setTimeout(() => durationPickerRef.current?.open(), 0);
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +90,7 @@ export function EntryForm({
             setTimeout(() => topicSelectRef.current?.open(), 0);
           }}
           placeholder="Select client..."
-          className="w-[220px] flex-shrink-0"
+          className="w-[160px] flex-shrink-0"
         />
 
         {/* Topic/Subtopic Cascade Selector */}
@@ -109,7 +100,7 @@ export function EntryForm({
           value={formData.subtopicId}
           onChange={handleSubtopicSelect}
           placeholder="Select topic..."
-          className="w-[260px] flex-shrink-0"
+          className="w-[160px] flex-shrink-0"
         />
 
         {/* Duration Picker */}
@@ -122,7 +113,7 @@ export function EntryForm({
             // Auto-focus description after duration selection
             setTimeout(() => descriptionInputRef.current?.focus(), 0);
           }}
-          className="w-[120px] flex-shrink-0"
+          className="w-[100px] flex-shrink-0"
         />
 
         {/* Description */}

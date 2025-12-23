@@ -1,6 +1,22 @@
 import type { NextConfig } from "next";
 
+// Generate readable build timestamp at build time (e.g., "23 Dec 2025, 14:30")
+const getBuildTimestamp = () => {
+  const now = new Date();
+  return now.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_BUILD_ID: getBuildTimestamp(),
+  },
   output: "standalone",
   async headers() {
     return [

@@ -80,6 +80,9 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     newDate.setDate(newDate.getDate() + 7);
     if (formatDateISO(newDate) <= formatDateISO(today)) {
       setSelectedDate(newDate);
+    } else {
+      // If selectedDate + 7 would be in the future, navigate to today instead
+      setSelectedDate(today);
     }
   }, [selectedDate, today]);
 

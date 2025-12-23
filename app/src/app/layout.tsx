@@ -18,7 +18,7 @@ const robotoCondensed = Roboto_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "Veda Legal - Practice Management",
+  title: "VEDA Legal - Practice Management",
   description: "Legal practice management and timesheet tracking",
 };
 

@@ -99,7 +99,7 @@ export function Sidebar({ user, className }: SidebarProps) {
       {/* Logo */}
       <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
         <h1 className="font-heading text-[22px] font-semibold tracking-tight">
-          <span className="text-[var(--accent-pink)]">Veda</span>{" "}
+          <span className="text-[var(--accent-pink)]">VEDA</span>{" "}
           <span className="text-[var(--text-primary)]">Legal</span>
         </h1>
         <p className="text-[10px] text-[var(--text-muted)] mt-0.5 tracking-wider uppercase">
@@ -130,6 +130,12 @@ export function Sidebar({ user, className }: SidebarProps) {
               <p className="text-[11px] text-[var(--text-muted)] leading-tight">{user.role}</p>
             </div>
           </div>
+          {/* Version indicator - admin only */}
+          {isAdmin && (
+            <p className="text-[9px] text-[var(--text-muted)] text-center mt-2 opacity-50">
+              {process.env.NEXT_PUBLIC_BUILD_ID}
+            </p>
+          )}
         </div>
       )}
     </aside>

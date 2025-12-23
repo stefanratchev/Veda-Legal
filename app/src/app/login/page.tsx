@@ -34,7 +34,7 @@ function LoginContent() {
         {/* Logo */}
         <div className="text-center mb-12 animate-fade-up">
           <h1 className="font-heading text-5xl font-semibold tracking-tight mb-2">
-            <span className="text-[var(--accent-pink)]">Veda</span>{" "}
+            <span className="text-[var(--accent-pink)]">VEDA</span>{" "}
             <span className="text-[var(--text-primary)]">Legal</span>
           </h1>
           <p className="text-sm text-[var(--text-muted)] uppercase tracking-[3px]">
@@ -99,13 +99,13 @@ function LoginContent() {
           </button>
 
           <p className="text-xs text-[var(--text-muted)] text-center mt-6">
-            Only authorized Veda Legal employees can sign in
+            Only authorized VEDA Legal employees can sign in
           </p>
         </div>
 
         {/* Footer */}
         <p className="text-xs text-[var(--text-muted)] text-center mt-8">
-          &copy; {new Date().getFullYear()} Veda Legal. All rights reserved.
+          &copy; {new Date().getFullYear()} VEDA Legal. All rights reserved.
         </p>
       </div>
     </div>

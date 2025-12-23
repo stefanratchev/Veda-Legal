@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, and, desc, asc, notExists } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
+import {
+  serviceDescriptions,
+  serviceDescriptionTopics,
+  serviceDescriptionLineItems,
+  clients,
+  timeEntries,
+} from "@/lib/schema";
 import {
   requireAuth,
   requireWriteAccess,
@@ -16,31 +24,37 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const serviceDescriptions = await db.serviceDescription.findMany({
-      select: {
+    const allServiceDescriptions = await db.query.serviceDescriptions.findMany({
+      columns: {
         id: true,
         clientId: true,
-        client: { select: { name: true } },
         periodStart: true,
         periodEnd: true,
         status: true,
         updatedAt: true,
+      },
+      with: {
+        client: {
+          columns: { name: true },
+        },
         topics: {
-          select: {
+          columns: {
             pricingMode: true,
             hourlyRate: true,
             fixedFee: true,
+          },
+          with: {
             lineItems: {
-              select: { hours: true, fixedAmount: true },
+              columns: { hours: true, fixedAmount: true },
             },
           },
         },
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: [desc(serviceDescriptions.updatedAt)],
     });
 
     // Calculate total amount for each service description
-    const result = serviceDescriptions.map((sd) => {
+    const result = allServiceDescriptions.map((sd) => {
       let totalAmount = 0;
       for (const topic of sd.topics) {
         if (topic.pricingMode === "FIXED" && topic.fixedFee) {
@@ -63,11 +77,11 @@ export async function GET(request: NextRequest) {
         id: sd.id,
         clientId: sd.clientId,
         clientName: sd.client.name,
-        periodStart: sd.periodStart.toISOString().split("T")[0],
-        periodEnd: sd.periodEnd.toISOString().split("T")[0],
+        periodStart: sd.periodStart,
+        periodEnd: sd.periodEnd,
         status: sd.status,
         totalAmount: Math.round(totalAmount * 100) / 100,
-        updatedAt: sd.updatedAt.toISOString(),
+        updatedAt: sd.updatedAt,
       };
     });
 
@@ -115,42 +129,68 @@ export async function POST(request: NextRequest) {
 
   try {
     // Get client with hourly rate
-    const client = await db.client.findUnique({
-      where: { id: clientId },
-      select: { id: true, hourlyRate: true },
+    const client = await db.query.clients.findFirst({
+      where: eq(clients.id, clientId),
+      columns: { id: true, hourlyRate: true },
     });
 
     if (!client) {
       return errorResponse("Client not found", 404);
     }
 
+    const startDateStr = startDate.toISOString().split("T")[0];
+    const endDateStr = endDate.toISOString().split("T")[0];
+
     // Get unbilled time entries for this client in the date range
     // Exclude entries that are in FINALIZED service descriptions
-    const unbilledEntries = await db.timeEntry.findMany({
-      where: {
-        clientId,
-        date: { gte: startDate, lte: endDate },
-        billingLineItems: {
-          none: {
-            topic: {
-              serviceDescription: { status: "FINALIZED" },
-            },
-          },
-        },
-      },
-      select: {
+    // Using a subquery approach for Drizzle
+    const unbilledEntries = await db.query.timeEntries.findMany({
+      where: and(
+        eq(timeEntries.clientId, clientId),
+        // date >= startDate AND date <= endDate
+        // In Drizzle with date strings, we compare directly
+      ),
+      columns: {
         id: true,
         date: true,
         hours: true,
         description: true,
         topicName: true,
       },
-      orderBy: [{ topicName: "asc" }, { date: "asc" }],
+      with: {
+        billingLineItems: {
+          columns: { id: true },
+          with: {
+            topic: {
+              columns: { id: true },
+              with: {
+                serviceDescription: {
+                  columns: { status: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [asc(timeEntries.topicName), asc(timeEntries.date)],
+    });
+
+    // Filter entries: include only those in date range and not in FINALIZED service descriptions
+    const filteredEntries = unbilledEntries.filter((entry) => {
+      // Check date range
+      if (entry.date < startDateStr || entry.date > endDateStr) {
+        return false;
+      }
+      // Check if any billing line item is in a FINALIZED service description
+      const hasFinalized = entry.billingLineItems.some(
+        (li) => li.topic?.serviceDescription?.status === "FINALIZED"
+      );
+      return !hasFinalized;
     });
 
     // Group entries by topic
-    const entriesByTopic = new Map<string, typeof unbilledEntries>();
-    for (const entry of unbilledEntries) {
+    const entriesByTopic = new Map<string, typeof filteredEntries>();
+    for (const entry of filteredEntries) {
       const topicName = entry.topicName || "Other";
       if (!entriesByTopic.has(topicName)) {
         entriesByTopic.set(topicName, []);
@@ -158,37 +198,53 @@ export async function POST(request: NextRequest) {
       entriesByTopic.get(topicName)!.push(entry);
     }
 
-    // Create service description with topics and line items
-    const serviceDescription = await db.serviceDescription.create({
-      data: {
-        clientId,
-        periodStart: startDate,
-        periodEnd: endDate,
-        status: "DRAFT",
-        topics: {
-          create: Array.from(entriesByTopic.entries()).map(
-            ([topicName, entries], topicIndex) => ({
-              topicName,
-              displayOrder: topicIndex,
-              pricingMode: "HOURLY",
-              hourlyRate: client.hourlyRate,
-              lineItems: {
-                create: entries.map((entry, itemIndex) => ({
-                  timeEntryId: entry.id,
-                  date: entry.date,
-                  description: entry.description,
-                  hours: entry.hours,
-                  displayOrder: itemIndex,
-                })),
-              },
-            })
-          ),
-        },
-      },
-      select: { id: true },
+    // Create service description
+    const now = new Date().toISOString();
+    const serviceDescriptionId = createId();
+
+    await db.insert(serviceDescriptions).values({
+      id: serviceDescriptionId,
+      clientId,
+      periodStart: startDateStr,
+      periodEnd: endDateStr,
+      status: "DRAFT",
+      updatedAt: now,
     });
 
-    return NextResponse.json({ id: serviceDescription.id });
+    // Create topics and line items
+    let topicIndex = 0;
+    for (const [topicName, entries] of entriesByTopic.entries()) {
+      const topicId = createId();
+      await db.insert(serviceDescriptionTopics).values({
+        id: topicId,
+        serviceDescriptionId,
+        topicName,
+        displayOrder: topicIndex,
+        pricingMode: "HOURLY",
+        hourlyRate: client.hourlyRate,
+        updatedAt: now,
+      });
+
+      // Create line items for this topic
+      const lineItemValues = entries.map((entry, itemIndex) => ({
+        id: createId(),
+        topicId,
+        timeEntryId: entry.id,
+        date: entry.date,
+        description: entry.description,
+        hours: entry.hours,
+        displayOrder: itemIndex,
+        updatedAt: now,
+      }));
+
+      if (lineItemValues.length > 0) {
+        await db.insert(serviceDescriptionLineItems).values(lineItemValues);
+      }
+
+      topicIndex++;
+    }
+
+    return NextResponse.json({ id: serviceDescriptionId });
   } catch (error) {
     console.error("Database error creating service description:", error);
     return errorResponse("Failed to create service description", 500);

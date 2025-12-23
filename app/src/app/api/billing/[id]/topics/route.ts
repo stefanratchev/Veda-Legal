@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
+import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
 import { requireWriteAccess, serializeDecimal, errorResponse } from "@/lib/api-utils";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -29,9 +31,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     // Verify service description exists and is draft
-    const sd = await db.serviceDescription.findUnique({
-      where: { id },
-      select: { status: true, topics: { select: { displayOrder: true } } },
+    const sd = await db.query.serviceDescriptions.findFirst({
+      where: eq(serviceDescriptions.id, id),
+      columns: { status: true },
+      with: {
+        topics: {
+          columns: { displayOrder: true },
+        },
+      },
     });
 
     if (!sd) {
@@ -43,24 +50,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const maxOrder = Math.max(0, ...sd.topics.map((t) => t.displayOrder));
+    const now = new Date().toISOString();
 
-    const topic = await db.serviceDescriptionTopic.create({
-      data: {
-        serviceDescriptionId: id,
-        topicName: topicName.trim(),
-        displayOrder: maxOrder + 1,
-        pricingMode: pricingMode || "HOURLY",
-        hourlyRate: hourlyRate ? new Prisma.Decimal(hourlyRate) : null,
-        fixedFee: fixedFee ? new Prisma.Decimal(fixedFee) : null,
-      },
-      select: {
-        id: true,
-        topicName: true,
-        displayOrder: true,
-        pricingMode: true,
-        hourlyRate: true,
-        fixedFee: true,
-      },
+    const [topic] = await db.insert(serviceDescriptionTopics).values({
+      id: createId(),
+      serviceDescriptionId: id,
+      topicName: topicName.trim(),
+      displayOrder: maxOrder + 1,
+      pricingMode: pricingMode || "HOURLY",
+      hourlyRate: hourlyRate ? String(hourlyRate) : null,
+      fixedFee: fixedFee ? String(fixedFee) : null,
+      updatedAt: now,
+    }).returning({
+      id: serviceDescriptionTopics.id,
+      topicName: serviceDescriptionTopics.topicName,
+      displayOrder: serviceDescriptionTopics.displayOrder,
+      pricingMode: serviceDescriptionTopics.pricingMode,
+      hourlyRate: serviceDescriptionTopics.hourlyRate,
+      fixedFee: serviceDescriptionTopics.fixedFee,
     });
 
     return NextResponse.json({

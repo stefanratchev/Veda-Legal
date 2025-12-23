@@ -8,8 +8,10 @@ interface FormData {
   invoicedName: string;
   invoiceAttn: string;
   email: string;
+  secondaryEmails: string;
   hourlyRate: string;
   status: ClientStatus;
+  notes: string;
 }
 
 type ModalMode = "create" | "edit" | "delete";
@@ -171,6 +173,26 @@ export function ClientModal({
                 />
               </div>
 
+              {/* Secondary Emails */}
+              <div>
+                <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
+                  Secondary Email(s)
+                </label>
+                <input
+                  type="text"
+                  value={formData.secondaryEmails}
+                  onChange={(e) => onFormChange({ secondaryEmails: e.target.value })}
+                  className="
+                    w-full px-3 py-2 rounded text-[13px]
+                    bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                    text-[var(--text-primary)] placeholder-[var(--text-muted)]
+                    focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+                    focus:outline-none transition-all duration-200
+                  "
+                  placeholder="finance@acme.com, legal@acme.com"
+                />
+              </div>
+
               {/* Hourly Rate */}
               <div>
                 <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
@@ -218,6 +240,27 @@ export function ClientModal({
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
                 </select>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => onFormChange({ notes: e.target.value })}
+                  rows={5}
+                  className="
+                    w-full px-3 py-2 rounded text-[13px]
+                    bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                    text-[var(--text-primary)] placeholder-[var(--text-muted)]
+                    focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+                    focus:outline-none transition-all duration-200
+                    resize-y min-h-[100px]
+                  "
+                  placeholder="Additional client information..."
+                />
               </div>
             </div>
           )}

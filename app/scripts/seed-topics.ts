@@ -1,0 +1,286 @@
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "../src/lib/schema";
+import { createId } from "@paralleldrive/cuid2";
+import "dotenv/config";
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const db = drizzle(pool, { schema });
+
+interface SubtopicData {
+  name: string;
+}
+
+interface TopicData {
+  name: string;
+  subtopics: SubtopicData[];
+}
+
+const TOPICS: TopicData[] = [
+  {
+    name: "Internal",
+    subtopics: [
+      { name: "Onboarding" },
+      { name: "AML/ KYC" },
+      { name: "Admin" },
+      { name: "Marketing" },
+      { name: "Other" },
+      { name: "Fee proposal for:" },
+    ],
+  },
+  {
+    name: "Company Incorporation",
+    subtopics: [
+      { name: "Drafting incorporation documents" },
+      { name: "Revising incorporation documents" },
+      { name: "Modifications to standard documents" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Commercial Register filing: preparation for filing" },
+      { name: "Commercial Register filing: submission of application" },
+      { name: "Commercial Register filing: additional requests" },
+      { name: "VAT registration: document preparation" },
+      { name: "VAT registration: NRA correspondence" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "UBO Disclosure",
+    subtopics: [
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Review of documents and ownership structure to determination of disclosure" },
+      { name: "Drafting UBO declaration" },
+      { name: "Revising UBO declaration" },
+      { name: "Commercial Register filing: preparation for filing" },
+      { name: "Commercial Register filing: submission of application" },
+      { name: "Commercial Register filing: additional requests" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Corporate Changes",
+    subtopics: [
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Drafting documents:" },
+      { name: "Revising documents:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Commercial Register filing: preparation for filing" },
+      { name: "Commercial Register filing: submission of application" },
+      { name: "Commercial Register filing: additional requests" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Bank Account",
+    subtopics: [
+      { name: "Correspondence with the bank" },
+      { name: "Research and summary of bank requirements" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Drafting documents:" },
+      { name: "Revising documents:" },
+      { name: "Bank visit: opening account" },
+    ],
+  },
+  {
+    name: "Employment Agreement",
+    subtopics: [
+      { name: "Drafting employment agreement" },
+      { name: "Revising employment agreement" },
+      { name: "Reflecting client comments in employment agreement" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Employment Internal Rules",
+    subtopics: [
+      { name: "Drafting Internal Labour Rules" },
+      { name: "Revising Internal Labour Rules" },
+      { name: "Drafting Internal Remuneration Rules" },
+      { name: "Revising Internal Remuneration Rules" },
+      { name: "Reflecting client comments in Internal Rules" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Employment Advisory",
+    subtopics: [
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Drafting documents:" },
+      { name: "Revising documents:" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Intercompany Agreement",
+    subtopics: [
+      { name: "Drafting Intercompany Agreement" },
+      { name: "Revising Intercompany Agreement" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Contracts",
+    subtopics: [
+      { name: "Drafting:" },
+      { name: "Revising:" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Terms & Conditions",
+    subtopics: [
+      { name: "Drafting T&C:" },
+      { name: "Revising T&C:" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Data Protection",
+    subtopics: [
+      { name: "Drafting a Privacy Policy" },
+      { name: "Revision a Privacy Policy" },
+      { name: "Drafting Data Protection Instruction" },
+      { name: "Revising Data Protection Instruction" },
+      { name: "Drafting Cookies Policy" },
+      { name: "Revising Cookies Policy" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "M&A Advisory",
+    subtopics: [
+      { name: "Drafting:" },
+      { name: "Revising:" },
+      { name: "Negotiation:" },
+      { name: "Reflecting client comments in:" },
+      { name: "Review and revision of counterparty documentation" },
+      { name: "Advice during negotiation of transaction terms" },
+      { name: "Coordinating execution of transaction documents" },
+      { name: "Preparing documents for regulatory approval" },
+      { name: "Filling for regulatory approval" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Legal analysis under applicable law and caselaw:" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Due Diligence",
+    subtopics: [
+      { name: "Drafting of initial request list" },
+      { name: "Drafting additional requests" },
+      { name: "Providing answers to request list" },
+      { name: "Drafting due diligence report" },
+      { name: "Identifying legal risks and potential liabilities" },
+      { name: "Review of:" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Legal analysis under applicable law and caselaw:" },
+      { name: "Other:" },
+    ],
+  },
+  {
+    name: "Legal Advisory",
+    subtopics: [
+      { name: "Drafting:" },
+      { name: "Revising:" },
+      { name: "Client correspondence:" },
+      { name: "Client meeting:" },
+      { name: "Strategic consideration:" },
+      { name: "Analysis of applicable law and caselaw:" },
+      { name: "Other:" },
+    ],
+  },
+];
+
+async function main() {
+  console.log("Deleting existing topics and subtopics...");
+  await db.delete(schema.subtopics);
+  await db.delete(schema.topics);
+
+  console.log("Seeding topics and subtopics...");
+
+  const now = new Date().toISOString();
+
+  for (let topicOrder = 0; topicOrder < TOPICS.length; topicOrder++) {
+    const topicData = TOPICS[topicOrder];
+
+    const topicId = createId();
+    await db.insert(schema.topics).values({
+      id: topicId,
+      name: topicData.name,
+      displayOrder: topicOrder,
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    console.log(`Created topic: ${topicData.name}`);
+
+    for (let subtopicOrder = 0; subtopicOrder < topicData.subtopics.length; subtopicOrder++) {
+      const subtopicData = topicData.subtopics[subtopicOrder];
+      const isPrefix = subtopicData.name.endsWith(":");
+
+      await db.insert(schema.subtopics).values({
+        id: createId(),
+        topicId: topicId,
+        name: subtopicData.name,
+        isPrefix,
+        displayOrder: subtopicOrder,
+        status: "ACTIVE",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    console.log(`  Created ${topicData.subtopics.length} subtopics`);
+  }
+
+  console.log("Seeding complete!");
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await pool.end();
+  });

@@ -1,11 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
-import {
-  formatDateISO,
-  toDecimalHours,
-  isSameDay,
-} from "@/lib/date-utils";
+import { formatDateISO, toDecimalHours } from "@/lib/date-utils";
 import { WeekStrip } from "./WeekStrip";
 import { EntryForm } from "./EntryForm";
 import { EntriesList } from "./EntriesList";
@@ -194,7 +190,6 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
       <EntriesList
         entries={entries}
         isLoadingEntries={isLoadingEntries}
-        isToday={isSameDay(selectedDate, today)}
         onDeleteEntry={deleteEntry}
       />
     </div>

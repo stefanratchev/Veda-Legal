@@ -4,6 +4,23 @@ import { useState, useCallback } from "react";
 import { TopicModal } from "./TopicModal";
 import { SubtopicModal } from "./SubtopicModal";
 import { Topic, Subtopic } from "@/types";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface TopicsContentProps {
   initialTopics: Topic[];
@@ -33,6 +50,16 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
   // Get selected topic
   const selectedTopic =
     topics.find((t) => t.id === effectiveSelectedTopicId) || null;
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Topic CRUD handlers
   const openCreateTopic = useCallback(() => {
@@ -299,102 +326,108 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
     [effectiveSelectedTopicId]
   );
 
-  // Reorder topic handler
-  const moveTopicInDirection = useCallback(
-    async (topic: Topic, direction: "up" | "down") => {
-      // Get topics in the same status group, sorted by displayOrder
-      const sameStatusTopics = topics
-        .filter((t) => t.status === topic.status)
+  // Handle topic drag end
+  const handleTopicDragEnd = useCallback(
+    async (event: DragEndEvent, status: "ACTIVE" | "INACTIVE") => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const itemsInSection = topics
+        .filter((t) => t.status === status)
         .sort((a, b) => a.displayOrder - b.displayOrder);
 
-      const currentIndex = sameStatusTopics.findIndex((t) => t.id === topic.id);
-      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      const oldIndex = itemsInSection.findIndex((t) => t.id === active.id);
+      const newIndex = itemsInSection.findIndex((t) => t.id === over.id);
 
-      if (targetIndex < 0 || targetIndex >= sameStatusTopics.length) return;
+      if (oldIndex === -1 || newIndex === -1) return;
 
-      const targetTopic = sameStatusTopics[targetIndex];
-      const currentOrder = topic.displayOrder;
-      const targetOrder = targetTopic.displayOrder;
+      const reordered = arrayMove(itemsInSection, oldIndex, newIndex);
 
-      // Optimistically update UI
+      // Calculate which items changed
+      const updates: { id: string; displayOrder: number }[] = [];
+      reordered.forEach((item, index) => {
+        if (item.displayOrder !== index) {
+          updates.push({ id: item.id, displayOrder: index });
+        }
+      });
+
+      if (updates.length === 0) return;
+
+      // Optimistic update
       setTopics((prev) =>
         prev.map((t) => {
-          if (t.id === topic.id) return { ...t, displayOrder: targetOrder };
-          if (t.id === targetTopic.id) return { ...t, displayOrder: currentOrder };
-          return t;
+          const update = updates.find((u) => u.id === t.id);
+          return update ? { ...t, displayOrder: update.displayOrder } : t;
         })
       );
 
       try {
-        // Update both topics in parallel
-        const [res1, res2] = await Promise.all([
-          fetch(`/api/topics/${topic.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ displayOrder: targetOrder }),
-          }),
-          fetch(`/api/topics/${targetTopic.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ displayOrder: currentOrder }),
-          }),
-        ]);
+        const response = await fetch("/api/topics/reorder", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: updates }),
+        });
 
-        if (!res1.ok || !res2.ok) {
+        if (!response.ok) {
           // Revert on failure
           setTopics((prev) =>
             prev.map((t) => {
-              if (t.id === topic.id) return { ...t, displayOrder: currentOrder };
-              if (t.id === targetTopic.id) return { ...t, displayOrder: targetOrder };
-              return t;
+              const original = itemsInSection.find((o) => o.id === t.id);
+              return original ? { ...t, displayOrder: original.displayOrder } : t;
             })
           );
-          setError("Failed to reorder topic");
+          setError("Failed to reorder topics");
         }
       } catch {
         // Revert on failure
         setTopics((prev) =>
           prev.map((t) => {
-            if (t.id === topic.id) return { ...t, displayOrder: currentOrder };
-            if (t.id === targetTopic.id) return { ...t, displayOrder: targetOrder };
-            return t;
+            const original = itemsInSection.find((o) => o.id === t.id);
+            return original ? { ...t, displayOrder: original.displayOrder } : t;
           })
         );
-        setError("Failed to reorder topic");
+        setError("Failed to reorder topics");
       }
     },
     [topics]
   );
 
-  // Reorder subtopic handler
-  const moveSubtopicInDirection = useCallback(
-    async (subtopic: Subtopic, direction: "up" | "down") => {
-      if (!selectedTopic) return;
+  // Handle subtopic drag end
+  const handleSubtopicDragEnd = useCallback(
+    async (event: DragEndEvent, status: "ACTIVE" | "INACTIVE") => {
+      const { active, over } = event;
+      if (!over || active.id === over.id || !selectedTopic) return;
 
-      // Get subtopics in the same status group, sorted by displayOrder
-      const sameStatusSubtopics = selectedTopic.subtopics
-        .filter((s) => s.status === subtopic.status)
+      const itemsInSection = selectedTopic.subtopics
+        .filter((s) => s.status === status)
         .sort((a, b) => a.displayOrder - b.displayOrder);
 
-      const currentIndex = sameStatusSubtopics.findIndex((s) => s.id === subtopic.id);
-      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      const oldIndex = itemsInSection.findIndex((s) => s.id === active.id);
+      const newIndex = itemsInSection.findIndex((s) => s.id === over.id);
 
-      if (targetIndex < 0 || targetIndex >= sameStatusSubtopics.length) return;
+      if (oldIndex === -1 || newIndex === -1) return;
 
-      const targetSubtopic = sameStatusSubtopics[targetIndex];
-      const currentOrder = subtopic.displayOrder;
-      const targetOrder = targetSubtopic.displayOrder;
+      const reordered = arrayMove(itemsInSection, oldIndex, newIndex);
 
-      // Optimistically update UI
+      // Calculate which items changed
+      const updates: { id: string; displayOrder: number }[] = [];
+      reordered.forEach((item, index) => {
+        if (item.displayOrder !== index) {
+          updates.push({ id: item.id, displayOrder: index });
+        }
+      });
+
+      if (updates.length === 0) return;
+
+      // Optimistic update
       setTopics((prev) =>
         prev.map((t) =>
           t.id === effectiveSelectedTopicId
             ? {
                 ...t,
                 subtopics: t.subtopics.map((s) => {
-                  if (s.id === subtopic.id) return { ...s, displayOrder: targetOrder };
-                  if (s.id === targetSubtopic.id) return { ...s, displayOrder: currentOrder };
-                  return s;
+                  const update = updates.find((u) => u.id === s.id);
+                  return update ? { ...s, displayOrder: update.displayOrder } : s;
                 }),
               }
             : t
@@ -402,21 +435,13 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
       );
 
       try {
-        // Update both subtopics in parallel
-        const [res1, res2] = await Promise.all([
-          fetch(`/api/subtopics/${subtopic.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ displayOrder: targetOrder }),
-          }),
-          fetch(`/api/subtopics/${targetSubtopic.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ displayOrder: currentOrder }),
-          }),
-        ]);
+        const response = await fetch("/api/subtopics/reorder", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: updates }),
+        });
 
-        if (!res1.ok || !res2.ok) {
+        if (!response.ok) {
           // Revert on failure
           setTopics((prev) =>
             prev.map((t) =>
@@ -424,15 +449,14 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                 ? {
                     ...t,
                     subtopics: t.subtopics.map((s) => {
-                      if (s.id === subtopic.id) return { ...s, displayOrder: currentOrder };
-                      if (s.id === targetSubtopic.id) return { ...s, displayOrder: targetOrder };
-                      return s;
+                      const original = itemsInSection.find((o) => o.id === s.id);
+                      return original ? { ...s, displayOrder: original.displayOrder } : s;
                     }),
                   }
                 : t
             )
           );
-          setError("Failed to reorder subtopic");
+          setError("Failed to reorder subtopics");
         }
       } catch {
         // Revert on failure
@@ -442,15 +466,14 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
               ? {
                   ...t,
                   subtopics: t.subtopics.map((s) => {
-                    if (s.id === subtopic.id) return { ...s, displayOrder: currentOrder };
-                    if (s.id === targetSubtopic.id) return { ...s, displayOrder: targetOrder };
-                    return s;
+                    const original = itemsInSection.find((o) => o.id === s.id);
+                    return original ? { ...s, displayOrder: original.displayOrder } : s;
                   }),
                 }
               : t
           )
         );
-        setError("Failed to reorder subtopic");
+        setError("Failed to reorder subtopics");
       }
     },
     [selectedTopic, effectiveSelectedTopicId]
@@ -521,21 +544,30 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
             </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
-              {activeTopics.map((topic, index) => (
-                <TopicRow
-                  key={topic.id}
-                  topic={topic}
-                  isSelected={topic.id === effectiveSelectedTopicId}
-                  onSelect={() => setSelectedTopicId(topic.id)}
-                  onEdit={() => openEditTopic(topic)}
-                  onToggleStatus={() => toggleTopicStatus(topic)}
-                  onDelete={() => deleteTopic(topic)}
-                  onMoveUp={() => moveTopicInDirection(topic, "up")}
-                  onMoveDown={() => moveTopicInDirection(topic, "down")}
-                  isFirst={index === 0}
-                  isLast={index === activeTopics.length - 1}
-                />
-              ))}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => handleTopicDragEnd(event, "ACTIVE")}
+              >
+                <SortableContext
+                  items={activeTopics.map((t) => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {activeTopics.map((topic) => (
+                    <SortableTopicRow
+                      key={topic.id}
+                      id={topic.id}
+                      topic={topic}
+                      isSelected={topic.id === effectiveSelectedTopicId}
+                      onSelect={() => setSelectedTopicId(topic.id)}
+                      onEdit={() => openEditTopic(topic)}
+                      onToggleStatus={() => toggleTopicStatus(topic)}
+                      onDelete={() => deleteTopic(topic)}
+                      disabled={activeTopics.length <= 1}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
 
               {/* Inactive Topics */}
               {inactiveTopics.length > 0 && (
@@ -543,22 +575,31 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                   <div className="px-4 py-2 bg-[var(--bg-surface)] text-[var(--text-muted)] text-xs font-medium">
                     Inactive ({inactiveTopics.length})
                   </div>
-                  {inactiveTopics.map((topic, index) => (
-                    <TopicRow
-                      key={topic.id}
-                      topic={topic}
-                      isSelected={topic.id === effectiveSelectedTopicId}
-                      onSelect={() => setSelectedTopicId(topic.id)}
-                      onEdit={() => openEditTopic(topic)}
-                      onToggleStatus={() => toggleTopicStatus(topic)}
-                      onDelete={() => deleteTopic(topic)}
-                      onMoveUp={() => moveTopicInDirection(topic, "up")}
-                      onMoveDown={() => moveTopicInDirection(topic, "down")}
-                      isFirst={index === 0}
-                      isLast={index === inactiveTopics.length - 1}
-                      isInactive
-                    />
-                  ))}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(event) => handleTopicDragEnd(event, "INACTIVE")}
+                  >
+                    <SortableContext
+                      items={inactiveTopics.map((t) => t.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {inactiveTopics.map((topic) => (
+                        <SortableTopicRow
+                          key={topic.id}
+                          id={topic.id}
+                          topic={topic}
+                          isSelected={topic.id === effectiveSelectedTopicId}
+                          onSelect={() => setSelectedTopicId(topic.id)}
+                          onEdit={() => openEditTopic(topic)}
+                          onToggleStatus={() => toggleTopicStatus(topic)}
+                          onDelete={() => deleteTopic(topic)}
+                          isInactive
+                          disabled={inactiveTopics.length <= 1}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </>
               )}
             </div>
@@ -605,19 +646,28 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
             </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
-              {activeSubtopics.map((subtopic, index) => (
-                <SubtopicRow
-                  key={subtopic.id}
-                  subtopic={subtopic}
-                  onEdit={() => openEditSubtopic(subtopic)}
-                  onToggleStatus={() => toggleSubtopicStatus(subtopic)}
-                  onDelete={() => deleteSubtopic(subtopic)}
-                  onMoveUp={() => moveSubtopicInDirection(subtopic, "up")}
-                  onMoveDown={() => moveSubtopicInDirection(subtopic, "down")}
-                  isFirst={index === 0}
-                  isLast={index === activeSubtopics.length - 1}
-                />
-              ))}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => handleSubtopicDragEnd(event, "ACTIVE")}
+              >
+                <SortableContext
+                  items={activeSubtopics.map((s) => s.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {activeSubtopics.map((subtopic) => (
+                    <SortableSubtopicRow
+                      key={subtopic.id}
+                      id={subtopic.id}
+                      subtopic={subtopic}
+                      onEdit={() => openEditSubtopic(subtopic)}
+                      onToggleStatus={() => toggleSubtopicStatus(subtopic)}
+                      onDelete={() => deleteSubtopic(subtopic)}
+                      disabled={activeSubtopics.length <= 1}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
 
               {/* Inactive Subtopics */}
               {inactiveSubtopics.length > 0 && (
@@ -625,20 +675,29 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                   <div className="px-4 py-2 bg-[var(--bg-surface)] text-[var(--text-muted)] text-xs font-medium">
                     Inactive ({inactiveSubtopics.length})
                   </div>
-                  {inactiveSubtopics.map((subtopic, index) => (
-                    <SubtopicRow
-                      key={subtopic.id}
-                      subtopic={subtopic}
-                      onEdit={() => openEditSubtopic(subtopic)}
-                      onToggleStatus={() => toggleSubtopicStatus(subtopic)}
-                      onDelete={() => deleteSubtopic(subtopic)}
-                      onMoveUp={() => moveSubtopicInDirection(subtopic, "up")}
-                      onMoveDown={() => moveSubtopicInDirection(subtopic, "down")}
-                      isFirst={index === 0}
-                      isLast={index === inactiveSubtopics.length - 1}
-                      isInactive
-                    />
-                  ))}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(event) => handleSubtopicDragEnd(event, "INACTIVE")}
+                  >
+                    <SortableContext
+                      items={inactiveSubtopics.map((s) => s.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {inactiveSubtopics.map((subtopic) => (
+                        <SortableSubtopicRow
+                          key={subtopic.id}
+                          id={subtopic.id}
+                          subtopic={subtopic}
+                          onEdit={() => openEditSubtopic(subtopic)}
+                          onToggleStatus={() => toggleSubtopicStatus(subtopic)}
+                          onDelete={() => deleteSubtopic(subtopic)}
+                          isInactive
+                          disabled={inactiveSubtopics.length <= 1}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </>
               )}
             </div>
@@ -666,34 +725,32 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
   );
 }
 
-// Topic row component
-interface TopicRowProps {
+// Topic row component with drag handle
+interface TopicRowWithHandleProps {
   topic: Topic;
   isSelected: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onToggleStatus: () => void;
   onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  isFirst: boolean;
-  isLast: boolean;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+  isDragging?: boolean;
   isInactive?: boolean;
+  disabled?: boolean;
 }
 
-function TopicRow({
+function TopicRowWithHandle({
   topic,
   isSelected,
   onSelect,
   onEdit,
   onToggleStatus,
   onDelete,
-  onMoveUp,
-  onMoveDown,
-  isFirst,
-  isLast,
+  dragHandleProps,
+  isDragging,
   isInactive,
-}: TopicRowProps) {
+  disabled,
+}: TopicRowWithHandleProps) {
   return (
     <div
       onClick={onSelect}
@@ -701,9 +758,21 @@ function TopicRow({
         p-3 flex items-center justify-between cursor-pointer transition-colors
         ${isSelected ? "bg-[var(--accent-pink-glow)] border-l-2 border-l-[var(--accent-pink)]" : "hover:bg-[var(--bg-hover)]"}
         ${isInactive ? "opacity-60" : ""}
+        ${isDragging ? "shadow-lg bg-[var(--bg-elevated)] rounded" : ""}
       `}
     >
       <div className="flex items-center gap-2 min-w-0">
+        <button
+          {...dragHandleProps}
+          className={`p-1 -ml-1 transition-colors touch-none ${
+            disabled
+              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-grab active:cursor-grabbing"
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DragHandleIcon />
+        </button>
         <span
           className={`font-medium text-sm truncate ${isInactive ? "text-[var(--text-secondary)]" : "text-[var(--text-primary)]"}`}
         >
@@ -718,30 +787,6 @@ function TopicRow({
         onClick={(e) => e.stopPropagation()}
       >
         <button
-          onClick={onMoveUp}
-          disabled={isFirst}
-          className={`p-1.5 text-xs transition-colors ${
-            isFirst
-              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
-              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-          }`}
-          title="Move up"
-        >
-          <ChevronUpIcon />
-        </button>
-        <button
-          onClick={onMoveDown}
-          disabled={isLast}
-          className={`p-1.5 text-xs transition-colors ${
-            isLast
-              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
-              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-          }`}
-          title="Move down"
-        >
-          <ChevronDownIcon />
-        </button>
-        <button
           onClick={onEdit}
           className="p-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
           title="Edit"
@@ -771,38 +816,82 @@ function TopicRow({
   );
 }
 
-// Subtopic row component
-interface SubtopicRowProps {
+// Sortable wrapper for TopicRow
+interface SortableTopicRowProps extends Omit<TopicRowWithHandleProps, "dragHandleProps" | "isDragging"> {
+  id: string;
+  disabled?: boolean;
+}
+
+function SortableTopicRow({ id, disabled, ...props }: SortableTopicRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    position: isDragging ? "relative" as const : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <TopicRowWithHandle
+        {...props}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        isDragging={isDragging}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+// Subtopic row component with drag handle
+interface SubtopicRowWithHandleProps {
   subtopic: Subtopic;
   onEdit: () => void;
   onToggleStatus: () => void;
   onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  isFirst: boolean;
-  isLast: boolean;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+  isDragging?: boolean;
   isInactive?: boolean;
+  disabled?: boolean;
 }
 
-function SubtopicRow({
+function SubtopicRowWithHandle({
   subtopic,
   onEdit,
   onToggleStatus,
   onDelete,
-  onMoveUp,
-  onMoveDown,
-  isFirst,
-  isLast,
+  dragHandleProps,
+  isDragging,
   isInactive,
-}: SubtopicRowProps) {
+  disabled,
+}: SubtopicRowWithHandleProps) {
   return (
     <div
       className={`
         p-3 flex items-center justify-between transition-colors hover:bg-[var(--bg-hover)]
         ${isInactive ? "opacity-60" : ""}
+        ${isDragging ? "shadow-lg bg-[var(--bg-elevated)] rounded" : ""}
       `}
     >
       <div className="flex items-center gap-2 min-w-0">
+        <button
+          {...dragHandleProps}
+          className={`p-1 -ml-1 transition-colors touch-none ${
+            disabled
+              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-grab active:cursor-grabbing"
+          }`}
+        >
+          <DragHandleIcon />
+        </button>
         <span
           className={`text-sm truncate ${isInactive ? "text-[var(--text-secondary)]" : "text-[var(--text-primary)]"}`}
         >
@@ -816,30 +905,6 @@ function SubtopicRow({
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <button
-          onClick={onMoveUp}
-          disabled={isFirst}
-          className={`p-1.5 text-xs transition-colors ${
-            isFirst
-              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
-              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-          }`}
-          title="Move up"
-        >
-          <ChevronUpIcon />
-        </button>
-        <button
-          onClick={onMoveDown}
-          disabled={isLast}
-          className={`p-1.5 text-xs transition-colors ${
-            isLast
-              ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
-              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-          }`}
-          title="Move down"
-        >
-          <ChevronDownIcon />
-        </button>
-        <button
           onClick={onEdit}
           className="p-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
           title="Edit"
@@ -869,43 +934,42 @@ function SubtopicRow({
   );
 }
 
+// Sortable wrapper for SubtopicRow
+interface SortableSubtopicRowProps extends Omit<SubtopicRowWithHandleProps, "dragHandleProps" | "isDragging"> {
+  id: string;
+  disabled?: boolean;
+}
+
+function SortableSubtopicRow({ id, disabled, ...props }: SortableSubtopicRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    position: isDragging ? "relative" as const : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <SubtopicRowWithHandle
+        {...props}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        isDragging={isDragging}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
 // Icons
-function ChevronUpIcon() {
-  return (
-    <svg
-      className="w-4 h-4"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M5 15l7-7 7 7"
-      />
-    </svg>
-  );
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg
-      className="w-4 h-4"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M19 9l-7 7-7-7"
-      />
-    </svg>
-  );
-}
-
 function EditIcon() {
   return (
     <svg
@@ -974,6 +1038,23 @@ function DeleteIcon() {
         strokeWidth={2}
         d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
       />
+    </svg>
+  );
+}
+
+function DragHandleIcon() {
+  return (
+    <svg
+      className="w-4 h-4"
+      fill="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <circle cx="9" cy="5" r="1.5" />
+      <circle cx="15" cy="5" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" />
+      <circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="19" r="1.5" />
+      <circle cx="15" cy="19" r="1.5" />
     </svg>
   );
 }

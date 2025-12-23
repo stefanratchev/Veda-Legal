@@ -392,35 +392,42 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
     [topics]
   );
 
-  // Reorder subtopic handler
-  const moveSubtopicInDirection = useCallback(
-    async (subtopic: Subtopic, direction: "up" | "down") => {
-      if (!selectedTopic) return;
+  // Handle subtopic drag end
+  const handleSubtopicDragEnd = useCallback(
+    async (event: DragEndEvent, status: "ACTIVE" | "INACTIVE") => {
+      const { active, over } = event;
+      if (!over || active.id === over.id || !selectedTopic) return;
 
-      // Get subtopics in the same status group, sorted by displayOrder
-      const sameStatusSubtopics = selectedTopic.subtopics
-        .filter((s) => s.status === subtopic.status)
+      const itemsInSection = selectedTopic.subtopics
+        .filter((s) => s.status === status)
         .sort((a, b) => a.displayOrder - b.displayOrder);
 
-      const currentIndex = sameStatusSubtopics.findIndex((s) => s.id === subtopic.id);
-      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      const oldIndex = itemsInSection.findIndex((s) => s.id === active.id);
+      const newIndex = itemsInSection.findIndex((s) => s.id === over.id);
 
-      if (targetIndex < 0 || targetIndex >= sameStatusSubtopics.length) return;
+      if (oldIndex === -1 || newIndex === -1) return;
 
-      const targetSubtopic = sameStatusSubtopics[targetIndex];
-      const currentOrder = subtopic.displayOrder;
-      const targetOrder = targetSubtopic.displayOrder;
+      const reordered = arrayMove(itemsInSection, oldIndex, newIndex);
 
-      // Optimistically update UI
+      // Calculate which items changed
+      const updates: { id: string; displayOrder: number }[] = [];
+      reordered.forEach((item, index) => {
+        if (item.displayOrder !== index) {
+          updates.push({ id: item.id, displayOrder: index });
+        }
+      });
+
+      if (updates.length === 0) return;
+
+      // Optimistic update
       setTopics((prev) =>
         prev.map((t) =>
           t.id === effectiveSelectedTopicId
             ? {
                 ...t,
                 subtopics: t.subtopics.map((s) => {
-                  if (s.id === subtopic.id) return { ...s, displayOrder: targetOrder };
-                  if (s.id === targetSubtopic.id) return { ...s, displayOrder: currentOrder };
-                  return s;
+                  const update = updates.find((u) => u.id === s.id);
+                  return update ? { ...s, displayOrder: update.displayOrder } : s;
                 }),
               }
             : t
@@ -428,21 +435,13 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
       );
 
       try {
-        // Update both subtopics in parallel
-        const [res1, res2] = await Promise.all([
-          fetch(`/api/subtopics/${subtopic.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ displayOrder: targetOrder }),
-          }),
-          fetch(`/api/subtopics/${targetSubtopic.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ displayOrder: currentOrder }),
-          }),
-        ]);
+        const response = await fetch("/api/subtopics/reorder", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: updates }),
+        });
 
-        if (!res1.ok || !res2.ok) {
+        if (!response.ok) {
           // Revert on failure
           setTopics((prev) =>
             prev.map((t) =>
@@ -450,15 +449,14 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                 ? {
                     ...t,
                     subtopics: t.subtopics.map((s) => {
-                      if (s.id === subtopic.id) return { ...s, displayOrder: currentOrder };
-                      if (s.id === targetSubtopic.id) return { ...s, displayOrder: targetOrder };
-                      return s;
+                      const original = itemsInSection.find((o) => o.id === s.id);
+                      return original ? { ...s, displayOrder: original.displayOrder } : s;
                     }),
                   }
                 : t
             )
           );
-          setError("Failed to reorder subtopic");
+          setError("Failed to reorder subtopics");
         }
       } catch {
         // Revert on failure
@@ -468,15 +466,14 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
               ? {
                   ...t,
                   subtopics: t.subtopics.map((s) => {
-                    if (s.id === subtopic.id) return { ...s, displayOrder: currentOrder };
-                    if (s.id === targetSubtopic.id) return { ...s, displayOrder: targetOrder };
-                    return s;
+                    const original = itemsInSection.find((o) => o.id === s.id);
+                    return original ? { ...s, displayOrder: original.displayOrder } : s;
                   }),
                 }
               : t
           )
         );
-        setError("Failed to reorder subtopic");
+        setError("Failed to reorder subtopics");
       }
     },
     [selectedTopic, effectiveSelectedTopicId]

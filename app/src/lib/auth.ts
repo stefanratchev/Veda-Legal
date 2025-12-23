@@ -1,6 +1,8 @@
 import { NextAuthOptions } from "next-auth";
 import AzureADProvider from "next-auth/providers/azure-ad";
+import { eq } from "drizzle-orm";
 import { db } from "./db";
+import { users } from "./schema";
 
 /**
  * Fetch user photo from Microsoft Graph API and return as base64 data URL.
@@ -58,9 +60,9 @@ export const authOptions: NextAuthOptions = {
 
       try {
         // Check if user exists in whitelist
-        const existingUser = await db.user.findUnique({
-          where: { email },
-          select: { id: true, status: true },
+        const existingUser = await db.query.users.findFirst({
+          where: eq(users.email, email),
+          columns: { id: true, status: true },
         });
 
         // Not in whitelist - block login
@@ -80,15 +82,14 @@ export const authOptions: NextAuthOptions = {
           photoDataUrl = await fetchAzureADPhoto(account.access_token);
         }
 
-        await db.user.update({
-          where: { id: existingUser.id },
-          data: {
+        await db.update(users)
+          .set({
             status: "ACTIVE",
             name: user.name || azureProfile?.name,
             image: photoDataUrl,
             lastLogin: new Date(),
-          },
-        });
+          })
+          .where(eq(users.id, existingUser.id));
 
         return true;
       } catch (error) {

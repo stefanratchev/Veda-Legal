@@ -82,7 +82,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // Fetch the time entry for original values if linked
     let originalDescription: string | undefined;
-    let originalHours: number | undefined;
+    let originalHours: number | null | undefined;
 
     if (updated.timeEntryId) {
       const fullItem = await db.query.serviceDescriptionLineItems.findFirst({

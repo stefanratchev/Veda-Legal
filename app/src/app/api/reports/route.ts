@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { timeEntries, clients, users } from "@/lib/schema";
+import { timeEntries, users } from "@/lib/schema";
 import { requireAuth } from "@/lib/api-utils";
 
 interface EmployeeStats {

@@ -1,9 +1,13 @@
 import { cache } from "react";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { users } from "@/lib/schema";
 import { authOptions } from "@/lib/auth";
-import type { Position } from "@prisma/client";
+
+// Position type (matches Drizzle enum)
+type Position = "ADMIN" | "PARTNER" | "SENIOR_ASSOCIATE" | "ASSOCIATE" | "CONSULTANT";
 
 export interface AuthenticatedUser {
   id: string;
@@ -34,9 +38,9 @@ export function getInitials(name: string | null | undefined): string {
 export async function getAuthenticatedUser(
   email: string
 ): Promise<AuthenticatedUser | null> {
-  const dbUser = await db.user.findUnique({
-    where: { email },
-    select: { id: true, name: true, position: true, image: true },
+  const dbUser = await db.query.users.findFirst({
+    where: eq(users.email, email),
+    columns: { id: true, name: true, position: true, image: true },
   });
 
   if (!dbUser) {

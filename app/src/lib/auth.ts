@@ -87,7 +87,7 @@ export const authOptions: NextAuthOptions = {
             status: "ACTIVE",
             name: user.name || azureProfile?.name,
             image: photoDataUrl,
-            lastLogin: new Date(),
+            lastLogin: new Date().toISOString(),
           })
           .where(eq(users.id, existingUser.id));
 

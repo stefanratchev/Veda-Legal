@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and, desc, asc, notExists } from "drizzle-orm";
+import { eq, and, desc, asc } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import {
@@ -12,7 +12,6 @@ import {
 import {
   requireAuth,
   requireWriteAccess,
-  serializeDecimal,
   errorResponse,
 } from "@/lib/api-utils";
 

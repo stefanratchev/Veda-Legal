@@ -646,19 +646,28 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
             </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
-              {activeSubtopics.map((subtopic, index) => (
-                <SubtopicRow
-                  key={subtopic.id}
-                  subtopic={subtopic}
-                  onEdit={() => openEditSubtopic(subtopic)}
-                  onToggleStatus={() => toggleSubtopicStatus(subtopic)}
-                  onDelete={() => deleteSubtopic(subtopic)}
-                  onMoveUp={() => moveSubtopicInDirection(subtopic, "up")}
-                  onMoveDown={() => moveSubtopicInDirection(subtopic, "down")}
-                  isFirst={index === 0}
-                  isLast={index === activeSubtopics.length - 1}
-                />
-              ))}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => handleSubtopicDragEnd(event, "ACTIVE")}
+              >
+                <SortableContext
+                  items={activeSubtopics.map((s) => s.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {activeSubtopics.map((subtopic) => (
+                    <SortableSubtopicRow
+                      key={subtopic.id}
+                      id={subtopic.id}
+                      subtopic={subtopic}
+                      onEdit={() => openEditSubtopic(subtopic)}
+                      onToggleStatus={() => toggleSubtopicStatus(subtopic)}
+                      onDelete={() => deleteSubtopic(subtopic)}
+                      disabled={activeSubtopics.length <= 1}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
 
               {/* Inactive Subtopics */}
               {inactiveSubtopics.length > 0 && (
@@ -666,20 +675,29 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                   <div className="px-4 py-2 bg-[var(--bg-surface)] text-[var(--text-muted)] text-xs font-medium">
                     Inactive ({inactiveSubtopics.length})
                   </div>
-                  {inactiveSubtopics.map((subtopic, index) => (
-                    <SubtopicRow
-                      key={subtopic.id}
-                      subtopic={subtopic}
-                      onEdit={() => openEditSubtopic(subtopic)}
-                      onToggleStatus={() => toggleSubtopicStatus(subtopic)}
-                      onDelete={() => deleteSubtopic(subtopic)}
-                      onMoveUp={() => moveSubtopicInDirection(subtopic, "up")}
-                      onMoveDown={() => moveSubtopicInDirection(subtopic, "down")}
-                      isFirst={index === 0}
-                      isLast={index === inactiveSubtopics.length - 1}
-                      isInactive
-                    />
-                  ))}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(event) => handleSubtopicDragEnd(event, "INACTIVE")}
+                  >
+                    <SortableContext
+                      items={inactiveSubtopics.map((s) => s.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {inactiveSubtopics.map((subtopic) => (
+                        <SortableSubtopicRow
+                          key={subtopic.id}
+                          id={subtopic.id}
+                          subtopic={subtopic}
+                          onEdit={() => openEditSubtopic(subtopic)}
+                          onToggleStatus={() => toggleSubtopicStatus(subtopic)}
+                          onDelete={() => deleteSubtopic(subtopic)}
+                          isInactive
+                          disabled={inactiveSubtopics.length <= 1}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </>
               )}
             </div>

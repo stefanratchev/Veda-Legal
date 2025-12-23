@@ -1,5 +1,5 @@
 import { pgTable, index, foreignKey, text, integer, numeric, timestamp, date, uniqueIndex, boolean, pgEnum } from "drizzle-orm/pg-core"
-import { sql } from "drizzle-orm"
+import { sql, relations } from "drizzle-orm"
 
 export const clientStatus = pgEnum("ClientStatus", ['ACTIVE', 'INACTIVE'])
 export const position = pgEnum("Position", ['ADMIN', 'PARTNER', 'SENIOR_ASSOCIATE', 'ASSOCIATE', 'CONSULTANT'])
@@ -172,3 +172,73 @@ export const timeEntries = pgTable("time_entries", {
 			name: "time_entries_subtopicId_fkey"
 		}).onUpdate("cascade").onDelete("set null"),
 ]);
+
+// Relations
+export const usersRelations = relations(users, ({ many }) => ({
+  timeEntries: many(timeEntries),
+  finalizedServiceDescriptions: many(serviceDescriptions),
+}));
+
+export const clientsRelations = relations(clients, ({ many }) => ({
+  timeEntries: many(timeEntries),
+  serviceDescriptions: many(serviceDescriptions),
+}));
+
+export const topicsRelations = relations(topics, ({ many }) => ({
+  subtopics: many(subtopics),
+}));
+
+export const subtopicsRelations = relations(subtopics, ({ one, many }) => ({
+  topic: one(topics, {
+    fields: [subtopics.topicId],
+    references: [topics.id],
+  }),
+  timeEntries: many(timeEntries),
+}));
+
+export const timeEntriesRelations = relations(timeEntries, ({ one, many }) => ({
+  user: one(users, {
+    fields: [timeEntries.userId],
+    references: [users.id],
+  }),
+  client: one(clients, {
+    fields: [timeEntries.clientId],
+    references: [clients.id],
+  }),
+  subtopic: one(subtopics, {
+    fields: [timeEntries.subtopicId],
+    references: [subtopics.id],
+  }),
+  billingLineItems: many(serviceDescriptionLineItems),
+}));
+
+export const serviceDescriptionsRelations = relations(serviceDescriptions, ({ one, many }) => ({
+  client: one(clients, {
+    fields: [serviceDescriptions.clientId],
+    references: [clients.id],
+  }),
+  finalizedBy: one(users, {
+    fields: [serviceDescriptions.finalizedById],
+    references: [users.id],
+  }),
+  topics: many(serviceDescriptionTopics),
+}));
+
+export const serviceDescriptionTopicsRelations = relations(serviceDescriptionTopics, ({ one, many }) => ({
+  serviceDescription: one(serviceDescriptions, {
+    fields: [serviceDescriptionTopics.serviceDescriptionId],
+    references: [serviceDescriptions.id],
+  }),
+  lineItems: many(serviceDescriptionLineItems),
+}));
+
+export const serviceDescriptionLineItemsRelations = relations(serviceDescriptionLineItems, ({ one }) => ({
+  topic: one(serviceDescriptionTopics, {
+    fields: [serviceDescriptionLineItems.topicId],
+    references: [serviceDescriptionTopics.id],
+  }),
+  timeEntry: one(timeEntries, {
+    fields: [serviceDescriptionLineItems.timeEntryId],
+    references: [timeEntries.id],
+  }),
+}));

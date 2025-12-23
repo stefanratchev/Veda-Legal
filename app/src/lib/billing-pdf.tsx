@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   },
   logo: {
     fontSize: 16,
-    color: "#c97b98",
+    color: "#FF9999",
     fontWeight: "bold",
   },
   sectionTitle: {
@@ -163,7 +163,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
           </View>
           <View>
             <Text style={styles.logo}>VEDA</Text>
-            <Text style={{ color: "#c97b98", fontSize: 8 }}>LEGAL</Text>
+            <Text style={{ color: "#FF9999", fontSize: 8 }}>LEGAL</Text>
           </View>
         </View>
 

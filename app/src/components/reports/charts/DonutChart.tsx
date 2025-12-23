@@ -82,7 +82,8 @@ export function DonutChart({
             fontSize: "12px",
           }}
           labelStyle={{ color: "var(--text-primary)" }}
-          formatter={(value) => [valueFormatter(value as number), valueLabel]}
+          itemStyle={{ color: "var(--text-secondary)" }}
+          formatter={(value) => valueFormatter(value as number)}
         />
         <Legend
           layout="vertical"

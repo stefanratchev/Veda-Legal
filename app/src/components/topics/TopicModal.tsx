@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useClickOutside } from "@/hooks/useClickOutside";
 import { Topic } from "@/types";
 
 interface TopicModalProps {
@@ -13,10 +12,15 @@ interface TopicModalProps {
 export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
   const [name, setName] = useState(topic?.name || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const modalRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  useClickOutside(modalRef, onClose, true);
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
 
   useEffect(() => {
     nameInputRef.current?.focus();
@@ -35,10 +39,7 @@ export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div
-        ref={modalRef}
-        className="w-full max-w-md bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg shadow-xl animate-fade-up"
-      >
+      <div className="w-full max-w-md bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg shadow-xl animate-fade-up">
         <div className="px-6 py-4 border-b border-[var(--border-subtle)]">
           <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)]">
             {topic ? "Edit Topic" : "Add Topic"}

@@ -50,8 +50,9 @@ model Client {
   timesheetCode String        @unique    // Code shown in employee timesheets
   invoicedName  String?                  // Name on outgoing invoices
   invoiceAttn   String?                  // Contact person for invoices
-  email         String?
-  hourlyRate    Decimal?      @db.Decimal(10, 2)  // Rate in EUR
+  email           String?
+  secondaryEmails String?                  // Additional emails, comma-separated
+  hourlyRate      Decimal?      @db.Decimal(10, 2)  // Rate in EUR
   phone         String?
   address       String?
   practiceArea  PracticeArea?

@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useClickOutside } from "@/hooks/useClickOutside";
@@ -56,10 +57,23 @@ const navItems: NavItem[] = [
   { name: "Reports", href: "/reports", icon: Icons.reports, adminOnly: true },
 ];
 
+// Format position for display (SENIOR_ASSOCIATE → "Senior Associate")
+function formatPosition(position: string): string {
+  return position
+    .split("_")
+    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+// Check if position has admin-level access
+function hasAdminAccess(position: string): boolean {
+  return ["ADMIN", "PARTNER"].includes(position);
+}
+
 interface SidebarProps {
   user?: {
     name: string;
-    role: string;
+    position: string;
     initials: string;
     image?: string | null;
   };
@@ -68,7 +82,7 @@ interface SidebarProps {
 
 export function Sidebar({ user, className }: SidebarProps) {
   const pathname = usePathname();
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = user?.position ? hasAdminAccess(user.position) : false;
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -106,13 +120,13 @@ export function Sidebar({ user, className }: SidebarProps) {
     <aside className={`fixed left-0 top-0 h-screen w-[240px] bg-[var(--bg-elevated)] border-r border-[var(--border-subtle)] flex flex-col ${className || ""}`}>
       {/* Logo */}
       <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
-        <h1 className="font-heading text-[22px] font-semibold tracking-tight">
-          <span className="text-[var(--accent-pink)]">VEDA</span>{" "}
-          <span className="text-[var(--text-primary)]">Legal</span>
-        </h1>
-        <p className="text-[10px] text-[var(--text-muted)] mt-0.5 tracking-wider uppercase">
-          Practice Management
-        </p>
+        <Image
+          src="/logo.svg"
+          alt="Veda Legal"
+          width={180}
+          height={72}
+          priority
+        />
       </div>
 
       {/* Navigation */}
@@ -148,7 +162,7 @@ export function Sidebar({ user, className }: SidebarProps) {
                 <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
                   {user.name}
                 </p>
-                <p className="text-[11px] text-[var(--text-muted)] leading-tight">{user.role}</p>
+                <p className="text-[11px] text-[var(--text-muted)] leading-tight">{formatPosition(user.position)}</p>
               </div>
               <svg
                 className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${showUserMenu ? "rotate-180" : ""}`}

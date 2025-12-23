@@ -12,7 +12,7 @@ export default async function EmployeesPage() {
       id: true,
       name: true,
       email: true,
-      role: true,
+      position: true,
       status: true,
       createdAt: true,
       lastLogin: true,
@@ -31,7 +31,7 @@ export default async function EmployeesPage() {
     <EmployeesContent
       initialEmployees={serializedEmployees}
       currentUserId={user.id}
-      readOnly={user.role !== "ADMIN"}
+      readOnly={!["ADMIN", "PARTNER"].includes(user.position)}
     />
   );
 }

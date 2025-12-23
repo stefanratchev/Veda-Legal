@@ -249,7 +249,7 @@ async function getReportData({
 
 export default async function ReportsPage() {
   const user = await getCurrentUser();
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = ["ADMIN", "PARTNER"].includes(user.position);
 
   // Get current month range
   const today = new Date();

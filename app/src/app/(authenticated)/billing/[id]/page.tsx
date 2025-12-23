@@ -12,7 +12,7 @@ interface PageProps {
 export default async function ServiceDescriptionPage({ params }: PageProps) {
   const user = await getCurrentUser();
 
-  if (user.role !== "ADMIN") {
+  if (!["ADMIN", "PARTNER"].includes(user.position)) {
     redirect("/billing");
   }
 

@@ -3,12 +3,12 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
-import type { UserRole } from "@prisma/client";
+import type { Position } from "@prisma/client";
 
 export interface AuthenticatedUser {
   id: string;
   name: string;
-  role: UserRole;
+  position: Position;
   initials: string;
   image: string | null;
 }
@@ -36,7 +36,7 @@ export async function getAuthenticatedUser(
 ): Promise<AuthenticatedUser | null> {
   const dbUser = await db.user.findUnique({
     where: { email },
-    select: { id: true, name: true, role: true, image: true },
+    select: { id: true, name: true, position: true, image: true },
   });
 
   if (!dbUser) {
@@ -46,7 +46,7 @@ export async function getAuthenticatedUser(
   return {
     id: dbUser.id,
     name: dbUser.name || "User",
-    role: dbUser.role,
+    position: dbUser.position,
     initials: getInitials(dbUser.name),
     image: dbUser.image,
   };

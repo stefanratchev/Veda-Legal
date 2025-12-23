@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { Prisma, UserRole, UserStatus } from "@prisma/client";
+import { Prisma, Position, UserStatus } from "@prisma/client";
 import {
   requireAuth,
   requireAdmin,
@@ -9,8 +9,8 @@ import {
 } from "@/lib/auth-utils";
 import { isValidEmail } from "@/lib/api-utils";
 
-// Valid roles for the simplified two-role system
-const VALID_ROLES: UserRole[] = ["ADMIN", "EMPLOYEE"];
+// Valid positions that can be set via the UI (Admin is not selectable)
+const VALID_POSITIONS: Position[] = ["PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE"];
 
 // Valid statuses for admin updates (PENDING is only for newly created users)
 const VALID_STATUSES: UserStatus[] = ["ACTIVE", "INACTIVE"];
@@ -21,7 +21,7 @@ const EMPLOYEE_SELECT = {
   id: true,
   name: true,
   email: true,
-  role: true,
+  position: true,
   status: true,
   createdAt: true,
   lastLogin: true,
@@ -77,7 +77,7 @@ export async function PATCH(request: NextRequest) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { id, name, role, status } = body;
+  const { id, name, position, status } = body;
 
   if (!id) {
     return errorResponse("Employee ID is required", 400);
@@ -92,8 +92,8 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  if (role !== undefined && !VALID_ROLES.includes(role)) {
-    return errorResponse("Invalid role value", 400);
+  if (position !== undefined && !VALID_POSITIONS.includes(position)) {
+    return errorResponse("Invalid position value", 400);
   }
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
@@ -107,7 +107,7 @@ export async function PATCH(request: NextRequest) {
 
   const updateData: Prisma.UserUpdateInput = {};
   if (name !== undefined) updateData.name = name.trim();
-  if (role !== undefined) updateData.role = role;
+  if (position !== undefined) updateData.position = position;
   if (status !== undefined) updateData.status = status;
 
   try {
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { email, name, role } = body;
+  const { email, name, position } = body;
 
   // Validate email
   if (!email || typeof email !== "string") {
@@ -155,9 +155,9 @@ export async function POST(request: NextRequest) {
     return errorResponse("Invalid email format", 400);
   }
 
-  // Validate role
-  if (!role || !VALID_ROLES.includes(role)) {
-    return errorResponse("Valid role is required (ADMIN or EMPLOYEE)", 400);
+  // Validate position
+  if (!position || !VALID_POSITIONS.includes(position)) {
+    return errorResponse("Valid position is required (PARTNER, SENIOR_ASSOCIATE, or ASSOCIATE)", 400);
   }
 
   // Validate name if provided
@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
       data: {
         email: email.trim().toLowerCase(),
         name: name?.trim() || null,
-        role,
+        position,
         status: "PENDING",
       },
       select: EMPLOYEE_SELECT,

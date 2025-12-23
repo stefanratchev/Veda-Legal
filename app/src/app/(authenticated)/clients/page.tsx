@@ -6,8 +6,8 @@ import { ClientsContent } from "@/components/clients/ClientsContent";
 export default async function ClientsPage() {
   const user = await getCurrentUser();
 
-  // Only ADMIN can access clients page
-  if (user.role !== "ADMIN") {
+  // Only ADMIN or PARTNER can access clients page
+  if (!["ADMIN", "PARTNER"].includes(user.position)) {
     redirect("/timesheets");
   }
 

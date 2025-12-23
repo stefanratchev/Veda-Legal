@@ -6,7 +6,7 @@ import { BillingContent } from "@/components/billing/BillingContent";
 export default async function BillingPage() {
   const user = await getCurrentUser();
 
-  if (user.role !== "ADMIN") {
+  if (!["ADMIN", "PARTNER"].includes(user.position)) {
     redirect("/timesheets");
   }
 

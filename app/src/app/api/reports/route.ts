@@ -53,14 +53,14 @@ export async function GET(request: NextRequest) {
 
   const user = await db.user.findUnique({
     where: { email: auth.session.user?.email || "" },
-    select: { id: true, email: true, name: true, role: true },
+    select: { id: true, email: true, name: true, position: true },
   });
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = ["ADMIN", "PARTNER"].includes(user.position);
 
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get("startDate");

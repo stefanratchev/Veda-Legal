@@ -13,7 +13,7 @@ export default async function AuthenticatedLayout({
       <Sidebar
         user={{
           name: user.name,
-          role: user.role,
+          position: user.position,
           initials: user.initials,
         }}
         className="animate-slide-in"

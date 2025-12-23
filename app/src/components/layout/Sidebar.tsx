@@ -57,10 +57,23 @@ const navItems: NavItem[] = [
   { name: "Reports", href: "/reports", icon: Icons.reports, adminOnly: true },
 ];
 
+// Format position for display (SENIOR_ASSOCIATE → "Senior Associate")
+function formatPosition(position: string): string {
+  return position
+    .split("_")
+    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+// Check if position has admin-level access
+function hasAdminAccess(position: string): boolean {
+  return ["ADMIN", "PARTNER"].includes(position);
+}
+
 interface SidebarProps {
   user?: {
     name: string;
-    role: string;
+    position: string;
     initials: string;
     image?: string | null;
   };
@@ -69,7 +82,7 @@ interface SidebarProps {
 
 export function Sidebar({ user, className }: SidebarProps) {
   const pathname = usePathname();
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = user?.position ? hasAdminAccess(user.position) : false;
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -149,7 +162,7 @@ export function Sidebar({ user, className }: SidebarProps) {
                 <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
                   {user.name}
                 </p>
-                <p className="text-[11px] text-[var(--text-muted)] leading-tight">{user.role}</p>
+                <p className="text-[11px] text-[var(--text-muted)] leading-tight">{formatPosition(user.position)}</p>
               </div>
               <svg
                 className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${showUserMenu ? "rotate-180" : ""}`}

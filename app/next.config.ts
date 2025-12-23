@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// Generate readable build timestamp at build time (e.g., "23 Dec 2025, 14:30")
+// Generate readable build timestamp at build time in Sofia timezone (e.g., "23 Dec 2025, 14:30")
 const getBuildTimestamp = () => {
   const now = new Date();
   return now.toLocaleDateString("en-GB", {
@@ -10,6 +10,7 @@ const getBuildTimestamp = () => {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Europe/Sofia",
   });
 };
 

@@ -1,26 +1,29 @@
-import { db } from "@/lib/db";
+import { asc } from "drizzle-orm";
+import { db, topics, subtopics } from "@/lib/db";
 import { TopicsContent } from "@/components/topics/TopicsContent";
 
 export default async function TopicsPage() {
-  const topics = await db.topic.findMany({
-    select: {
+  const topicsList = await db.query.topics.findMany({
+    columns: {
       id: true,
       name: true,
       displayOrder: true,
       status: true,
+    },
+    with: {
       subtopics: {
-        select: {
+        columns: {
           id: true,
           name: true,
           isPrefix: true,
           displayOrder: true,
           status: true,
         },
-        orderBy: { displayOrder: "asc" },
+        orderBy: [asc(subtopics.displayOrder)],
       },
     },
-    orderBy: { displayOrder: "asc" },
+    orderBy: [asc(topics.displayOrder)],
   });
 
-  return <TopicsContent initialTopics={topics} />;
+  return <TopicsContent initialTopics={topicsList} />;
 }

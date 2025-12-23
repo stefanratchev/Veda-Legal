@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import { desc } from "drizzle-orm";
+import { db, clients } from "@/lib/db";
 import { getCurrentUser } from "@/lib/user";
 import { ClientsContent } from "@/components/clients/ClientsContent";
 
@@ -11,8 +12,8 @@ export default async function ClientsPage() {
     redirect("/timesheets");
   }
 
-  const clients = await db.client.findMany({
-    select: {
+  const clientsList = await db.query.clients.findMany({
+    columns: {
       id: true,
       name: true,
       invoicedName: true,
@@ -27,14 +28,14 @@ export default async function ClientsPage() {
       notes: true,
       createdAt: true,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [desc(clients.createdAt)],
   });
 
-  // Convert for client component (Decimal to number, Date to string)
-  const serializedClients = clients.map((client) => ({
+  // Convert for client component (numeric string to number, timestamp string already ISO)
+  const serializedClients = clientsList.map((client) => ({
     ...client,
     hourlyRate: client.hourlyRate ? Number(client.hourlyRate) : null,
-    createdAt: client.createdAt.toISOString(),
+    createdAt: client.createdAt,
   }));
 
   return <ClientsContent initialClients={serializedClients} />;

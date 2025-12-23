@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { serviceDescriptions, serviceDescriptionTopics, clients, users, serviceDescriptionLineItems, timeEntries, topics, subtopics } from "./schema";
+import { serviceDescriptions, serviceDescriptionTopics, clients, users, serviceDescriptionLineItems, timeEntries, topics, subtopics } from "../src/lib/schema";
 
 export const serviceDescriptionTopicsRelations = relations(serviceDescriptionTopics, ({one, many}) => ({
 	serviceDescription: one(serviceDescriptions, {

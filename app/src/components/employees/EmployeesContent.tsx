@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { Position, UserStatus } from "@prisma/client";
 import { DataTable } from "@/components/ui/DataTable";
 import { ColumnDef } from "@/components/ui/table-types";
 import { EmployeeModal } from "./EmployeeModal";
+
+type Position = "ADMIN" | "PARTNER" | "SENIOR_ASSOCIATE" | "ASSOCIATE" | "CONSULTANT";
+type UserStatus = "PENDING" | "ACTIVE" | "INACTIVE";
 
 interface Employee {
   id: string;

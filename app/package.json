@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -19,6 +20,7 @@
     "@azure/msal-node": "^3.8.4",
     "@prisma/adapter-pg": "^7.1.0",
     "@prisma/client": "^7.1.0",
+    "@react-pdf/renderer": "^4.3.1",
     "csv-parse": "^6.1.0",
     "dotenv": "^17.2.3",
     "next": "16.0.10",

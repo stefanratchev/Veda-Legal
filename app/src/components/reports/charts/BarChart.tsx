@@ -88,7 +88,9 @@ export function BarChart({
             fontSize: "12px",
           }}
           labelStyle={{ color: "var(--text-primary)" }}
+          itemStyle={{ color: "var(--text-secondary)" }}
           formatter={(value) => [valueFormatter(value as number), valueLabel]}
+          cursor={{ fill: "var(--bg-surface)", fillOpacity: 0.5 }}
         />
         <Bar
           dataKey="value"

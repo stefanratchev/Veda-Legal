@@ -21,6 +21,7 @@ model User {
 
   // Relations
   timeEntries   TimeEntry[]
+  finalizedServiceDescriptions ServiceDescription[] @relation("FinalizedServiceDescriptions")
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -56,6 +57,7 @@ model Client {
 
   // Relations
   timeEntries   TimeEntry[]
+  serviceDescriptions ServiceDescription[]
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -141,6 +143,8 @@ model TimeEntry {
   topicName     String    @default("")
   subtopicName  String    @default("")
 
+  billingLineItems ServiceDescriptionLineItem[]
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -149,4 +153,78 @@ model TimeEntry {
   @@index([subtopicId])
   @@index([date])
   @@map("time_entries")
+}
+
+// ============================================
+// BILLING: Service Descriptions
+// ============================================
+
+enum ServiceDescriptionStatus {
+  DRAFT
+  FINALIZED
+}
+
+enum PricingMode {
+  HOURLY
+  FIXED
+}
+
+model ServiceDescription {
+  id            String                    @id @default(cuid())
+  clientId      String
+  client        Client                    @relation(fields: [clientId], references: [id])
+  periodStart   DateTime                  @db.Date
+  periodEnd     DateTime                  @db.Date
+  status        ServiceDescriptionStatus  @default(DRAFT)
+  finalizedAt   DateTime?
+  finalizedById String?
+  finalizedBy   User?                     @relation("FinalizedServiceDescriptions", fields: [finalizedById], references: [id])
+
+  topics        ServiceDescriptionTopic[]
+
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  @@index([clientId])
+  @@index([status])
+  @@map("service_descriptions")
+}
+
+model ServiceDescriptionTopic {
+  id                   String                       @id @default(cuid())
+  serviceDescriptionId String
+  serviceDescription   ServiceDescription           @relation(fields: [serviceDescriptionId], references: [id], onDelete: Cascade)
+  topicName            String
+  displayOrder         Int                          @default(0)
+  pricingMode          PricingMode                  @default(HOURLY)
+  hourlyRate           Decimal?                     @db.Decimal(10, 2)
+  fixedFee             Decimal?                     @db.Decimal(10, 2)
+
+  lineItems            ServiceDescriptionLineItem[]
+
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+
+  @@index([serviceDescriptionId])
+  @@map("service_description_topics")
+}
+
+model ServiceDescriptionLineItem {
+  id           String                  @id @default(cuid())
+  topicId      String
+  topic        ServiceDescriptionTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  timeEntryId  String?
+  timeEntry    TimeEntry?              @relation(fields: [timeEntryId], references: [id])
+  date         DateTime?               @db.Date
+  description  String
+  hours        Decimal?                @db.Decimal(4, 2)
+  fixedAmount  Decimal?                @db.Decimal(10, 2)
+  displayOrder Int                     @default(0)
+
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@index([topicId])
+  @@index([timeEntryId])
+  @@map("service_description_line_items")
 }

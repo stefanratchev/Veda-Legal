@@ -8,10 +8,10 @@
   --bg-surface: #383838;
   --bg-hover: #444444;
 
-  /* Brand Accent - Dusty Rose */
-  --accent-pink: #c97b98;
-  --accent-pink-dim: #a86580;
-  --accent-pink-glow: rgba(201, 123, 152, 0.18);
+  /* Brand Accent - Coral Pink */
+  --accent-pink: #FF9999;
+  --accent-pink-dim: #CC7A7A;
+  --accent-pink-glow: rgba(255, 153, 153, 0.18);
 
   /* Text */
   --text-primary: #ffffff;
@@ -20,7 +20,7 @@
 
   /* Borders */
   --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-accent: rgba(201, 123, 152, 0.35);
+  --border-accent: rgba(255, 153, 153, 0.35);
 
   /* Semantic Colors */
   --success: #4a9d6e;

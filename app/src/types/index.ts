@@ -74,3 +74,78 @@ export const initialFormData: FormData = {
   minutes: 0,
   description: "",
 };
+
+/**
+ * Service description status.
+ */
+export type ServiceDescriptionStatus = "DRAFT" | "FINALIZED";
+
+/**
+ * Pricing mode for a topic.
+ */
+export type PricingMode = "HOURLY" | "FIXED";
+
+/**
+ * Line item in a service description topic.
+ */
+export interface ServiceDescriptionLineItem {
+  id: string;
+  timeEntryId: string | null;
+  date: string | null;
+  description: string;
+  hours: number | null;
+  fixedAmount: number | null;
+  displayOrder: number;
+  // Original values from TimeEntry (for showing changes)
+  originalDescription?: string;
+  originalHours?: number;
+}
+
+/**
+ * Topic section in a service description.
+ */
+export interface ServiceDescriptionTopic {
+  id: string;
+  topicName: string;
+  displayOrder: number;
+  pricingMode: PricingMode;
+  hourlyRate: number | null;
+  fixedFee: number | null;
+  lineItems: ServiceDescriptionLineItem[];
+}
+
+/**
+ * Service description for billing.
+ */
+export interface ServiceDescription {
+  id: string;
+  clientId: string;
+  client: {
+    id: string;
+    name: string;
+    invoicedName: string | null;
+    invoiceAttn: string | null;
+    hourlyRate: number | null;
+  };
+  periodStart: string;
+  periodEnd: string;
+  status: ServiceDescriptionStatus;
+  finalizedAt: string | null;
+  topics: ServiceDescriptionTopic[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Service description list item (without nested topics).
+ */
+export interface ServiceDescriptionListItem {
+  id: string;
+  clientId: string;
+  clientName: string;
+  periodStart: string;
+  periodEnd: string;
+  status: ServiceDescriptionStatus;
+  totalAmount: number;
+  updatedAt: string;
+}

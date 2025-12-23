@@ -133,7 +133,7 @@ Dark theme with CSS variables in `globals.css`:
 - `--bg-deep` (#151515) - Page background
 - `--bg-elevated` (#1c1c1c) - Cards, sidebar
 - `--bg-surface` (#383838) - Inputs
-- `--accent-pink` (#c97b98) - Primary accent (Dusty Rose)
+- `--accent-pink` (#FF9999) - Primary accent (Coral Pink)
 - Semantic colors: `--success`, `--warning`, `--danger`, `--info` (with matching `*-bg` variants)
 
 **Typography:** Roboto Condensed (headings) + Roboto (body)

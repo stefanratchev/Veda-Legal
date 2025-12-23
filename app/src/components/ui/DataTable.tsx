@@ -10,6 +10,7 @@ export function DataTable<TData>({
   pageSize = 25,
   emptyMessage = "No data",
   emptyIcon,
+  onRowClick,
 }: DataTableProps<TData>) {
   // Sorting state
   const [sortState, setSortState] = useState<SortState | null>(null);
@@ -164,7 +165,10 @@ export function DataTable<TData>({
           {paginatedData.map((row) => (
             <tr
               key={getRowKey(row)}
-              className="border-b border-[var(--border-subtle)] last:border-b-0 hover:bg-[var(--bg-hover)] transition-colors"
+              onClick={() => onRowClick?.(row)}
+              className={`border-b border-[var(--border-subtle)] last:border-b-0 hover:bg-[var(--bg-hover)] transition-colors ${
+                onRowClick ? "cursor-pointer" : ""
+              }`}
             >
               {columns.map((column) => (
                 <td

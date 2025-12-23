@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { topics } from "@/lib/schema";
 import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
 
 interface ReorderItem {
@@ -38,15 +40,15 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
+    const now = new Date().toISOString();
     // Update all topics in a transaction
-    await db.$transaction(
-      items.map((item: ReorderItem) =>
-        db.topic.update({
-          where: { id: item.id },
-          data: { displayOrder: item.displayOrder },
-        })
-      )
-    );
+    await db.transaction(async (tx) => {
+      for (const item of items as ReorderItem[]) {
+        await tx.update(topics)
+          .set({ displayOrder: item.displayOrder, updatedAt: now })
+          .where(eq(topics.id, item.id));
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

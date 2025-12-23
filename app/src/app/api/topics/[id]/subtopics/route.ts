@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, max } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
+import { topics, subtopics } from "@/lib/schema";
 import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
 
 interface RouteContext {
@@ -16,7 +19,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { id: topicId } = await context.params;
 
   // Verify topic exists
-  const topic = await db.topic.findUnique({ where: { id: topicId } });
+  const topic = await db.query.topics.findFirst({
+    where: eq(topics.id, topicId),
+    columns: { id: true },
+  });
   if (!topic) {
     return errorResponse("Topic not found", 404);
   }
@@ -40,28 +46,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
   // Auto-detect isPrefix from name
   const isPrefix = name.trim().endsWith(":");
 
-  // Get next display order within this topic
-  const maxOrder = await db.subtopic.aggregate({
-    where: { topicId },
-    _max: { displayOrder: true },
-  });
-  const nextOrder = (maxOrder._max.displayOrder ?? 0) + 1;
-
   try {
-    const subtopic = await db.subtopic.create({
-      data: {
-        topicId,
-        name: name.trim(),
-        isPrefix,
-        displayOrder: nextOrder,
-      },
-      select: {
-        id: true,
-        name: true,
-        isPrefix: true,
-        displayOrder: true,
-        status: true,
-      },
+    // Get next display order within this topic
+    const [maxOrderResult] = await db
+      .select({ maxOrder: max(subtopics.displayOrder) })
+      .from(subtopics)
+      .where(eq(subtopics.topicId, topicId));
+    const nextOrder = (maxOrderResult?.maxOrder ?? 0) + 1;
+
+    const now = new Date().toISOString();
+    const [subtopic] = await db.insert(subtopics).values({
+      id: createId(),
+      topicId,
+      name: name.trim(),
+      isPrefix,
+      displayOrder: nextOrder,
+      updatedAt: now,
+    }).returning({
+      id: subtopics.id,
+      name: subtopics.name,
+      isPrefix: subtopics.isPrefix,
+      displayOrder: subtopics.displayOrder,
+      status: subtopics.status,
     });
 
     return NextResponse.json(subtopic);

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, asc, count } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { topics, subtopics } from "@/lib/schema";
 import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
 
 interface RouteContext {
@@ -24,7 +26,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const { name, displayOrder, status } = body;
 
-  const updateData: { name?: string; displayOrder?: number; status?: "ACTIVE" | "INACTIVE" } = {};
+  const updateData: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
 
   if (name !== undefined) {
     if (typeof name !== "string" || name.trim().length === 0) {
@@ -51,29 +55,39 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const topic = await db.topic.update({
-      where: { id },
-      data: updateData,
-      include: {
-        subtopics: {
-          orderBy: { displayOrder: "asc" },
-          select: {
-            id: true,
-            name: true,
-            isPrefix: true,
-            displayOrder: true,
-            status: true,
-          },
-        },
+    const [updatedTopic] = await db.update(topics)
+      .set(updateData)
+      .where(eq(topics.id, id))
+      .returning({
+        id: topics.id,
+        name: topics.name,
+        displayOrder: topics.displayOrder,
+        status: topics.status,
+      });
+
+    if (!updatedTopic) {
+      return errorResponse("Topic not found", 404);
+    }
+
+    // Fetch subtopics for the response
+    const topicSubtopics = await db.query.subtopics.findMany({
+      where: eq(subtopics.topicId, id),
+      orderBy: [asc(subtopics.displayOrder)],
+      columns: {
+        id: true,
+        name: true,
+        isPrefix: true,
+        displayOrder: true,
+        status: true,
       },
     });
 
     return NextResponse.json({
-      id: topic.id,
-      name: topic.name,
-      displayOrder: topic.displayOrder,
-      status: topic.status,
-      subtopics: topic.subtopics,
+      id: updatedTopic.id,
+      name: updatedTopic.name,
+      displayOrder: updatedTopic.displayOrder,
+      status: updatedTopic.status,
+      subtopics: topicSubtopics,
     });
   } catch (error) {
     console.error("Database error updating topic:", error);
@@ -92,15 +106,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   try {
     // Check if topic has subtopics
-    const subtopicCount = await db.subtopic.count({
-      where: { topicId: id },
-    });
+    const [subtopicCountResult] = await db
+      .select({ count: count() })
+      .from(subtopics)
+      .where(eq(subtopics.topicId, id));
 
-    if (subtopicCount > 0) {
+    if (subtopicCountResult.count > 0) {
       return errorResponse("Cannot delete topic with subtopics. Delete subtopics first.", 400);
     }
 
-    await db.topic.delete({ where: { id } });
+    await db.delete(topics).where(eq(topics.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 interface Client {
   id: string;
   name: string;
-  timesheetCode: string;
 }
 
 interface CreateServiceDescriptionModalProps {
@@ -107,7 +106,7 @@ export function CreateServiceDescriptionModal({
               <option value="">Select a client</option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
-                  {client.name} ({client.timesheetCode})
+                  {client.name}
                 </option>
               ))}
             </select>

@@ -164,7 +164,6 @@ AZURE_AD_TENANT_ID=<from Azure Portal>
 
 - **Client**: External party receiving legal services (not to be confused with client-side code)
 - **TimeEntry**: Billable hours logged against a client
-- **timesheetCode**: Unique short code for each client (e.g., "VED001")
 - **Topic**: High-level work category (e.g., "Company Incorporation", "M&A Advisory")
 - **Subtopic**: Specific task type within a topic (e.g., "Client correspondence:", "Drafting documents:")
 - **isPrefix**: Subtopics ending with ":" are prefixes - user should add details after selecting

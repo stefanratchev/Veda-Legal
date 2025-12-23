@@ -20,7 +20,6 @@ const TIMEENTRY_SELECT = {
     select: {
       id: true,
       name: true,
-      timesheetCode: true,
     },
   },
   subtopicId: true,

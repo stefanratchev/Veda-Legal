@@ -8,7 +8,6 @@ export default async function TimesheetsPage() {
     select: {
       id: true,
       name: true,
-      timesheetCode: true,
     },
     orderBy: { name: "asc" },
   });

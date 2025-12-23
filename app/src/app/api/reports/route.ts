@@ -16,7 +16,6 @@ interface EmployeeStats {
 interface ClientStats {
   id: string;
   name: string;
-  timesheetCode: string;
   hourlyRate: number | null;
   totalHours: number;
   revenue: number | null;
@@ -40,7 +39,6 @@ interface ReportData {
     userName: string;
     clientId: string;
     clientName: string;
-    clientCode: string;
   }[];
 }
 
@@ -102,7 +100,7 @@ export async function GET(request: NextRequest) {
         userId: true,
         user: { select: { id: true, name: true } },
         clientId: true,
-        client: { select: { id: true, name: true, timesheetCode: true, hourlyRate: true } },
+        client: { select: { id: true, name: true, hourlyRate: true } },
       },
       orderBy: { date: "desc" },
     });
@@ -120,7 +118,6 @@ export async function GET(request: NextRequest) {
     const clientMap = new Map<string, {
       id: string;
       name: string;
-      timesheetCode: string;
       hourlyRate: number | null;
       totalHours: number;
       employees: Map<string, { name: string; hours: number }>;
@@ -168,7 +165,6 @@ export async function GET(request: NextRequest) {
         clientMap.set(clientId, {
           id: clientId,
           name: entry.client.name,
-          timesheetCode: entry.client.timesheetCode,
           hourlyRate: clientRate,
           totalHours: 0,
           employees: new Map(),
@@ -210,7 +206,6 @@ export async function GET(request: NextRequest) {
       return {
         id: client.id,
         name: client.name,
-        timesheetCode: client.timesheetCode,
         hourlyRate: client.hourlyRate,
         totalHours: client.totalHours,
         revenue: client.hourlyRate !== null ? client.totalHours * client.hourlyRate : null,
@@ -235,7 +230,6 @@ export async function GET(request: NextRequest) {
         userName: e.user.name || "Unknown",
         clientId: e.clientId,
         clientName: e.client.name,
-        clientCode: e.client.timesheetCode,
       })),
     };
 

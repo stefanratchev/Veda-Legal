@@ -10,7 +10,6 @@ import { ClientModal } from "./ClientModal";
 interface Client {
   id: string;
   name: string;
-  timesheetCode: string;
   invoicedName: string | null;
   invoiceAttn: string | null;
   email: string | null;
@@ -32,7 +31,6 @@ type ModalMode = "create" | "edit" | "delete" | null;
 
 interface FormData {
   name: string;
-  timesheetCode: string;
   invoicedName: string;
   invoiceAttn: string;
   email: string;
@@ -44,7 +42,6 @@ interface FormData {
 
 const initialFormData: FormData = {
   name: "",
-  timesheetCode: "",
   invoicedName: "",
   invoiceAttn: "",
   email: "",
@@ -98,7 +95,6 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
   const openEditModal = useCallback((client: Client) => {
     setFormData({
       name: client.name,
-      timesheetCode: client.timesheetCode,
       invoicedName: client.invoicedName || "",
       invoiceAttn: client.invoiceAttn || "",
       email: client.email || "",
@@ -329,7 +325,6 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
   const exportToCSV = useCallback(() => {
     const headers = [
       "Name",
-      "Timesheet Code",
       "Invoiced Name",
       "Invoice Attn",
       "Email",
@@ -354,7 +349,6 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
 
     const rows = clients.map((client) => [
       escapeCSV(client.name),
-      escapeCSV(client.timesheetCode),
       escapeCSV(client.invoicedName),
       escapeCSV(client.invoiceAttn),
       escapeCSV(client.email),

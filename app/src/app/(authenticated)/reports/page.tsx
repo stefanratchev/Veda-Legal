@@ -43,7 +43,6 @@ async function getReportData({
         select: {
           id: true,
           name: true,
-          timesheetCode: true,
           hourlyRate: true,
         },
       },
@@ -68,7 +67,6 @@ async function getReportData({
     {
       id: string;
       name: string;
-      timesheetCode: string;
       hourlyRate: number | null;
       totalHours: number;
       employeeHoursMap: Map<string, { id: string; name: string; hours: number }>;
@@ -170,7 +168,6 @@ async function getReportData({
       clientMap.set(entry.client.id, {
         id: entry.client.id,
         name: entry.client.name,
-        timesheetCode: entry.client.timesheetCode,
         hourlyRate,
         totalHours: hours,
         employeeHoursMap,
@@ -213,7 +210,6 @@ async function getReportData({
       return {
         id: client.id,
         name: client.name,
-        timesheetCode: client.timesheetCode,
         hourlyRate: client.hourlyRate,
         totalHours: client.totalHours,
         revenue,
@@ -232,7 +228,6 @@ async function getReportData({
     userName: entry.user.name || "Unknown",
     clientId: entry.client.id,
     clientName: entry.client.name,
-    clientCode: entry.client.timesheetCode,
   }));
 
   return {

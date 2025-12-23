@@ -15,7 +15,6 @@ export default async function ClientsPage() {
     select: {
       id: true,
       name: true,
-      timesheetCode: true,
       invoicedName: true,
       invoiceAttn: true,
       email: true,

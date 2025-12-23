@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { UserRole, UserStatus } from "@prisma/client";
+import { Position, UserStatus } from "@prisma/client";
 import { DataTable } from "@/components/ui/DataTable";
 import { ColumnDef } from "@/components/ui/table-types";
 import { EmployeeModal } from "./EmployeeModal";
@@ -10,7 +10,7 @@ interface Employee {
   id: string;
   name: string | null;
   email: string;
-  role: UserRole;
+  position: Position;
   status: UserStatus;
   createdAt: string;
   lastLogin: string | null;
@@ -27,11 +27,11 @@ type ModalMode = "create" | "edit" | null;
 interface FormData {
   email: string;
   name: string;
-  role: UserRole;
+  position: Position;
 }
 
-const roleStyles: Record<
-  "ADMIN" | "EMPLOYEE",
+const positionStyles: Record<
+  Position,
   { dotColor: string; textColor: string; label: string }
 > = {
   ADMIN: {
@@ -39,10 +39,20 @@ const roleStyles: Record<
     textColor: "var(--text-primary)",
     label: "Admin",
   },
-  EMPLOYEE: {
+  PARTNER: {
+    dotColor: "var(--accent-pink)",
+    textColor: "var(--text-primary)",
+    label: "Partner",
+  },
+  SENIOR_ASSOCIATE: {
+    dotColor: "var(--text-secondary)",
+    textColor: "var(--text-secondary)",
+    label: "Senior Associate",
+  },
+  ASSOCIATE: {
     dotColor: "var(--text-muted)",
     textColor: "var(--text-muted)",
-    label: "Employee",
+    label: "Associate",
   },
 };
 
@@ -122,14 +132,14 @@ export function EmployeesContent({
   const [formData, setFormData] = useState<FormData>({
     email: "",
     name: "",
-    role: "EMPLOYEE",
+    position: "ASSOCIATE",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"ALL" | UserRole>("ALL");
+  const [positionFilter, setPositionFilter] = useState<"ALL" | Position>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL_ACTIVE" | "PENDING" | "INCLUDE_INACTIVE">("ALL_ACTIVE");
 
   // Filtered employees
@@ -142,8 +152,8 @@ export function EmployeesContent({
       if (statusFilter === "PENDING" && employee.status !== "PENDING") {
         return false;
       }
-      // Role filter
-      if (roleFilter !== "ALL" && employee.role !== roleFilter) {
+      // Position filter
+      if (positionFilter !== "ALL" && employee.position !== positionFilter) {
         return false;
       }
       // Search
@@ -155,14 +165,14 @@ export function EmployeesContent({
       }
       return true;
     });
-  }, [employees, searchQuery, roleFilter, statusFilter]);
+  }, [employees, searchQuery, positionFilter, statusFilter]);
 
   // Modal handlers
   const openCreateModal = useCallback(() => {
     setFormData({
       email: "",
       name: "",
-      role: "EMPLOYEE",
+      position: "ASSOCIATE",
     });
     setSelectedEmployee(null);
     setError(null);
@@ -173,7 +183,7 @@ export function EmployeesContent({
     setFormData({
       email: employee.email,
       name: employee.name || "",
-      role: employee.role,
+      position: employee.position,
     });
     setSelectedEmployee(employee);
     setError(null);
@@ -234,7 +244,7 @@ export function EmployeesContent({
         body: JSON.stringify({
           email: formData.email,
           name: formData.name || undefined,
-          role: formData.role,
+          position: formData.position,
         }),
       });
 
@@ -330,12 +340,11 @@ export function EmployeesContent({
         ),
       },
       {
-        id: "role",
-        header: "Role",
-        accessor: (employee) => employee.role,
+        id: "position",
+        header: "Position",
+        accessor: (employee) => employee.position,
         cell: (employee) => {
-          const role = employee.role as "ADMIN" | "EMPLOYEE";
-          const style = roleStyles[role];
+          const style = positionStyles[employee.position];
           return (
             <span
               className="flex items-center gap-2 text-xs font-medium"
@@ -555,10 +564,10 @@ export function EmployeesContent({
           />
         </div>
 
-        {/* Role Filter */}
+        {/* Position Filter */}
         <select
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value as "ALL" | UserRole)}
+          value={positionFilter}
+          onChange={(e) => setPositionFilter(e.target.value as "ALL" | Position)}
           className="
             px-3 py-2 rounded text-[13px]
             bg-[var(--bg-surface)] border border-[var(--border-subtle)]
@@ -568,9 +577,10 @@ export function EmployeesContent({
             cursor-pointer
           "
         >
-          <option value="ALL">All Roles</option>
-          <option value="ADMIN">Admin</option>
-          <option value="EMPLOYEE">Employee</option>
+          <option value="ALL">All Positions</option>
+          <option value="PARTNER">Partner</option>
+          <option value="SENIOR_ASSOCIATE">Senior Associate</option>
+          <option value="ASSOCIATE">Associate</option>
         </select>
 
         {/* Status Filter */}

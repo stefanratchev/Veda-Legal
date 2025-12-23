@@ -9,8 +9,18 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 
-// Roles that can modify data (clients, etc.)
-const WRITE_ROLES = ["ADMIN", "PARTNER", "ASSOCIATE"];
+// Positions that have admin-level access (can manage clients, reports, billing)
+const ADMIN_POSITIONS = ["ADMIN", "PARTNER"] as const;
+
+// All positions can write (log time entries)
+const WRITE_POSITIONS = ["ADMIN", "PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE"] as const;
+
+/**
+ * Check if a position has admin-level access.
+ */
+export function hasAdminAccess(position: string): boolean {
+  return ADMIN_POSITIONS.includes(position as (typeof ADMIN_POSITIONS)[number]);
+}
 
 // Common validation patterns
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -51,7 +61,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthResult> {
 }
 
 /**
- * Require write access (ADMIN, PARTNER, or ASSOCIATE role).
+ * Require write access (any position can write).
  */
 export async function requireWriteAccess(request: NextRequest): Promise<AuthResult> {
   const auth = await requireAuth(request);
@@ -66,7 +76,7 @@ export async function requireWriteAccess(request: NextRequest): Promise<AuthResu
 
   const user = await db.user.findUnique({
     where: { email: userEmail },
-    select: { role: true },
+    select: { position: true },
   });
 
   // User must exist in database to have write access
@@ -74,8 +84,8 @@ export async function requireWriteAccess(request: NextRequest): Promise<AuthResu
     return { error: "User not registered. Contact administrator.", status: 403 };
   }
 
-  // User must have a write role
-  if (!WRITE_ROLES.includes(user.role)) {
+  // User must have a valid position
+  if (!WRITE_POSITIONS.includes(user.position as (typeof WRITE_POSITIONS)[number])) {
     return { error: "Insufficient permissions", status: 403 };
   }
 

@@ -15,7 +15,7 @@ model User {
   email         String    @unique
   name          String?
   image         String?
-  role          UserRole  @default(EMPLOYEE)
+  position      Position  @default(ASSOCIATE)
   status        UserStatus @default(PENDING)
   lastLogin     DateTime?
 
@@ -29,9 +29,11 @@ model User {
   @@map("users")
 }
 
-enum UserRole {
+enum Position {
   ADMIN
-  EMPLOYEE
+  PARTNER
+  SENIOR_ASSOCIATE
+  ASSOCIATE
 }
 
 enum UserStatus {

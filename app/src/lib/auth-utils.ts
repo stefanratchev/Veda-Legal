@@ -1,5 +1,5 @@
 /**
- * Centralized authorization utilities for role-based access control.
+ * Centralized authorization utilities for position-based access control.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -7,7 +7,10 @@ import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { UserRole } from "@prisma/client";
+import { Position } from "@prisma/client";
+
+// Positions that have admin-level access
+const ADMIN_POSITIONS: Position[] = ["ADMIN", "PARTNER"];
 
 export type AuthSession = {
   user: {
@@ -19,7 +22,7 @@ export type AuthSession = {
 export type AuthUser = {
   id: string;
   email: string;
-  role: UserRole;
+  position: Position;
 };
 
 export type AuthResult =
@@ -28,7 +31,7 @@ export type AuthResult =
 
 /**
  * Require authentication and fetch user from database.
- * Returns user with id, email, and role.
+ * Returns user with id, email, and position.
  */
 export async function requireAuth(request: NextRequest): Promise<AuthResult> {
   // Try getServerSession first
@@ -47,7 +50,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthResult> {
 
   const user = await db.user.findUnique({
     where: { email },
-    select: { id: true, email: true, role: true },
+    select: { id: true, email: true, position: true },
   });
 
   if (!user) {
@@ -56,19 +59,19 @@ export async function requireAuth(request: NextRequest): Promise<AuthResult> {
 
   return {
     session: { user: { name: session?.user?.name, email } },
-    user: { id: user.id, email: user.email, role: user.role },
+    user: { id: user.id, email: user.email, position: user.position },
   };
 }
 
 /**
- * Require ADMIN role.
- * Returns 403 if user is EMPLOYEE.
+ * Require admin-level access (ADMIN or PARTNER).
+ * Returns 403 if user doesn't have admin access.
  */
 export async function requireAdmin(request: NextRequest): Promise<AuthResult> {
   const auth = await requireAuth(request);
   if ("error" in auth) return auth;
 
-  if (auth.user.role !== "ADMIN") {
+  if (!ADMIN_POSITIONS.includes(auth.user.position)) {
     return { error: "Admin access required", status: 403 };
   }
 
@@ -76,10 +79,10 @@ export async function requireAdmin(request: NextRequest): Promise<AuthResult> {
 }
 
 /**
- * Check if user is admin.
+ * Check if position has admin-level access.
  */
-export function isAdmin(role: UserRole): boolean {
-  return role === "ADMIN";
+export function hasAdminAccess(position: Position): boolean {
+  return ADMIN_POSITIONS.includes(position);
 }
 
 /**

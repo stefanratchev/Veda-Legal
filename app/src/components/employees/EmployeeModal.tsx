@@ -1,11 +1,11 @@
 "use client";
 
-import { UserRole } from "@prisma/client";
+import { Position } from "@prisma/client";
 
 interface FormData {
   email: string;
   name: string;
-  role: UserRole;
+  position: Position;
 }
 
 interface EmployeeModalProps {
@@ -19,9 +19,11 @@ interface EmployeeModalProps {
   onClose: () => void;
 }
 
-const roleOptions: Array<{ value: UserRole; label: string; description: string }> = [
-  { value: "ADMIN", label: "Admin", description: "Full system access" },
-  { value: "EMPLOYEE", label: "Employee", description: "Standard access" },
+// Position options available in the UI (Admin is not selectable)
+const positionOptions: Array<{ value: Position; label: string; description: string }> = [
+  { value: "PARTNER", label: "Partner", description: "Full system access, can manage clients and billing" },
+  { value: "SENIOR_ASSOCIATE", label: "Senior Associate", description: "Can log time entries" },
+  { value: "ASSOCIATE", label: "Associate", description: "Can log time entries" },
 ];
 
 export function EmployeeModal({
@@ -35,7 +37,7 @@ export function EmployeeModal({
   onClose,
 }: EmployeeModalProps) {
   const canSubmit = mode === "create"
-    ? formData.email.trim().length > 0 && formData.role
+    ? formData.email.trim().length > 0 && formData.position
     : formData.name.trim().length > 0;
 
   return (
@@ -101,14 +103,14 @@ export function EmployeeModal({
               />
             </div>
 
-            {/* Role */}
+            {/* Position */}
             <div>
               <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
-                Role / Permissions
+                Position
               </label>
               <select
-                value={formData.role}
-                onChange={(e) => onFormChange({ role: e.target.value as UserRole })}
+                value={formData.position}
+                onChange={(e) => onFormChange({ position: e.target.value as Position })}
                 className="
                   w-full px-3 py-2 rounded text-[13px]
                   bg-[var(--bg-surface)] border border-[var(--border-subtle)]
@@ -118,14 +120,14 @@ export function EmployeeModal({
                   cursor-pointer
                 "
               >
-                {roleOptions.map((option) => (
+                {positionOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
               <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
-                {roleOptions.find((o) => o.value === formData.role)?.description}
+                {positionOptions.find((o) => o.value === formData.position)?.description}
               </p>
             </div>
           </div>

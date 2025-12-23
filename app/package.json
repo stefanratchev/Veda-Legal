@@ -16,14 +16,11 @@
     "db:seed-topics": "npx tsx prisma/seed-topics.ts"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.11.1",
     "@azure/msal-node": "^3.8.4",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@paralleldrive/cuid2": "^3.0.4",
-    "@prisma/adapter-pg": "^7.1.0",
-    "@prisma/client": "^7.1.0",
     "@react-pdf/renderer": "^4.3.1",
     "csv-parse": "^6.1.0",
     "dotenv": "^17.2.3",
@@ -32,7 +29,6 @@
     "next": "16.0.10",
     "next-auth": "^4.24.13",
     "pg": "^8.16.3",
-    "prisma": "^7.1.0",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "recharts": "^3.6.0"

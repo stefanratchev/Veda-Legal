@@ -14,8 +14,13 @@ interface Client {
   invoicedName: string | null;
   invoiceAttn: string | null;
   email: string | null;
+  secondaryEmails: string | null;
   hourlyRate: number | null;
+  phone: string | null;
+  address: string | null;
+  practiceArea: string | null;
   status: ClientStatus;
+  notes: string | null;
   createdAt: string;
 }
 
@@ -31,8 +36,10 @@ interface FormData {
   invoicedName: string;
   invoiceAttn: string;
   email: string;
+  secondaryEmails: string;
   hourlyRate: string;
   status: ClientStatus;
+  notes: string;
 }
 
 const initialFormData: FormData = {
@@ -41,8 +48,10 @@ const initialFormData: FormData = {
   invoicedName: "",
   invoiceAttn: "",
   email: "",
+  secondaryEmails: "",
   hourlyRate: "",
   status: "ACTIVE",
+  notes: "",
 };
 
 const statusStyles: Record<ClientStatus, { dotColor: string; dotOpacity: string; textColor: string; label: string }> = {
@@ -93,8 +102,10 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
       invoicedName: client.invoicedName || "",
       invoiceAttn: client.invoiceAttn || "",
       email: client.email || "",
+      secondaryEmails: client.secondaryEmails || "",
       hourlyRate: client.hourlyRate?.toString() || "",
       status: client.status,
+      notes: client.notes || "",
     });
     setSelectedClient(client);
     setError(null);

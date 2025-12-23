@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, desc, inArray } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
-import { Prisma, Position, UserStatus } from "@prisma/client";
+import { users } from "@/lib/schema";
 import {
   requireAuth,
   requireAdmin,
@@ -10,30 +12,12 @@ import {
 import { isValidEmail } from "@/lib/api-utils";
 
 // Valid positions that can be set via the UI (Admin is not selectable)
-const VALID_POSITIONS: Position[] = ["PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE"];
+const VALID_POSITIONS = ["PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE"] as const;
 
 // Valid statuses for admin updates (PENDING is only for newly created users)
-const VALID_STATUSES: UserStatus[] = ["ACTIVE", "INACTIVE"];
+const VALID_STATUSES = ["ACTIVE", "INACTIVE"] as const;
 
 const MAX_NAME_LENGTH = 100;
-
-const EMPLOYEE_SELECT = {
-  id: true,
-  name: true,
-  email: true,
-  position: true,
-  status: true,
-  createdAt: true,
-  lastLogin: true,
-} as const;
-
-function serializeEmployee<T extends { createdAt: Date; lastLogin: Date | null }>(employee: T) {
-  return {
-    ...employee,
-    createdAt: employee.createdAt.toISOString(),
-    lastLogin: employee.lastLogin?.toISOString() ?? null,
-  };
-}
 
 // GET /api/employees - List all employees
 // Both ADMIN and EMPLOYEE can view
@@ -47,15 +31,23 @@ export async function GET(request: NextRequest) {
   const includeInactive = searchParams.get("includeInactive") === "true";
 
   try {
-    const employees = await db.user.findMany({
+    const employees = await db.query.users.findMany({
       where: includeInactive
         ? undefined
-        : { status: { in: ["PENDING", "ACTIVE"] } },
-      select: EMPLOYEE_SELECT,
-      orderBy: { createdAt: "desc" },
+        : inArray(users.status, ["PENDING", "ACTIVE"]),
+      columns: {
+        id: true,
+        name: true,
+        email: true,
+        position: true,
+        status: true,
+        createdAt: true,
+        lastLogin: true,
+      },
+      orderBy: [desc(users.createdAt)],
     });
 
-    return successResponse(employees.map(serializeEmployee));
+    return successResponse(employees);
   } catch (error) {
     console.error("Database error fetching employees:", error);
     return errorResponse("Failed to fetch employees", 500);
@@ -105,26 +97,33 @@ export async function PATCH(request: NextRequest) {
     return errorResponse("You cannot deactivate yourself", 400);
   }
 
-  const updateData: Prisma.UserUpdateInput = {};
+  const updateData: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
   if (name !== undefined) updateData.name = name.trim();
   if (position !== undefined) updateData.position = position;
   if (status !== undefined) updateData.status = status;
 
   try {
-    const employee = await db.user.update({
-      where: { id },
-      data: updateData,
-      select: EMPLOYEE_SELECT,
-    });
+    const [employee] = await db.update(users)
+      .set(updateData)
+      .where(eq(users.id, id))
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        position: users.position,
+        status: users.status,
+        createdAt: users.createdAt,
+        lastLogin: users.lastLogin,
+      });
 
-    return successResponse(serializeEmployee(employee));
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    if (!employee) {
       return errorResponse("Employee not found", 404);
     }
+
+    return successResponse(employee);
+  } catch (error) {
     console.error("Database error updating employee:", error);
     return errorResponse("Failed to update employee", 500);
   }
@@ -172,25 +171,33 @@ export async function POST(request: NextRequest) {
 
   try {
     // Check for existing user
-    const existing = await db.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
+    const existing = await db.query.users.findFirst({
+      where: eq(users.email, email.trim().toLowerCase()),
     });
 
     if (existing) {
       return errorResponse("An employee with this email already exists", 409);
     }
 
-    const employee = await db.user.create({
-      data: {
-        email: email.trim().toLowerCase(),
-        name: name?.trim() || null,
-        position,
-        status: "PENDING",
-      },
-      select: EMPLOYEE_SELECT,
+    const now = new Date().toISOString();
+    const [employee] = await db.insert(users).values({
+      id: createId(),
+      email: email.trim().toLowerCase(),
+      name: name?.trim() || null,
+      position,
+      status: "PENDING",
+      updatedAt: now,
+    }).returning({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      position: users.position,
+      status: users.status,
+      createdAt: users.createdAt,
+      lastLogin: users.lastLogin,
     });
 
-    return NextResponse.json(serializeEmployee(employee), { status: 201 });
+    return NextResponse.json(employee, { status: 201 });
   } catch (error) {
     console.error("Database error creating employee:", error);
     return errorResponse("Failed to create employee", 500);
@@ -224,20 +231,28 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    const employee = await db.user.update({
-      where: { id },
-      data: { status: "INACTIVE" },
-      select: EMPLOYEE_SELECT,
-    });
+    const [employee] = await db.update(users)
+      .set({
+        status: "INACTIVE",
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(users.id, id))
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        position: users.position,
+        status: users.status,
+        createdAt: users.createdAt,
+        lastLogin: users.lastLogin,
+      });
 
-    return successResponse(serializeEmployee(employee));
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    if (!employee) {
       return errorResponse("Employee not found", 404);
     }
+
+    return successResponse(employee);
+  } catch (error) {
     console.error("Database error deactivating employee:", error);
     return errorResponse("Failed to deactivate employee", 500);
   }

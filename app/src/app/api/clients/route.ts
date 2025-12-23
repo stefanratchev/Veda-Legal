@@ -22,8 +22,10 @@ const CLIENT_SELECT = {
   invoicedName: true,
   invoiceAttn: true,
   email: true,
+  secondaryEmails: true,
   hourlyRate: true,
   status: true,
+  notes: true,
   createdAt: true,
 } as const;
 
@@ -71,7 +73,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { name, timesheetCode, invoicedName, invoiceAttn, email, hourlyRate, status } = body;
+  const { name, timesheetCode, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return errorResponse("Name is required", 400);
@@ -125,8 +127,10 @@ export async function POST(request: NextRequest) {
         invoicedName: invoicedName?.trim() || null,
         invoiceAttn: invoiceAttn?.trim() || null,
         email: email?.trim() || null,
+        secondaryEmails: secondaryEmails?.trim() || null,
         hourlyRate: hourlyRate ? new Prisma.Decimal(hourlyRate) : null,
         status: clientStatus,
+        notes: notes?.trim() || null,
       },
       select: CLIENT_SELECT,
     });
@@ -155,7 +159,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, name, timesheetCode, invoicedName, invoiceAttn, email, hourlyRate, status } = body;
+  const { id, name, timesheetCode, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes } = body;
 
   if (!id) {
     return NextResponse.json(
@@ -222,10 +226,12 @@ export async function PATCH(request: NextRequest) {
   if (invoicedName !== undefined) updateData.invoicedName = invoicedName?.trim() || null;
   if (invoiceAttn !== undefined) updateData.invoiceAttn = invoiceAttn?.trim() || null;
   if (email !== undefined) updateData.email = email?.trim() || null;
+  if (secondaryEmails !== undefined) updateData.secondaryEmails = secondaryEmails?.trim() || null;
   if (hourlyRate !== undefined) {
     updateData.hourlyRate = hourlyRate ? new Prisma.Decimal(hourlyRate) : null;
   }
   if (status !== undefined) updateData.status = status;
+  if (notes !== undefined) updateData.notes = notes?.trim() || null;
 
   try {
     const client = await db.client.update({

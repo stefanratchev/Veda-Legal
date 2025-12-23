@@ -325,6 +325,61 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
     [openEditModal, openDeleteModal]
   );
 
+  // CSV Export function
+  const exportToCSV = useCallback(() => {
+    const headers = [
+      "Name",
+      "Timesheet Code",
+      "Invoiced Name",
+      "Invoice Attn",
+      "Email",
+      "Secondary Emails",
+      "Hourly Rate",
+      "Phone",
+      "Address",
+      "Practice Area",
+      "Status",
+      "Notes",
+      "Created",
+    ];
+
+    const escapeCSV = (value: string | null | undefined): string => {
+      if (value === null || value === undefined) return "";
+      const str = String(value);
+      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = clients.map((client) => [
+      escapeCSV(client.name),
+      escapeCSV(client.timesheetCode),
+      escapeCSV(client.invoicedName),
+      escapeCSV(client.invoiceAttn),
+      escapeCSV(client.email),
+      escapeCSV(client.secondaryEmails),
+      client.hourlyRate?.toString() || "",
+      escapeCSV(client.phone),
+      escapeCSV(client.address),
+      escapeCSV(client.practiceArea),
+      client.status,
+      escapeCSV(client.notes),
+      new Date(client.createdAt).toISOString().split("T")[0],
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `clients-export-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [clients]);
+
   // Empty state icon
   const emptyIcon = (
     <svg className="w-6 h-6 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -344,21 +399,38 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
             Manage your client records
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="
-            flex items-center gap-1.5 px-4 py-2 rounded
-            bg-[var(--accent-pink)] text-[var(--bg-deep)]
-            font-medium text-[13px]
-            hover:bg-[var(--accent-pink-dim)]
-            transition-colors duration-200
-          "
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-          </svg>
-          Add Client
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportToCSV}
+            className="
+              flex items-center gap-1.5 px-4 py-2 rounded
+              bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+              text-[var(--text-secondary)] font-medium text-[13px]
+              hover:border-[var(--border-accent)] hover:text-[var(--text-primary)]
+              transition-colors duration-200
+            "
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export CSV
+          </button>
+          <button
+            onClick={openCreateModal}
+            className="
+              flex items-center gap-1.5 px-4 py-2 rounded
+              bg-[var(--accent-pink)] text-[var(--bg-deep)]
+              font-medium text-[13px]
+              hover:bg-[var(--accent-pink-dim)]
+              transition-colors duration-200
+            "
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Client
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

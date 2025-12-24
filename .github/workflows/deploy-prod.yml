@@ -26,12 +26,6 @@ jobs:
         env:
           DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
-      - name: Generate Prisma client
-        working-directory: ./app
-        run: npx prisma generate
-        env:
-          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
-
       - name: Build application
         working-directory: ./app
         run: npm run build
@@ -51,7 +45,7 @@ jobs:
 
       - name: Run database migrations
         working-directory: ./app
-        run: npx prisma migrate deploy
+        run: npx drizzle-kit migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 

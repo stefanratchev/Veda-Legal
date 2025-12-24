@@ -5,7 +5,8 @@ import { formatDateISO, toDecimalHours } from "@/lib/date-utils";
 import { WeekStrip } from "./WeekStrip";
 import { EntryForm } from "./EntryForm";
 import { EntriesList } from "./EntriesList";
-import type { Client, Topic, TimeEntry, FormData } from "@/types";
+import { TeamTimesheets } from "./TeamTimesheets";
+import type { Client, Topic, TimeEntry, FormData, TeamSummary } from "@/types";
 import { initialFormData } from "@/types";
 
 interface TimesheetsContentProps {
@@ -17,6 +18,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   const today = useMemo(() => new Date(), []);
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [teamSummaries, setTeamSummaries] = useState<TeamSummary[]>([]);
   const [datesWithEntries, setDatesWithEntries] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
@@ -30,7 +32,16 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
       const response = await fetch(`/api/timesheets?date=${formatDateISO(date)}`);
       if (response.ok) {
         const data = await response.json();
-        setEntries(data);
+        // Handle both response shapes:
+        // - Array for regular users (backward compatible)
+        // - Object with entries + teamSummaries for ADMIN/PARTNER
+        if (Array.isArray(data)) {
+          setEntries(data);
+          setTeamSummaries([]);
+        } else {
+          setEntries(data.entries || []);
+          setTeamSummaries(data.teamSummaries || []);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch entries:", err);
@@ -191,6 +202,12 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         entries={entries}
         isLoadingEntries={isLoadingEntries}
         onDeleteEntry={deleteEntry}
+      />
+
+      {/* Team Timesheets (only shown for ADMIN/PARTNER) */}
+      <TeamTimesheets
+        summaries={teamSummaries}
+        selectedDate={selectedDate}
       />
     </div>
   );

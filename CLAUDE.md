@@ -177,8 +177,19 @@ TimeEntries reference a Subtopic, with denormalized `topicName` and `subtopicNam
 - If `isPrefix` is true: pre-fill description with subtopic name, user adds specifics
 - If `isPrefix` is false: use subtopic name as the full description
 
-To update topics/subtopics, edit `src/lib/seed-topics.ts` and run:
+To update topics/subtopics, edit `scripts/seed-topics.ts` and run:
 ```bash
-npx tsx src/lib/seed-topics.ts  # Local
-DATABASE_URL="<prod-url>" npx tsx src/lib/seed-topics.ts  # Production
+npm run db:seed-topics                                    # Local
+DATABASE_URL="<prod-url>" npm run db:seed-topics          # Production
 ```
+
+## Production Deployment
+
+**Deployment method:** Push to `prod` branch triggers GitHub Actions workflow (`.github/workflows/deploy-prod.yml`)
+
+**Running migrations on production:**
+```bash
+/migrate-prod   # Claude Code slash command - applies pending migrations to Azure PostgreSQL
+```
+
+**Production environment:** Azure Web App with Azure PostgreSQL Flexible Server. Credentials stored in `app/.env.prod` (not committed).

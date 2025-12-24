@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
+import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
 import { requireWriteAccess, serializeDecimal, errorResponse } from "@/lib/api-utils";
 
 type RouteParams = { params: Promise<{ id: string; topicId: string }> };
@@ -23,9 +24,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     // Verify service description is draft
-    const sd = await db.serviceDescription.findUnique({
-      where: { id },
-      select: { status: true },
+    const sd = await db.query.serviceDescriptions.findFirst({
+      where: eq(serviceDescriptions.id, id),
+      columns: { status: true },
     });
 
     if (!sd) {
@@ -36,7 +37,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Cannot modify finalized service description", 400);
     }
 
-    const updateData: Prisma.ServiceDescriptionTopicUpdateInput = {};
+    const updateData: Record<string, unknown> = {
+      updatedAt: new Date().toISOString(),
+    };
 
     if (body.topicName !== undefined) {
       updateData.topicName = body.topicName.trim();
@@ -45,27 +48,30 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updateData.pricingMode = body.pricingMode;
     }
     if (body.hourlyRate !== undefined) {
-      updateData.hourlyRate = body.hourlyRate ? new Prisma.Decimal(body.hourlyRate) : null;
+      updateData.hourlyRate = body.hourlyRate ? String(body.hourlyRate) : null;
     }
     if (body.fixedFee !== undefined) {
-      updateData.fixedFee = body.fixedFee ? new Prisma.Decimal(body.fixedFee) : null;
+      updateData.fixedFee = body.fixedFee ? String(body.fixedFee) : null;
     }
     if (body.displayOrder !== undefined) {
       updateData.displayOrder = body.displayOrder;
     }
 
-    const topic = await db.serviceDescriptionTopic.update({
-      where: { id: topicId },
-      data: updateData,
-      select: {
-        id: true,
-        topicName: true,
-        displayOrder: true,
-        pricingMode: true,
-        hourlyRate: true,
-        fixedFee: true,
-      },
-    });
+    const [topic] = await db.update(serviceDescriptionTopics)
+      .set(updateData)
+      .where(eq(serviceDescriptionTopics.id, topicId))
+      .returning({
+        id: serviceDescriptionTopics.id,
+        topicName: serviceDescriptionTopics.topicName,
+        displayOrder: serviceDescriptionTopics.displayOrder,
+        pricingMode: serviceDescriptionTopics.pricingMode,
+        hourlyRate: serviceDescriptionTopics.hourlyRate,
+        fixedFee: serviceDescriptionTopics.fixedFee,
+      });
+
+    if (!topic) {
+      return errorResponse("Topic not found", 404);
+    }
 
     return NextResponse.json({
       id: topic.id,
@@ -76,9 +82,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       fixedFee: serializeDecimal(topic.fixedFee),
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-      return errorResponse("Topic not found", 404);
-    }
     console.error("Database error updating topic:", error);
     return errorResponse("Failed to update topic", 500);
   }
@@ -94,9 +97,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id, topicId } = await params;
 
   try {
-    const sd = await db.serviceDescription.findUnique({
-      where: { id },
-      select: { status: true },
+    const sd = await db.query.serviceDescriptions.findFirst({
+      where: eq(serviceDescriptions.id, id),
+      columns: { status: true },
     });
 
     if (!sd) {
@@ -107,13 +110,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Cannot modify finalized service description", 400);
     }
 
-    await db.serviceDescriptionTopic.delete({ where: { id: topicId } });
+    // Check if topic exists before deleting
+    const existingTopic = await db.query.serviceDescriptionTopics.findFirst({
+      where: eq(serviceDescriptionTopics.id, topicId),
+      columns: { id: true },
+    });
+
+    if (!existingTopic) {
+      return errorResponse("Topic not found", 404);
+    }
+
+    await db.delete(serviceDescriptionTopics).where(eq(serviceDescriptionTopics.id, topicId));
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-      return errorResponse("Topic not found", 404);
-    }
     console.error("Database error deleting topic:", error);
     return errorResponse("Failed to delete topic", 500);
   }

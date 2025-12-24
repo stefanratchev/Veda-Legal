@@ -26,12 +26,6 @@ jobs:
         env:
           DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
-      - name: Generate Prisma client
-        working-directory: ./app
-        run: npx prisma generate
-        env:
-          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
-
       - name: Build application
         working-directory: ./app
         run: npm run build
@@ -48,12 +42,6 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Run database migrations
-        working-directory: ./app
-        run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3

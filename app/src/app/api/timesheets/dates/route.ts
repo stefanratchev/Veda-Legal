@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, and, gte, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { timeEntries } from "@/lib/schema";
 import { requireAuth, getUserFromSession } from "@/lib/api-utils";
 
 // GET /api/timesheets/dates?year=2024&month=12 - Get dates with entries for a month
@@ -29,27 +31,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid year or month" }, { status: 400 });
   }
 
-  // Get first and last day of the month
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0); // Last day of month
+  // Get first and last day of the month as date strings (YYYY-MM-DD)
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
   try {
-    const entries = await db.timeEntry.findMany({
-      where: {
-        userId: user.id,
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: {
-        date: true,
-      },
-      distinct: ["date"],
-    });
+    const entries = await db
+      .selectDistinct({ date: timeEntries.date })
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.userId, user.id),
+          gte(timeEntries.date, startDate),
+          lte(timeEntries.date, endDate)
+        )
+      );
 
-    // Return array of date strings (YYYY-MM-DD)
-    const dates = entries.map((e) => e.date.toISOString().split("T")[0]);
+    // Return array of date strings (already in YYYY-MM-DD format from schema)
+    const dates = entries.map((e) => e.date);
 
     return NextResponse.json(dates);
   } catch (error) {

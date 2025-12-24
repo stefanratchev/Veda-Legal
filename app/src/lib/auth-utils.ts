@@ -7,7 +7,11 @@ import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { Position } from "@prisma/client";
+import { users } from "@/lib/schema";
+import { eq } from "drizzle-orm";
+
+// Position type (matches Drizzle enum)
+type Position = "ADMIN" | "PARTNER" | "SENIOR_ASSOCIATE" | "ASSOCIATE" | "CONSULTANT";
 
 // Positions that have admin-level access
 const ADMIN_POSITIONS: Position[] = ["ADMIN", "PARTNER"];
@@ -48,9 +52,9 @@ export async function requireAuth(request: NextRequest): Promise<AuthResult> {
     return { error: "Unauthorized", status: 401 };
   }
 
-  const user = await db.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, position: true },
+  const user = await db.query.users.findFirst({
+    where: eq(users.email, email),
+    columns: { id: true, email: true, position: true },
   });
 
   if (!user) {

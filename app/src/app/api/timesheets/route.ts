@@ -1,39 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, and, desc } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
+import { timeEntries, clients, subtopics } from "@/lib/schema";
 import {
   requireAuth,
   getUserFromSession,
   errorResponse,
+  serializeDecimal,
   isValidHours,
   isNotFutureDate,
   MAX_HOURS_PER_ENTRY,
 } from "@/lib/api-utils";
 
-const TIMEENTRY_SELECT = {
-  id: true,
-  date: true,
-  hours: true,
-  description: true,
-  clientId: true,
-  client: {
-    select: {
-      id: true,
-      name: true,
-    },
-  },
-  subtopicId: true,
-  topicName: true,
-  subtopicName: true,
-  createdAt: true,
-  updatedAt: true,
-} as const;
-
-function serializeTimeEntry<T extends { hours: Prisma.Decimal; date: Date }>(entry: T) {
+function serializeTimeEntry(entry: {
+  id: string;
+  date: string;
+  hours: string;
+  description: string;
+  clientId: string;
+  client: { id: string; name: string } | null;
+  subtopicId: string | null;
+  topicName: string;
+  subtopicName: string;
+  createdAt: string;
+  updatedAt: string;
+}) {
   return {
     ...entry,
-    hours: Number(entry.hours),
-    date: entry.date.toISOString().split("T")[0],
+    hours: serializeDecimal(entry.hours),
+    // date is already a string in Drizzle
   };
 }
 
@@ -62,14 +58,36 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
   }
 
+  // Format date as YYYY-MM-DD for comparison (Drizzle stores date as string)
+  const dateStr = date.toISOString().split("T")[0];
+
   try {
-    const entries = await db.timeEntry.findMany({
-      where: {
-        userId: user.id,
-        date: date,
+    const entries = await db.query.timeEntries.findMany({
+      where: and(
+        eq(timeEntries.userId, user.id),
+        eq(timeEntries.date, dateStr)
+      ),
+      columns: {
+        id: true,
+        date: true,
+        hours: true,
+        description: true,
+        clientId: true,
+        subtopicId: true,
+        topicName: true,
+        subtopicName: true,
+        createdAt: true,
+        updatedAt: true,
       },
-      select: TIMEENTRY_SELECT,
-      orderBy: { createdAt: "desc" },
+      with: {
+        client: {
+          columns: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: [desc(timeEntries.createdAt)],
     });
 
     return NextResponse.json(entries.map(serializeTimeEntry));
@@ -121,9 +139,9 @@ export async function POST(request: NextRequest) {
   if (!clientId) {
     return errorResponse("Client is required", 400);
   }
-  const client = await db.client.findUnique({
-    where: { id: clientId },
-    select: { id: true, status: true },
+  const client = await db.query.clients.findFirst({
+    where: eq(clients.id, clientId),
+    columns: { id: true, status: true },
   });
   if (!client) {
     return errorResponse("Client not found", 404);
@@ -136,11 +154,16 @@ export async function POST(request: NextRequest) {
   if (!subtopicId) {
     return errorResponse("Subtopic is required", 400);
   }
-  const subtopic = await db.subtopic.findUnique({
-    where: { id: subtopicId },
-    include: {
+  const subtopic = await db.query.subtopics.findFirst({
+    where: eq(subtopics.id, subtopicId),
+    columns: {
+      id: true,
+      name: true,
+      status: true,
+    },
+    with: {
       topic: {
-        select: { name: true, status: true },
+        columns: { name: true, status: true },
       },
     },
   });
@@ -169,21 +192,43 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const entry = await db.timeEntry.create({
-      data: {
-        date: parsedDate,
-        hours: new Prisma.Decimal(hoursNum),
-        description: (description || "").trim(),
-        userId: user.id,
-        clientId: clientId,
-        subtopicId: subtopicId,
-        topicName: subtopic.topic.name,
-        subtopicName: subtopic.name,
-      },
-      select: TIMEENTRY_SELECT,
+    const now = new Date().toISOString();
+    const dateStr = parsedDate.toISOString().split("T")[0];
+
+    const [entry] = await db.insert(timeEntries).values({
+      id: createId(),
+      date: dateStr,
+      hours: String(hoursNum),
+      description: (description || "").trim(),
+      userId: user.id,
+      clientId: clientId,
+      subtopicId: subtopicId,
+      topicName: subtopic.topic.name,
+      subtopicName: subtopic.name,
+      updatedAt: now,
+    }).returning({
+      id: timeEntries.id,
+      date: timeEntries.date,
+      hours: timeEntries.hours,
+      description: timeEntries.description,
+      clientId: timeEntries.clientId,
+      subtopicId: timeEntries.subtopicId,
+      topicName: timeEntries.topicName,
+      subtopicName: timeEntries.subtopicName,
+      createdAt: timeEntries.createdAt,
+      updatedAt: timeEntries.updatedAt,
     });
 
-    return NextResponse.json(serializeTimeEntry(entry));
+    // Fetch the client for the response
+    const entryClient = await db.query.clients.findFirst({
+      where: eq(clients.id, clientId),
+      columns: { id: true, name: true },
+    });
+
+    return NextResponse.json(serializeTimeEntry({
+      ...entry,
+      client: entryClient ?? null,
+    }));
   } catch (error) {
     console.error("Database error creating time entry:", error);
     return NextResponse.json(
@@ -213,33 +258,24 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    await db.$transaction(async (tx) => {
-      const existingEntry = await tx.timeEntry.findUnique({
-        where: { id },
-        select: { userId: true },
-      });
-
-      if (!existingEntry) {
-        throw new Error("NOT_FOUND");
-      }
-
-      if (existingEntry.userId !== user.id) {
-        throw new Error("FORBIDDEN");
-      }
-
-      await tx.timeEntry.delete({ where: { id } });
+    // First check if entry exists and belongs to user
+    const existingEntry = await db.query.timeEntries.findFirst({
+      where: eq(timeEntries.id, id),
+      columns: { userId: true },
     });
+
+    if (!existingEntry) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
+
+    if (existingEntry.userId !== user.id) {
+      return NextResponse.json({ error: "You can only delete your own entries" }, { status: 403 });
+    }
+
+    await db.delete(timeEntries).where(eq(timeEntries.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message === "NOT_FOUND") {
-        return NextResponse.json({ error: "Entry not found" }, { status: 404 });
-      }
-      if (error.message === "FORBIDDEN") {
-        return NextResponse.json({ error: "You can only delete your own entries" }, { status: 403 });
-      }
-    }
     console.error("Database error deleting time entry:", error);
     return NextResponse.json(
       { error: "Failed to delete time entry" },

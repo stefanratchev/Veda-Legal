@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
+import { eq, asc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/user";
-import { db } from "@/lib/db";
+import { db, serviceDescriptions, serviceDescriptionTopics, serviceDescriptionLineItems } from "@/lib/db";
 import { ServiceDescriptionDetail } from "@/components/billing/ServiceDescriptionDetail";
 import { serializeDecimal } from "@/lib/api-utils";
 import type { ServiceDescription } from "@/types";
@@ -18,11 +19,11 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
 
   const { id } = await params;
 
-  const sd = await db.serviceDescription.findUnique({
-    where: { id },
-    include: {
+  const sd = await db.query.serviceDescriptions.findFirst({
+    where: eq(serviceDescriptions.id, id),
+    with: {
       client: {
-        select: {
+        columns: {
           id: true,
           name: true,
           invoicedName: true,
@@ -31,12 +32,14 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
         },
       },
       topics: {
-        orderBy: { displayOrder: "asc" },
-        include: {
+        orderBy: [asc(serviceDescriptionTopics.displayOrder)],
+        with: {
           lineItems: {
-            orderBy: { displayOrder: "asc" },
-            include: {
-              timeEntry: { select: { description: true, hours: true } },
+            orderBy: [asc(serviceDescriptionLineItems.displayOrder)],
+            with: {
+              timeEntry: {
+                columns: { description: true, hours: true },
+              },
             },
           },
         },
@@ -49,6 +52,8 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
   }
 
   // Serialize for client component
+  // In Drizzle: date() returns strings (YYYY-MM-DD), timestamp with mode:'string' returns ISO strings
+  // numeric() returns strings, which serializeDecimal converts to number | null
   const serviceDescription: ServiceDescription = {
     id: sd.id,
     clientId: sd.clientId,
@@ -59,10 +64,10 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
       invoiceAttn: sd.client.invoiceAttn,
       hourlyRate: serializeDecimal(sd.client.hourlyRate),
     },
-    periodStart: sd.periodStart.toISOString().split("T")[0],
-    periodEnd: sd.periodEnd.toISOString().split("T")[0],
+    periodStart: sd.periodStart,
+    periodEnd: sd.periodEnd,
     status: sd.status as "DRAFT" | "FINALIZED",
-    finalizedAt: sd.finalizedAt?.toISOString() || null,
+    finalizedAt: sd.finalizedAt || null,
     topics: sd.topics.map((topic) => ({
       id: topic.id,
       topicName: topic.topicName,
@@ -73,7 +78,7 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
       lineItems: topic.lineItems.map((item) => ({
         id: item.id,
         timeEntryId: item.timeEntryId,
-        date: item.date?.toISOString().split("T")[0] || null,
+        date: item.date || null,
         description: item.description,
         hours: serializeDecimal(item.hours),
         fixedAmount: serializeDecimal(item.fixedAmount),
@@ -82,8 +87,8 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
         originalHours: item.timeEntry ? serializeDecimal(item.timeEntry.hours) ?? undefined : undefined,
       })),
     })),
-    createdAt: sd.createdAt.toISOString(),
-    updatedAt: sd.updatedAt.toISOString(),
+    createdAt: sd.createdAt,
+    updatedAt: sd.updatedAt,
   };
 
   return <ServiceDescriptionDetail serviceDescription={serviceDescription} />;

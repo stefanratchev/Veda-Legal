@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
+import { serviceDescriptionLineItems } from "@/lib/schema";
 import { requireWriteAccess, serializeDecimal, errorResponse } from "@/lib/api-utils";
 
 type RouteParams = { params: Promise<{ id: string; topicId: string; itemId: string }> };
@@ -23,13 +24,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     // Verify hierarchy and draft status
-    const item = await db.serviceDescriptionLineItem.findUnique({
-      where: { id: itemId },
-      select: {
+    const item = await db.query.serviceDescriptionLineItems.findFirst({
+      where: eq(serviceDescriptionLineItems.id, itemId),
+      columns: { id: true },
+      with: {
         topic: {
-          select: {
-            id: true,
-            serviceDescription: { select: { id: true, status: true } },
+          columns: { id: true },
+          with: {
+            serviceDescription: {
+              columns: { id: true, status: true },
+            },
           },
         },
       },
@@ -43,54 +47,71 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Cannot modify finalized service description", 400);
     }
 
-    const updateData: Prisma.ServiceDescriptionLineItemUpdateInput = {};
+    const updateData: Record<string, unknown> = {
+      updatedAt: new Date().toISOString(),
+    };
 
     if (body.date !== undefined) {
-      updateData.date = body.date ? new Date(body.date) : null;
+      updateData.date = body.date ? body.date : null;
     }
     if (body.description !== undefined) {
       updateData.description = body.description.trim();
     }
     if (body.hours !== undefined) {
-      updateData.hours = body.hours ? new Prisma.Decimal(body.hours) : null;
+      updateData.hours = body.hours ? String(body.hours) : null;
     }
     if (body.fixedAmount !== undefined) {
-      updateData.fixedAmount = body.fixedAmount ? new Prisma.Decimal(body.fixedAmount) : null;
+      updateData.fixedAmount = body.fixedAmount ? String(body.fixedAmount) : null;
     }
     if (body.displayOrder !== undefined) {
       updateData.displayOrder = body.displayOrder;
     }
 
-    const updated = await db.serviceDescriptionLineItem.update({
-      where: { id: itemId },
-      data: updateData,
-      select: {
-        id: true,
-        timeEntryId: true,
-        date: true,
-        description: true,
-        hours: true,
-        fixedAmount: true,
-        displayOrder: true,
-        timeEntry: { select: { description: true, hours: true } },
-      },
-    });
+    const [updated] = await db.update(serviceDescriptionLineItems)
+      .set(updateData)
+      .where(eq(serviceDescriptionLineItems.id, itemId))
+      .returning({
+        id: serviceDescriptionLineItems.id,
+        timeEntryId: serviceDescriptionLineItems.timeEntryId,
+        date: serviceDescriptionLineItems.date,
+        description: serviceDescriptionLineItems.description,
+        hours: serviceDescriptionLineItems.hours,
+        fixedAmount: serviceDescriptionLineItems.fixedAmount,
+        displayOrder: serviceDescriptionLineItems.displayOrder,
+      });
+
+    // Fetch the time entry for original values if linked
+    let originalDescription: string | undefined;
+    let originalHours: number | null | undefined;
+
+    if (updated.timeEntryId) {
+      const fullItem = await db.query.serviceDescriptionLineItems.findFirst({
+        where: eq(serviceDescriptionLineItems.id, itemId),
+        columns: { id: true },
+        with: {
+          timeEntry: {
+            columns: { description: true, hours: true },
+          },
+        },
+      });
+      if (fullItem?.timeEntry) {
+        originalDescription = fullItem.timeEntry.description;
+        originalHours = serializeDecimal(fullItem.timeEntry.hours);
+      }
+    }
 
     return NextResponse.json({
       id: updated.id,
       timeEntryId: updated.timeEntryId,
-      date: updated.date?.toISOString().split("T")[0] || null,
+      date: updated.date || null,
       description: updated.description,
       hours: serializeDecimal(updated.hours),
       fixedAmount: serializeDecimal(updated.fixedAmount),
       displayOrder: updated.displayOrder,
-      originalDescription: updated.timeEntry?.description,
-      originalHours: updated.timeEntry ? serializeDecimal(updated.timeEntry.hours) : undefined,
+      originalDescription,
+      originalHours,
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-      return errorResponse("Line item not found", 404);
-    }
     console.error("Database error updating line item:", error);
     return errorResponse("Failed to update line item", 500);
   }
@@ -106,13 +127,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id, topicId, itemId } = await params;
 
   try {
-    const item = await db.serviceDescriptionLineItem.findUnique({
-      where: { id: itemId },
-      select: {
+    const item = await db.query.serviceDescriptionLineItems.findFirst({
+      where: eq(serviceDescriptionLineItems.id, itemId),
+      columns: { id: true },
+      with: {
         topic: {
-          select: {
-            id: true,
-            serviceDescription: { select: { id: true, status: true } },
+          columns: { id: true },
+          with: {
+            serviceDescription: {
+              columns: { id: true, status: true },
+            },
           },
         },
       },
@@ -126,7 +150,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Cannot modify finalized service description", 400);
     }
 
-    await db.serviceDescriptionLineItem.delete({ where: { id: itemId } });
+    await db.delete(serviceDescriptionLineItems).where(eq(serviceDescriptionLineItems.id, itemId));
 
     return NextResponse.json({ success: true });
   } catch (error) {

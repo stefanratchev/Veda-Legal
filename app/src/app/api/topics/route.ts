@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, asc, max } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
+import { topics, subtopics } from "@/lib/schema";
 import { requireAuth, requireWriteAccess, errorResponse } from "@/lib/api-utils";
 
 // GET /api/topics - List topics with subtopics
@@ -13,13 +16,13 @@ export async function GET(request: NextRequest) {
   const includeInactive = searchParams.get("includeInactive") === "true";
 
   try {
-    const topics = await db.topic.findMany({
-      where: includeInactive ? {} : { status: "ACTIVE" },
-      include: {
+    const allTopics = await db.query.topics.findMany({
+      where: includeInactive ? undefined : eq(topics.status, "ACTIVE"),
+      with: {
         subtopics: {
-          where: includeInactive ? {} : { status: "ACTIVE" },
-          orderBy: { displayOrder: "asc" },
-          select: {
+          where: includeInactive ? undefined : eq(subtopics.status, "ACTIVE"),
+          orderBy: [asc(subtopics.displayOrder)],
+          columns: {
             id: true,
             name: true,
             isPrefix: true,
@@ -28,11 +31,11 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: { displayOrder: "asc" },
+      orderBy: [asc(topics.displayOrder)],
     });
 
     return NextResponse.json(
-      topics.map((t) => ({
+      allTopics.map((t) => ({
         id: t.id,
         name: t.name,
         displayOrder: t.displayOrder,
@@ -69,30 +72,24 @@ export async function POST(request: NextRequest) {
     return errorResponse("Name must be 100 characters or less", 400);
   }
 
-  // Get next display order
-  const maxOrder = await db.topic.aggregate({
-    _max: { displayOrder: true },
-  });
-  const nextOrder = (maxOrder._max.displayOrder ?? 0) + 1;
-
   try {
-    const topic = await db.topic.create({
-      data: {
-        name: name.trim(),
-        displayOrder: nextOrder,
-      },
-      include: {
-        subtopics: {
-          orderBy: { displayOrder: "asc" },
-          select: {
-            id: true,
-            name: true,
-            isPrefix: true,
-            displayOrder: true,
-            status: true,
-          },
-        },
-      },
+    // Get next display order
+    const [maxOrderResult] = await db
+      .select({ maxOrder: max(topics.displayOrder) })
+      .from(topics);
+    const nextOrder = (maxOrderResult?.maxOrder ?? 0) + 1;
+
+    const now = new Date().toISOString();
+    const [topic] = await db.insert(topics).values({
+      id: createId(),
+      name: name.trim(),
+      displayOrder: nextOrder,
+      updatedAt: now,
+    }).returning({
+      id: topics.id,
+      name: topics.name,
+      displayOrder: topics.displayOrder,
+      status: topics.status,
     });
 
     return NextResponse.json({
@@ -100,7 +97,7 @@ export async function POST(request: NextRequest) {
       name: topic.name,
       displayOrder: topic.displayOrder,
       status: topic.status,
-      subtopics: topic.subtopics,
+      subtopics: [],
     });
   } catch (error) {
     console.error("Database error creating topic:", error);

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { ClientStatus } from "@prisma/client";
 import { DataTable } from "@/components/ui/DataTable";
 import { TableFilters } from "@/components/ui/TableFilters";
 import { ColumnDef } from "@/components/ui/table-types";
 import { ClientModal } from "./ClientModal";
+
+type ClientStatus = "ACTIVE" | "INACTIVE";
 
 interface Client {
   id: string;

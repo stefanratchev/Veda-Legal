@@ -1,11 +1,11 @@
-import { PrismaClient } from "@prisma/client";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
+import * as schema from "../src/lib/schema";
+import { createId } from "@paralleldrive/cuid2";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const db = drizzle(pool, { schema });
 
 interface SubtopicData {
   name: string;
@@ -232,36 +232,41 @@ const TOPICS: TopicData[] = [
 
 async function main() {
   console.log("Deleting existing topics and subtopics...");
-  await prisma.subtopic.deleteMany();
-  await prisma.topic.deleteMany();
+  await db.delete(schema.subtopics);
+  await db.delete(schema.topics);
 
   console.log("Seeding topics and subtopics...");
+
+  const now = new Date().toISOString();
 
   for (let topicOrder = 0; topicOrder < TOPICS.length; topicOrder++) {
     const topicData = TOPICS[topicOrder];
 
-    const topic = await prisma.topic.create({
-      data: {
-        name: topicData.name,
-        displayOrder: topicOrder,
-        status: "ACTIVE",
-      },
+    const topicId = createId();
+    await db.insert(schema.topics).values({
+      id: topicId,
+      name: topicData.name,
+      displayOrder: topicOrder,
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
     });
 
-    console.log(`Created topic: ${topic.name}`);
+    console.log(`Created topic: ${topicData.name}`);
 
     for (let subtopicOrder = 0; subtopicOrder < topicData.subtopics.length; subtopicOrder++) {
       const subtopicData = topicData.subtopics[subtopicOrder];
       const isPrefix = subtopicData.name.endsWith(":");
 
-      await prisma.subtopic.create({
-        data: {
-          topicId: topic.id,
-          name: subtopicData.name,
-          isPrefix,
-          displayOrder: subtopicOrder,
-          status: "ACTIVE",
-        },
+      await db.insert(schema.subtopics).values({
+        id: createId(),
+        topicId: topicId,
+        name: subtopicData.name,
+        isPrefix,
+        displayOrder: subtopicOrder,
+        status: "ACTIVE",
+        createdAt: now,
+        updatedAt: now,
       });
     }
 
@@ -277,6 +282,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
     await pool.end();
   });

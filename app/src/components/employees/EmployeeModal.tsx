@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { Position } from "@prisma/client";
+
+type Position = "ADMIN" | "PARTNER" | "SENIOR_ASSOCIATE" | "ASSOCIATE" | "CONSULTANT";
 
 interface FormData {
   email: string;

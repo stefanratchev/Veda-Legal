@@ -16,11 +16,21 @@ const ADMIN_POSITIONS = ["ADMIN", "PARTNER"] as const;
 // All positions can write (log time entries)
 const WRITE_POSITIONS = ["ADMIN", "PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE", "CONSULTANT"] as const;
 
+// Positions that can view team timesheets
+const TEAM_VIEW_POSITIONS = ["ADMIN", "PARTNER"] as const;
+
 /**
  * Check if a position has admin-level access.
  */
 export function hasAdminAccess(position: string): boolean {
   return ADMIN_POSITIONS.includes(position as (typeof ADMIN_POSITIONS)[number]);
+}
+
+/**
+ * Check if a position can view team timesheets.
+ */
+export function canViewTeamTimesheets(position: string): boolean {
+  return TEAM_VIEW_POSITIONS.includes(position as (typeof TEAM_VIEW_POSITIONS)[number]);
 }
 
 // Common validation patterns
@@ -100,7 +110,7 @@ export async function getUserFromSession(email: string | null | undefined) {
 
   return db.query.users.findFirst({
     where: eq(users.email, email),
-    columns: { id: true, email: true, name: true },
+    columns: { id: true, email: true, name: true, position: true },
   });
 }
 

@@ -52,6 +52,16 @@ export interface TimeEntry {
 }
 
 /**
+ * Summary of an employee's time entries for team view.
+ */
+export interface TeamSummary {
+  userId: string;
+  userName: string;
+  position: string;
+  totalHours: number;
+}
+
+/**
  * Form data for creating time entries.
  */
 export interface FormData {

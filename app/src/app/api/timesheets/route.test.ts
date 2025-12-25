@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMockRequest } from "@/test/helpers/api";
 import {
   createMockUser,
+  createMockTimeEntry,
   MockUser,
 } from "@/test/mocks/factories";
 
@@ -125,6 +126,163 @@ describe("GET /api/timesheets", () => {
 
       expect(response.status).toBe(400);
       expect(data.error).toBe("Invalid date format");
+    });
+  });
+
+  describe("Happy Path", () => {
+    it("returns entries for given date", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      const entries = [
+        createMockTimeEntry({ userId: user.id, hours: "2.5" }),
+        createMockTimeEntry({ userId: user.id, hours: "1.0" }),
+      ];
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(data)).toBe(true);
+      expect(data).toHaveLength(2);
+    });
+
+    it("serializes decimal hours to numbers", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "2.5" })];
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(typeof data[0].hours).toBe("number");
+      expect(data[0].hours).toBe(2.5);
+    });
+
+    it("returns entries with client details populated", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      const entries = [
+        createMockTimeEntry({
+          userId: user.id,
+          client: { id: "client-1", name: "Acme Corp" },
+        }),
+      ];
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data[0].client).toEqual({ id: "client-1", name: "Acme Corp" });
+    });
+  });
+
+  describe("Role-Based Behavior", () => {
+    it("returns entries array directly for regular users", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      const entries = [createMockTimeEntry({ userId: user.id })];
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(Array.isArray(data)).toBe(true);
+      expect(data).not.toHaveProperty("teamSummaries");
+    });
+
+    it("returns entries and teamSummaries for ADMIN", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      const entries = [createMockTimeEntry({ userId: user.id })];
+      const teamSummaries = [
+        { userId: "other-user", userName: "Other User", position: "ASSOCIATE", totalHours: "4.0" },
+      ];
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          leftJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                having: vi.fn().mockReturnValue({
+                  orderBy: vi.fn().mockResolvedValue(teamSummaries),
+                }),
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data).toHaveProperty("entries");
+      expect(data).toHaveProperty("teamSummaries");
+      expect(Array.isArray(data.entries)).toBe(true);
+      expect(Array.isArray(data.teamSummaries)).toBe(true);
+    });
+
+    it("returns entries and teamSummaries for PARTNER", async () => {
+      const user = createMockUser({ position: "PARTNER" });
+      const entries = [createMockTimeEntry({ userId: user.id })];
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          leftJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              groupBy: vi.fn().mockReturnValue({
+                having: vi.fn().mockReturnValue({
+                  orderBy: vi.fn().mockResolvedValue([]),
+                }),
+              }),
+            }),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data).toHaveProperty("entries");
+      expect(data).toHaveProperty("teamSummaries");
     });
   });
 });

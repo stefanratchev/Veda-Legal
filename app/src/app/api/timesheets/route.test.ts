@@ -46,7 +46,7 @@ vi.mock("@/lib/api-utils", async (importOriginal) => {
 });
 
 // Import route after mocks are set up
-import { GET, POST } from "./route";
+import { GET, POST, DELETE } from "./route";
 
 // Helper to set up authenticated user
 function setupAuthenticatedUser(user: MockUser) {
@@ -725,6 +725,124 @@ describe("POST /api/timesheets", () => {
       expect(response.status).toBe(200);
       expect(data.topicName).toBe("M&A Advisory");
       expect(data.subtopicName).toBe("Drafting documents");
+    });
+  });
+});
+
+describe("DELETE /api/timesheets", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("Authentication", () => {
+    it("returns 401 when not authenticated", async () => {
+      mockRequireAuth.mockResolvedValue({ error: "Unauthorized", status: 401 });
+
+      const request = createMockRequest({
+        method: "DELETE",
+        url: "/api/timesheets?id=entry-1",
+      });
+
+      const response = await DELETE(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(data.error).toBe("Unauthorized");
+    });
+
+    it("returns 404 when user not in database", async () => {
+      const user = createMockUser();
+      mockRequireAuth.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+      mockGetUserFromSession.mockResolvedValue(null);
+
+      const request = createMockRequest({
+        method: "DELETE",
+        url: "/api/timesheets?id=entry-1",
+      });
+
+      const response = await DELETE(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(404);
+      expect(data.error).toBe("User not found");
+    });
+  });
+
+  describe("Validation", () => {
+    it("returns 400 when id param is missing", async () => {
+      const user = createMockUser();
+      setupAuthenticatedUser(user);
+
+      const request = createMockRequest({
+        method: "DELETE",
+        url: "/api/timesheets",
+      });
+
+      const response = await DELETE(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe("Entry ID is required");
+    });
+  });
+
+  describe("Authorization", () => {
+    it("returns 404 when entry not found", async () => {
+      const user = createMockUser();
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(null);
+
+      const request = createMockRequest({
+        method: "DELETE",
+        url: "/api/timesheets?id=nonexistent",
+      });
+
+      const response = await DELETE(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(404);
+      expect(data.error).toBe("Entry not found");
+    });
+
+    it("returns 403 when deleting another user's entry", async () => {
+      const user = createMockUser({ id: "user-1" });
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue({ userId: "other-user" });
+
+      const request = createMockRequest({
+        method: "DELETE",
+        url: "/api/timesheets?id=entry-1",
+      });
+
+      const response = await DELETE(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("You can only delete your own entries");
+    });
+  });
+
+  describe("Happy Path", () => {
+    it("deletes entry and returns success", async () => {
+      const user = createMockUser({ id: "user-1" });
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue({ userId: "user-1" });
+      mockDb.delete.mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      });
+
+      const request = createMockRequest({
+        method: "DELETE",
+        url: "/api/timesheets?id=entry-1",
+      });
+
+      const response = await DELETE(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
     });
   });
 });

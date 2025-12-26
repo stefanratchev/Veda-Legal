@@ -8,7 +8,7 @@ import {
 } from "@/test/mocks/factories";
 
 // Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireAuth, mockGetUserFromSession, mockCanViewTeamTimesheets, mockDb, mockBillingChain } = vi.hoisted(() => {
+const { mockRequireAuth, mockGetUserFromSession, mockCanViewTeamTimesheets, mockDb } = vi.hoisted(() => {
   // Create a chainable mock for billing table queries (used by getLockedEntryIds)
   // This chain uses innerJoin and is called first
   const mockBillingChain = {
@@ -25,7 +25,6 @@ const { mockRequireAuth, mockGetUserFromSession, mockCanViewTeamTimesheets, mock
     mockRequireAuth: vi.fn(),
     mockGetUserFromSession: vi.fn(),
     mockCanViewTeamTimesheets: vi.fn(),
-    mockBillingChain,
     mockDb: {
       query: {
         timeEntries: {

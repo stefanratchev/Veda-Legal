@@ -98,8 +98,10 @@ Current schema has `ADMIN` and `EMPLOYEE` roles. The `api-utils.ts` WRITE_ROLES 
 
 **Note:** Code references PARTNER/ASSOCIATE roles for future expansion; add to schema when needed.
 
-### Time Entry Immutability
-Time entries cannot be edited after creation - only deleted and recreated. This ensures audit integrity. The `PATCH /api/timesheets/[id]` endpoint does not exist.
+### Time Entry Editing
+Time entries can be edited by their owner via `PATCH /api/timesheets/[id]`. Editable fields: client, topic/subtopic, hours, description. Date cannot be changed.
+
+**Billing Lock:** Entries linked to a finalized service description cannot be edited. The `isLocked` field in the GET response indicates this state.
 
 ## Database
 

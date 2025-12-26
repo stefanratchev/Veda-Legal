@@ -4,20 +4,26 @@ import { useMemo, useState } from "react";
 import { formatHours } from "@/lib/date-utils";
 import { EntryRow } from "./EntryRow";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import type { TimeEntry } from "@/types";
+import type { TimeEntry, Client, Topic } from "@/types";
 
 interface EntriesListProps {
   entries: TimeEntry[];
   isLoadingEntries: boolean;
   onDeleteEntry?: (entryId: string) => void;
+  onUpdateEntry?: (updatedEntry: TimeEntry) => void;
   readOnly?: boolean;
+  clients?: Client[];
+  topics?: Topic[];
 }
 
 export function EntriesList({
   entries,
   isLoadingEntries,
   onDeleteEntry,
+  onUpdateEntry,
   readOnly = false,
+  clients = [],
+  topics = [],
 }: EntriesListProps) {
   const [entryToDelete, setEntryToDelete] = useState<TimeEntry | null>(null);
 
@@ -79,7 +85,10 @@ export function EntriesList({
                   key={entry.id}
                   entry={entry}
                   onDeleteClick={readOnly ? undefined : () => setEntryToDelete(entry)}
+                  onUpdate={onUpdateEntry}
                   readOnly={readOnly}
+                  clients={clients}
+                  topics={topics}
                 />
               ))}
             </tbody>

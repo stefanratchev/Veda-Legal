@@ -49,6 +49,7 @@ export interface TimeEntry {
   subtopicId?: string | null;
   topicName: string;
   subtopicName: string;
+  isLocked?: boolean;
 }
 
 /**

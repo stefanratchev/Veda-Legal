@@ -112,9 +112,10 @@ export function WeekStrip({
           </svg>
         </button>
 
-        {/* Days */}
-        <div className="flex-1 flex items-center gap-1">
-          {weekDays.map((day) => {
+        {/* Days - scrollable on mobile */}
+        <div className="flex-1 overflow-x-auto lg:overflow-visible scrollbar-hide">
+          <div className="flex items-center gap-1 min-w-max lg:min-w-0">
+            {weekDays.map((day) => {
             const selected = isSelected(day);
             const todayDay = isToday(day);
             const weekend = isWeekend(day);
@@ -146,7 +147,8 @@ export function WeekStrip({
                 )}
               </button>
             );
-          })}
+            })}
+          </div>
         </div>
 
         {/* Next Week */}

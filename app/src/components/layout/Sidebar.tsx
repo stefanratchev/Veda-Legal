@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import { useMobileNav } from "@/contexts/MobileNavContext";
 
 interface NavItem {
   name: string;
@@ -110,8 +111,30 @@ export function Sidebar({ user, className }: SidebarProps) {
   const isAdmin = user?.position ? hasAdminAccess(user.position) : false;
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const { isOpen, close } = useMobileNav();
 
   useClickOutside(userMenuRef, () => setShowUserMenu(false), showUserMenu);
+  useClickOutside(sidebarRef, () => {
+    if (isOpen) close();
+  }, isOpen);
+
+  // Close sidebar on route change
+  useEffect(() => {
+    close();
+  }, [pathname, close]);
+
+  // Prevent body scroll when sidebar is open on mobile
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = pathname === item.href;
@@ -139,7 +162,26 @@ export function Sidebar({ user, className }: SidebarProps) {
   };
 
   return (
-    <aside className={`fixed left-0 top-0 h-screen w-[240px] bg-[var(--bg-elevated)] border-r border-[var(--border-subtle)] flex flex-col ${className || ""}`}>
+    <>
+      {/* Backdrop overlay for mobile */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={close}
+        />
+      )}
+      <aside
+        ref={sidebarRef}
+        className={`
+          fixed left-0 top-0 h-screen w-[240px]
+          bg-[var(--bg-elevated)] border-r border-[var(--border-subtle)]
+          flex flex-col z-50
+          transition-transform duration-300 ease-in-out
+          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+          lg:translate-x-0 lg:transition-none
+          ${className || ""}
+        `}
+      >
       {/* Logo */}
       <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
         <Image
@@ -231,6 +273,7 @@ export function Sidebar({ user, className }: SidebarProps) {
           )}
         </div>
       )}
-    </aside>
+      </aside>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useMobileNav } from "@/contexts/MobileNavContext";
 
 interface HeaderProps {
   userName?: string;
@@ -8,6 +9,7 @@ interface HeaderProps {
 
 export function Header({ userName }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const { toggle } = useMobileNav();
 
   // Get greeting based on time of day
   const getGreeting = () => {
@@ -29,9 +31,20 @@ export function Header({ userName }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-[var(--bg-deep)]/80 border-b border-[var(--border-subtle)]">
-      <div className="flex items-center justify-between px-6 py-3">
-        {/* Search Box */}
-        <div className="relative max-w-[360px] flex-1">
+      <div className="flex items-center justify-between px-3 py-3 md:px-4 lg:px-6">
+        {/* Hamburger - mobile/tablet only */}
+        <button
+          onClick={toggle}
+          className="p-2 -ml-1 mr-2 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors lg:hidden"
+          aria-label="Toggle navigation"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        {/* Search Box - hidden on phones, visible on tablets+ */}
+        <div className="relative max-w-[360px] flex-1 hidden md:block">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -55,9 +68,9 @@ export function Header({ userName }: HeaderProps) {
         </div>
 
         {/* Right Side */}
-        <div className="flex items-center gap-3">
-          {/* Date Display */}
-          <span className="text-[13px] text-[var(--text-muted)]">{formatDate()}</span>
+        <div className="flex items-center gap-2 md:gap-3">
+          {/* Date Display - hidden on phones */}
+          <span className="text-[13px] text-[var(--text-muted)] hidden md:block">{formatDate()}</span>
 
           {/* Notification Button */}
           <button className="relative p-2 rounded bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--border-accent)] transition-all duration-200">
@@ -78,11 +91,11 @@ export function Header({ userName }: HeaderProps) {
       </div>
 
       {/* Page Header */}
-      <div className="px-6 pb-4">
+      <div className="px-3 pb-3 md:px-4 md:pb-4 lg:px-6">
         <p className="text-[10px] font-semibold text-[var(--accent-pink)] uppercase tracking-[1.5px] mb-1">
           Dashboard Overview
         </p>
-        <h2 className="font-heading text-2xl font-medium text-[var(--text-primary)] tracking-tight leading-none">
+        <h2 className="font-heading text-xl md:text-2xl font-medium text-[var(--text-primary)] tracking-tight leading-none">
           {getGreeting()}, {userName || "there"}
         </h2>
         <p className="text-[13px] text-[var(--text-secondary)] mt-1">

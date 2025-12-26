@@ -39,21 +39,21 @@ export function ConfirmModal({
       />
 
       {/* Modal Content */}
-      <div className="relative bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded w-full max-w-sm mx-4 animate-fade-up">
+      <div className="relative bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded w-full max-w-sm mx-2 md:mx-4 animate-fade-up">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
+        <div className="px-4 py-3 md:px-5 md:py-4 border-b border-[var(--border-subtle)]">
           <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)]">
             {title}
           </h2>
         </div>
 
         {/* Body */}
-        <div className="p-5">
+        <div className="p-4 md:p-5">
           <p className="text-[var(--text-secondary)] text-[13px]">{message}</p>
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-2">
+        <div className="px-4 py-2.5 md:px-5 md:py-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-2">
           <button
             onClick={onCancel}
             className="

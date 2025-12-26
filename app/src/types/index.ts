@@ -157,3 +157,11 @@ export interface ServiceDescriptionListItem {
   totalAmount: number;
   updatedAt: string;
 }
+
+// M365 Activity types
+export type {
+  M365CalendarEvent,
+  M365Email,
+  M365ActivityResponse,
+  M365ActivityError,
+} from "./m365";

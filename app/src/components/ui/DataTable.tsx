@@ -11,9 +11,10 @@ export function DataTable<TData>({
   emptyMessage = "No data",
   emptyIcon,
   onRowClick,
+  defaultSort,
 }: DataTableProps<TData>) {
   // Sorting state
-  const [sortState, setSortState] = useState<SortState | null>(null);
+  const [sortState, setSortState] = useState<SortState | null>(defaultSort ?? null);
 
   // Pagination state - simple current page tracking
   const [currentPage, setCurrentPage] = useState(1);

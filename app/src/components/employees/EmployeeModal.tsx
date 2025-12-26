@@ -63,7 +63,7 @@ export function EmployeeModal({
         {/* Header */}
         <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
           <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)]">
-            {mode === "create" ? "Add Employee" : "Edit Employee"}
+            {mode === "create" ? "Add Team Member" : "Edit Team Member"}
           </h2>
           {mode === "edit" && selectedEmployeeName && (
             <p className="text-[var(--text-muted)] text-[12px] mt-0.5">
@@ -86,7 +86,7 @@ export function EmployeeModal({
                   value={formData.email}
                   onChange={(e) => onFormChange({ email: e.target.value })}
                   className="w-full px-3 py-2 rounded text-[13px] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)] focus:outline-none transition-all duration-200"
-                  placeholder="employee@company.com"
+                  placeholder="name@company.com"
                   autoFocus
                 />
               </div>
@@ -108,7 +108,7 @@ export function EmployeeModal({
                   focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
                   focus:outline-none transition-all duration-200
                 "
-                placeholder={mode === "create" ? "Optional - will use Azure AD name" : "Enter employee name"}
+                placeholder={mode === "create" ? "Optional - will use Azure AD name" : "Enter name"}
                 autoFocus={mode === "edit"}
               />
             </div>
@@ -177,7 +177,7 @@ export function EmployeeModal({
               disabled:opacity-50
             "
           >
-            {isLoading ? "Saving..." : mode === "create" ? "Add Employee" : "Save Changes"}
+            {isLoading ? "Saving..." : mode === "create" ? "Add" : "Save"}
           </button>
         </div>
       </div>

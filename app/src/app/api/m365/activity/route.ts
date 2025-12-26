@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import type { M365CalendarEvent, M365Email, M365ActivityResponse } from "@/types/m365";
 
 const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
 
@@ -19,18 +20,25 @@ function isValidDateFormat(dateStr: string): boolean {
   return !isNaN(date.getTime());
 }
 
+interface GraphAttendee {
+  emailAddress: { name?: string; address: string };
+}
+
 interface GraphCalendarEvent {
-  id: string;
   subject: string;
   start: { dateTime: string };
   end: { dateTime: string };
-  organizer?: { emailAddress: { name: string } };
+  attendees?: GraphAttendee[];
+}
+
+interface GraphRecipient {
+  emailAddress: { name?: string; address: string };
 }
 
 interface GraphEmail {
-  id: string;
   subject: string;
-  from?: { emailAddress: { name: string; address: string } };
+  from?: { emailAddress: { name?: string; address: string } };
+  toRecipients?: GraphRecipient[];
   receivedDateTime?: string;
   sentDateTime?: string;
 }
@@ -44,7 +52,7 @@ interface GraphEmail {
  * - date: Required, YYYY-MM-DD format
  *
  * Returns:
- * - 200: { calendarEvents: [...], emails: [...] }
+ * - 200: M365ActivityResponse { calendar: [...], emails: [...] }
  * - 400: Invalid or missing date parameter
  * - 401: Not authenticated or session expired
  * - 500: Graph API error
@@ -91,10 +99,11 @@ export async function GET(request: NextRequest) {
   const endDateTime = `${date}T23:59:59.999Z`;
 
   try {
-    // Fetch calendar events and emails in parallel
-    const [calendarResponse, emailsResponse] = await Promise.all([
+    // Fetch calendar events and emails (inbox + sent) in parallel
+    const [calendarResponse, inboxResponse, sentResponse] = await Promise.all([
       fetchCalendarEvents(session.accessToken, startDateTime, endDateTime),
-      fetchEmails(session.accessToken, startDateTime, endDateTime),
+      fetchInboxEmails(session.accessToken, startDateTime, endDateTime),
+      fetchSentEmails(session.accessToken, startDateTime, endDateTime),
     ]);
 
     // Check for Graph API errors
@@ -106,8 +115,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!emailsResponse.ok) {
-      console.error("Email API error:", emailsResponse.status);
+    if (!inboxResponse.ok) {
+      console.error("Inbox API error:", inboxResponse.status);
+      return NextResponse.json(
+        { error: "Failed to fetch M365 activity data", code: "GRAPH_ERROR" },
+        { status: 500 }
+      );
+    }
+
+    if (!sentResponse.ok) {
+      console.error("Sent mail API error:", sentResponse.status);
       return NextResponse.json(
         { error: "Failed to fetch M365 activity data", code: "GRAPH_ERROR" },
         { status: 500 }
@@ -115,25 +132,60 @@ export async function GET(request: NextRequest) {
     }
 
     const calendarData = await calendarResponse.json();
-    const emailsData = await emailsResponse.json();
+    const inboxData = await inboxResponse.json();
+    const sentData = await sentResponse.json();
 
-    // Transform and return the data
-    const calendarEvents = (calendarData.value || []).map((event: GraphCalendarEvent) => ({
-      id: event.id,
-      subject: event.subject,
-      start: event.start?.dateTime,
-      end: event.end?.dateTime,
-      organizer: event.organizer?.emailAddress?.name,
-    }));
+    // Transform calendar events - calculate duration, extract attendees
+    const calendar: M365CalendarEvent[] = (calendarData.value || []).map(
+      (event: GraphCalendarEvent) => {
+        const startTime = new Date(event.start?.dateTime);
+        const endTime = new Date(event.end?.dateTime);
+        const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
 
-    const emails = (emailsData.value || []).map((email: GraphEmail) => ({
-      id: email.id,
+        const attendees = (event.attendees || []).map(
+          (a: GraphAttendee) => a.emailAddress?.name || a.emailAddress?.address
+        );
+
+        return {
+          subject: event.subject,
+          start: event.start?.dateTime,
+          durationMinutes,
+          attendees,
+        };
+      }
+    );
+
+    // Transform inbox emails (received)
+    const receivedEmails: M365Email[] = (inboxData.value || []).map(
+      (email: GraphEmail) => ({
+        subject: email.subject,
+        timestamp: email.receivedDateTime || "",
+        from: email.from?.emailAddress?.name || email.from?.emailAddress?.address || "",
+        to: (email.toRecipients || []).map(
+          (r: GraphRecipient) => r.emailAddress?.name || r.emailAddress?.address
+        ),
+        direction: "received" as const,
+      })
+    );
+
+    // Transform sent emails
+    const sentEmails: M365Email[] = (sentData.value || []).map((email: GraphEmail) => ({
       subject: email.subject,
-      from: email.from?.emailAddress?.name || email.from?.emailAddress?.address,
-      timestamp: email.receivedDateTime || email.sentDateTime,
+      timestamp: email.sentDateTime || "",
+      from: email.from?.emailAddress?.name || email.from?.emailAddress?.address || "",
+      to: (email.toRecipients || []).map(
+        (r: GraphRecipient) => r.emailAddress?.name || r.emailAddress?.address
+      ),
+      direction: "sent" as const,
     }));
 
-    return NextResponse.json({ calendarEvents, emails });
+    // Combine and sort emails by timestamp
+    const emails = [...receivedEmails, ...sentEmails].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const response: M365ActivityResponse = { calendar, emails };
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Error fetching M365 activity:", error);
     return NextResponse.json(
@@ -154,7 +206,7 @@ async function fetchCalendarEvents(
   const url = new URL(`${GRAPH_BASE_URL}/me/calendarView`);
   url.searchParams.set("startDateTime", startDateTime);
   url.searchParams.set("endDateTime", endDateTime);
-  url.searchParams.set("$select", "id,subject,start,end,organizer");
+  url.searchParams.set("$select", "subject,start,end,attendees");
 
   return fetch(url.toString(), {
     headers: {
@@ -164,20 +216,41 @@ async function fetchCalendarEvents(
 }
 
 /**
- * Fetch emails (both sent and received) from Microsoft Graph API.
+ * Fetch inbox (received) emails from Microsoft Graph API.
  */
-async function fetchEmails(
+async function fetchInboxEmails(
   accessToken: string,
   startDateTime: string,
   endDateTime: string
 ): Promise<Response> {
-  // For the tests, we're fetching inbox messages with receivedDateTime filter
   const url = new URL(`${GRAPH_BASE_URL}/me/mailFolders/Inbox/messages`);
   url.searchParams.set(
     "$filter",
     `receivedDateTime ge ${startDateTime} and receivedDateTime lt ${endDateTime}`
   );
-  url.searchParams.set("$select", "id,subject,from,receivedDateTime");
+  url.searchParams.set("$select", "subject,from,toRecipients,receivedDateTime");
+
+  return fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+/**
+ * Fetch sent emails from Microsoft Graph API.
+ */
+async function fetchSentEmails(
+  accessToken: string,
+  startDateTime: string,
+  endDateTime: string
+): Promise<Response> {
+  const url = new URL(`${GRAPH_BASE_URL}/me/mailFolders/SentItems/messages`);
+  url.searchParams.set(
+    "$filter",
+    `sentDateTime ge ${startDateTime} and sentDateTime lt ${endDateTime}`
+  );
+  url.searchParams.set("$select", "subject,from,toRecipients,sentDateTime");
 
   return fetch(url.toString(), {
     headers: {

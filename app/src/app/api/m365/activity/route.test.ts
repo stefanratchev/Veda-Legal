@@ -126,36 +126,43 @@ describe("GET /api/m365/activity", () => {
       const calendarEvents = {
         value: [
           {
-            id: "event-1",
             subject: "Client Meeting",
             start: { dateTime: "2024-12-20T10:00:00.000Z" },
             end: { dateTime: "2024-12-20T11:00:00.000Z" },
-            organizer: { emailAddress: { name: "John Doe" } },
+            attendees: [
+              { emailAddress: { name: "John Doe", address: "john@example.com" } },
+              { emailAddress: { name: "Jane Smith", address: "jane@example.com" } },
+            ],
           },
           {
-            id: "event-2",
             subject: "Team Standup",
             start: { dateTime: "2024-12-20T09:00:00.000Z" },
             end: { dateTime: "2024-12-20T09:30:00.000Z" },
-            organizer: { emailAddress: { name: "Jane Smith" } },
+            attendees: [],
           },
         ],
       };
 
-      // Mock emails response
-      const emails = {
+      // Mock inbox (received) emails response
+      const inboxEmails = {
         value: [
           {
-            id: "email-1",
             subject: "Re: Contract Review",
             from: { emailAddress: { name: "Client A", address: "client@example.com" } },
+            toRecipients: [{ emailAddress: { name: "Test User", address: "test@example.com" } }],
             receivedDateTime: "2024-12-20T14:30:00.000Z",
           },
+        ],
+      };
+
+      // Mock sent emails response
+      const sentEmails = {
+        value: [
           {
-            id: "email-2",
-            subject: "Invoice Approved",
-            from: { emailAddress: { name: "Client B", address: "clientb@example.com" } },
-            receivedDateTime: "2024-12-20T16:00:00.000Z",
+            subject: "Invoice Attached",
+            from: { emailAddress: { name: "Test User", address: "test@example.com" } },
+            toRecipients: [{ emailAddress: { name: "Client B", address: "clientb@example.com" } }],
+            sentDateTime: "2024-12-20T16:00:00.000Z",
           },
         ],
       };
@@ -167,7 +174,11 @@ describe("GET /api/m365/activity", () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve(emails),
+          json: () => Promise.resolve(inboxEmails),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(sentEmails),
         });
 
       const request = createMockRequest({
@@ -179,18 +190,28 @@ describe("GET /api/m365/activity", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toHaveProperty("calendarEvents");
+      expect(data).toHaveProperty("calendar");
       expect(data).toHaveProperty("emails");
-      expect(data.calendarEvents).toHaveLength(2);
+      expect(data.calendar).toHaveLength(2);
       expect(data.emails).toHaveLength(2);
 
-      // Verify calendar event structure
-      expect(data.calendarEvents[0]).toHaveProperty("id", "event-1");
-      expect(data.calendarEvents[0]).toHaveProperty("subject", "Client Meeting");
+      // Verify calendar event structure (M365CalendarEvent)
+      expect(data.calendar[0]).toHaveProperty("subject", "Client Meeting");
+      expect(data.calendar[0]).toHaveProperty("start", "2024-12-20T10:00:00.000Z");
+      expect(data.calendar[0]).toHaveProperty("durationMinutes", 60);
+      expect(data.calendar[0]).toHaveProperty("attendees");
+      expect(data.calendar[0].attendees).toEqual(["John Doe", "Jane Smith"]);
 
-      // Verify email structure
-      expect(data.emails[0]).toHaveProperty("id", "email-1");
+      // Verify email structure (M365Email)
+      // Emails are sorted by timestamp, so received (14:30) comes before sent (16:00)
       expect(data.emails[0]).toHaveProperty("subject", "Re: Contract Review");
+      expect(data.emails[0]).toHaveProperty("direction", "received");
+      expect(data.emails[0]).toHaveProperty("from", "Client A");
+      expect(data.emails[0]).toHaveProperty("to");
+      expect(data.emails[0].to).toEqual(["Test User"]);
+
+      expect(data.emails[1]).toHaveProperty("subject", "Invoice Attached");
+      expect(data.emails[1]).toHaveProperty("direction", "sent");
     });
 
     it("returns empty arrays when no data for date", async () => {
@@ -199,8 +220,12 @@ describe("GET /api/m365/activity", () => {
         accessToken: "valid-access-token",
       });
 
-      // Mock empty responses
+      // Mock empty responses (calendar, inbox, sent)
       mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ value: [] }),
+        })
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ value: [] }),
@@ -219,7 +244,7 @@ describe("GET /api/m365/activity", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.calendarEvents).toEqual([]);
+      expect(data.calendar).toEqual([]);
       expect(data.emails).toEqual([]);
     });
   });

@@ -203,6 +203,12 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     }
   }, [selectedDate, fetchDatesWithEntries]);
 
+  const updateEntry = useCallback((updatedEntry: TimeEntry) => {
+    setEntries((prev) =>
+      prev.map((e) => (e.id === updatedEntry.id ? updatedEntry : e))
+    );
+  }, []);
+
   return (
     <div className="space-y-4">
       {/* Page Title */}
@@ -254,6 +260,9 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         entries={entries}
         isLoadingEntries={isLoadingEntries}
         onDeleteEntry={deleteEntry}
+        onUpdateEntry={updateEntry}
+        clients={clients}
+        topics={topics}
       />
 
       {/* Team Timesheets (only shown for ADMIN/PARTNER) */}

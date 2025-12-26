@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and, desc, sql, ne } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
-import { timeEntries, clients, subtopics, users } from "@/lib/schema";
+import {
+  timeEntries,
+  clients,
+  subtopics,
+  users,
+  serviceDescriptionLineItems,
+  serviceDescriptionTopics,
+  serviceDescriptions,
+} from "@/lib/schema";
 import {
   requireAuth,
   getUserFromSession,
@@ -32,6 +40,33 @@ function serializeTimeEntry(entry: {
     hours: serializeDecimal(entry.hours),
     // date is already a string in Drizzle
   };
+}
+
+async function getLockedEntryIds(entryIds: string[]): Promise<Set<string>> {
+  if (entryIds.length === 0) return new Set();
+
+  const billedEntries = await db
+    .select({ timeEntryId: serviceDescriptionLineItems.timeEntryId })
+    .from(serviceDescriptionLineItems)
+    .innerJoin(
+      serviceDescriptionTopics,
+      eq(serviceDescriptionLineItems.topicId, serviceDescriptionTopics.id)
+    )
+    .innerJoin(
+      serviceDescriptions,
+      eq(serviceDescriptionTopics.serviceDescriptionId, serviceDescriptions.id)
+    )
+    .where(
+      and(
+        sql`${serviceDescriptionLineItems.timeEntryId} IN (${sql.join(
+          entryIds.map((id) => sql`${id}`),
+          sql`, `
+        )})`,
+        eq(serviceDescriptions.status, "FINALIZED")
+      )
+    );
+
+  return new Set(billedEntries.map((e) => e.timeEntryId).filter(Boolean) as string[]);
 }
 
 // GET /api/timesheets?date=YYYY-MM-DD - List entries for a date
@@ -92,7 +127,14 @@ export async function GET(request: NextRequest) {
       orderBy: [desc(timeEntries.createdAt)],
     });
 
-    const serializedEntries = entries.map(serializeTimeEntry);
+    // Check which entries are locked (part of finalized billing)
+    const entryIds = entries.map((e) => e.id);
+    const lockedIds = await getLockedEntryIds(entryIds);
+
+    const serializedEntries = entries.map((entry) => ({
+      ...serializeTimeEntry(entry),
+      isLocked: lockedIds.has(entry.id),
+    }));
 
     // For ADMIN/PARTNER: also fetch team summaries
     if (user.position && canViewTeamTimesheets(user.position)) {

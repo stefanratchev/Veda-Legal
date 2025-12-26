@@ -83,8 +83,8 @@ export function EntryForm({
   };
 
   return (
-    <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-      <div className="flex items-center gap-3">
+    <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-3 lg:p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         {/* Client Selector */}
         <ClientSelect
           clients={clients}
@@ -95,7 +95,7 @@ export function EntryForm({
             setTimeout(() => topicSelectRef.current?.open(), 0);
           }}
           placeholder="Select client..."
-          className="w-[160px] flex-shrink-0"
+          className="w-full lg:w-[160px] lg:flex-shrink-0"
         />
 
         {/* Topic/Subtopic Cascade Selector */}
@@ -105,21 +105,57 @@ export function EntryForm({
           value={formData.subtopicId}
           onChange={handleSubtopicSelect}
           placeholder="Select topic..."
-          className="w-[160px] flex-shrink-0"
+          className="w-full lg:w-[160px] lg:flex-shrink-0"
         />
 
-        {/* Duration Picker */}
-        <DurationPicker
-          ref={durationPickerRef}
-          hours={formData.hours}
-          minutes={formData.minutes}
-          onChange={(hours, minutes) => {
-            onFormChange({ hours, minutes });
-            // Auto-focus description after duration selection
-            setTimeout(() => descriptionInputRef.current?.focus(), 0);
-          }}
-          className="w-[100px] flex-shrink-0"
-        />
+        {/* Duration + Actions Row (mobile) / inline (desktop) */}
+        <div className="flex items-center gap-2 lg:contents">
+          <DurationPicker
+            ref={durationPickerRef}
+            hours={formData.hours}
+            minutes={formData.minutes}
+            onChange={(hours, minutes) => {
+              onFormChange({ hours, minutes });
+              // Auto-focus description after duration selection
+              setTimeout(() => descriptionInputRef.current?.focus(), 0);
+            }}
+            className="w-[100px] flex-shrink-0"
+          />
+
+          {/* Action Buttons - visible on mobile in this row */}
+          <div className="flex items-center gap-2 lg:hidden ml-auto">
+            {isEditMode && onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="
+                  px-3 py-2 rounded flex-shrink-0
+                  text-[var(--text-secondary)] text-sm
+                  bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                  hover:border-[var(--border-accent)]
+                  transition-colors
+                "
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={onSubmit}
+              disabled={!canSubmit || isLoading}
+              className="
+                px-4 py-2 rounded flex-shrink-0
+                bg-[var(--accent-pink)] text-[var(--bg-deep)]
+                font-semibold text-sm
+                hover:bg-[var(--accent-pink-dim)]
+                disabled:opacity-50 disabled:cursor-not-allowed
+                transition-all duration-200
+                shadow-lg shadow-[var(--accent-pink-glow)]
+              "
+            >
+              {isLoading ? "..." : isEditMode ? "Save" : "Log"}
+            </button>
+          </div>
+        </div>
 
         {/* Description */}
         <input
@@ -130,7 +166,7 @@ export function EntryForm({
           onKeyDown={handleKeyDown}
           placeholder="What did you work on?"
           className={`
-            flex-1 min-w-[200px] px-3 py-2 rounded text-sm
+            w-full lg:flex-1 lg:min-w-[200px] px-3 py-2 rounded text-sm
             bg-[var(--bg-surface)] border border-[var(--border-subtle)]
             text-[var(--text-primary)] placeholder-[var(--text-muted)]
             focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
@@ -139,8 +175,8 @@ export function EntryForm({
           `}
         />
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2">
+        {/* Action Buttons - desktop only (inline) */}
+        <div className="hidden lg:flex items-center gap-2">
           {isEditMode && onCancel && (
             <button
               type="button"

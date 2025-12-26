@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
+  formatDateLong,
   formatDateISO,
   formatHours,
   parseHoursToComponents,
+  toHoursAndMinutes,
   toDecimalHours,
   getWeekDays,
+  getDayName,
+  getMonthName,
   isSameDay,
   isFutureDate,
   getMonthRange,
@@ -14,10 +18,39 @@ import {
 } from "./date-utils";
 
 describe("date-utils", () => {
+  describe("formatDateLong", () => {
+    it("formats date with full weekday, day, month and year", () => {
+      const date = new Date(2024, 11, 20); // December 20, 2024
+      expect(formatDateLong(date)).toBe("Friday, 20 December 2024");
+    });
+
+    it("handles year boundary (Jan 1)", () => {
+      const date = new Date(2025, 0, 1); // January 1, 2025
+      expect(formatDateLong(date)).toBe("Wednesday, 1 January 2025");
+    });
+
+    it("handles year boundary (Dec 31)", () => {
+      const date = new Date(2024, 11, 31); // December 31, 2024
+      expect(formatDateLong(date)).toBe("Tuesday, 31 December 2024");
+    });
+  });
+
   describe("formatDateISO", () => {
     it("formats date as YYYY-MM-DD", () => {
       const date = new Date("2024-12-20T12:00:00Z");
       expect(formatDateISO(date)).toBe("2024-12-20");
+    });
+
+    it("pads single-digit months and days", () => {
+      const date = new Date(2024, 0, 5); // January 5, 2024
+      expect(formatDateISO(date)).toBe("2024-01-05");
+    });
+
+    it("handles year boundary (Dec 31 -> Jan 1)", () => {
+      const dec31 = new Date(2024, 11, 31);
+      const jan1 = new Date(2025, 0, 1);
+      expect(formatDateISO(dec31)).toBe("2024-12-31");
+      expect(formatDateISO(jan1)).toBe("2025-01-01");
     });
   });
 
@@ -47,6 +80,30 @@ describe("date-utils", () => {
     it("rounds minutes to nearest 15", () => {
       expect(parseHoursToComponents(1.4)).toEqual({ hours: 1, minutes: 30 });
     });
+
+    it("handles minutes that round to 60 (wraps to 0)", () => {
+      // 0.95 hours = 57 minutes, which rounds to 60, which should become 0
+      expect(parseHoursToComponents(0.95)).toEqual({ hours: 0, minutes: 0 });
+    });
+  });
+
+  describe("toHoursAndMinutes", () => {
+    it("converts decimal hours to hours and minutes", () => {
+      expect(toHoursAndMinutes(2.5)).toEqual({ hours: 2, minutes: 30 });
+    });
+
+    it("handles whole hours", () => {
+      expect(toHoursAndMinutes(3)).toEqual({ hours: 3, minutes: 0 });
+    });
+
+    it("handles minutes only", () => {
+      expect(toHoursAndMinutes(0.75)).toEqual({ hours: 0, minutes: 45 });
+    });
+
+    it("rounds minutes to nearest integer", () => {
+      // 1.333... hours = 1h 20m
+      expect(toHoursAndMinutes(1 + 20 / 60)).toEqual({ hours: 1, minutes: 20 });
+    });
   });
 
   describe("toDecimalHours", () => {
@@ -74,6 +131,48 @@ describe("date-utils", () => {
       const date = new Date("2024-12-18"); // Wednesday
       const days = getWeekDays(date);
       expect(days[6].getDay()).toBe(0); // Sunday
+    });
+
+    it("handles week crossing year boundary", () => {
+      // Dec 30, 2024 is a Monday, so week is Dec 30 - Jan 5
+      const date = new Date(2024, 11, 31); // December 31, 2024 (Tuesday)
+      const days = getWeekDays(date);
+      expect(formatDateISO(days[0])).toBe("2024-12-30"); // Monday
+      expect(formatDateISO(days[6])).toBe("2025-01-05"); // Sunday
+    });
+
+    it("handles week starting on Sunday (input is Sunday)", () => {
+      const sunday = new Date(2024, 11, 22); // December 22, 2024 is Sunday
+      const days = getWeekDays(sunday);
+      expect(formatDateISO(days[0])).toBe("2024-12-16"); // Previous Monday
+      expect(formatDateISO(days[6])).toBe("2024-12-22"); // The Sunday
+    });
+  });
+
+  describe("getDayName", () => {
+    it("returns short weekday name", () => {
+      const monday = new Date(2024, 11, 16); // Monday
+      expect(getDayName(monday)).toBe("Mon");
+    });
+
+    it("returns correct names for all days", () => {
+      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(2024, 11, 16 + i); // Dec 16-22, 2024 (Mon-Sun)
+        expect(getDayName(date)).toBe(days[i]);
+      }
+    });
+  });
+
+  describe("getMonthName", () => {
+    it("returns month and year", () => {
+      const date = new Date(2024, 11, 15); // December 2024
+      expect(getMonthName(date)).toBe("December 2024");
+    });
+
+    it("handles January (year boundary)", () => {
+      const date = new Date(2025, 0, 1); // January 2025
+      expect(getMonthName(date)).toBe("January 2025");
     });
   });
 
@@ -118,6 +217,20 @@ describe("date-utils", () => {
       expect(formatDateISO(start)).toBe("2025-12-01");
       expect(formatDateISO(end)).toBe("2025-12-31");
     });
+
+    it("handles February in leap year", () => {
+      const date = new Date(2024, 1, 15); // February 2024 (leap year)
+      const { start, end } = getMonthRange(date);
+      expect(formatDateISO(start)).toBe("2024-02-01");
+      expect(formatDateISO(end)).toBe("2024-02-29");
+    });
+
+    it("handles February in non-leap year", () => {
+      const date = new Date(2025, 1, 15); // February 2025 (not leap year)
+      const { start, end } = getMonthRange(date);
+      expect(formatDateISO(start)).toBe("2025-02-01");
+      expect(formatDateISO(end)).toBe("2025-02-28");
+    });
   });
 
   describe("getPreviousPeriod", () => {
@@ -136,6 +249,22 @@ describe("date-utils", () => {
       expect(formatDateISO(prevStart)).toBe("2025-11-29");
       expect(formatDateISO(prevEnd)).toBe("2025-12-09");
     });
+
+    it("handles year boundary for monthly range (January -> December)", () => {
+      const start = new Date(2025, 0, 1); // January 1, 2025
+      const end = new Date(2025, 0, 31); // January 31, 2025
+      const { start: prevStart, end: prevEnd } = getPreviousPeriod(start, end);
+      expect(formatDateISO(prevStart)).toBe("2024-12-01");
+      expect(formatDateISO(prevEnd)).toBe("2024-12-31");
+    });
+
+    it("handles custom range crossing year boundary", () => {
+      const start = new Date(2025, 0, 5); // January 5, 2025
+      const end = new Date(2025, 0, 15); // January 15, 2025 (11 days)
+      const { start: prevStart, end: prevEnd } = getPreviousPeriod(start, end);
+      expect(formatDateISO(prevStart)).toBe("2024-12-25");
+      expect(formatDateISO(prevEnd)).toBe("2025-01-04");
+    });
   });
 
   describe("getPreviousYear", () => {
@@ -145,6 +274,16 @@ describe("date-utils", () => {
       const { start: prevStart, end: prevEnd } = getPreviousYear(start, end);
       expect(formatDateISO(prevStart)).toBe("2024-12-01");
       expect(formatDateISO(prevEnd)).toBe("2024-12-31");
+    });
+
+    it("handles leap year Feb 29 going to non-leap year (becomes Mar 1)", () => {
+      // Feb 29, 2024 (leap year) -> Feb 29, 2023 doesn't exist, becomes Mar 1, 2023
+      const start = new Date(2024, 1, 29); // Feb 29, 2024
+      const end = new Date(2024, 1, 29);
+      const { start: prevStart, end: prevEnd } = getPreviousYear(start, end);
+      // JavaScript Date constructor handles Feb 29 in non-leap year by rolling to Mar 1
+      expect(formatDateISO(prevStart)).toBe("2023-03-01");
+      expect(formatDateISO(prevEnd)).toBe("2023-03-01");
     });
   });
 

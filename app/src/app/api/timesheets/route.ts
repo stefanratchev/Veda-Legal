@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql, ne } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
-import { timeEntries, clients, subtopics } from "@/lib/schema";
+import { timeEntries, clients, subtopics, users } from "@/lib/schema";
 import {
   requireAuth,
   getUserFromSession,
@@ -11,6 +11,7 @@ import {
   isValidHours,
   isNotFutureDate,
   MAX_HOURS_PER_ENTRY,
+  canViewTeamTimesheets,
 } from "@/lib/api-utils";
 
 function serializeTimeEntry(entry: {
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
   const dateStr = date.toISOString().split("T")[0];
 
   try {
+    // Fetch current user's entries
     const entries = await db.query.timeEntries.findMany({
       where: and(
         eq(timeEntries.userId, user.id),
@@ -90,7 +92,47 @@ export async function GET(request: NextRequest) {
       orderBy: [desc(timeEntries.createdAt)],
     });
 
-    return NextResponse.json(entries.map(serializeTimeEntry));
+    const serializedEntries = entries.map(serializeTimeEntry);
+
+    // For ADMIN/PARTNER: also fetch team summaries
+    if (user.position && canViewTeamTimesheets(user.position)) {
+      const teamSummaries = await db
+        .select({
+          userId: users.id,
+          userName: users.name,
+          position: users.position,
+          totalHours: sql<string>`COALESCE(SUM(CAST(${timeEntries.hours} AS DECIMAL)), 0)`,
+        })
+        .from(users)
+        .leftJoin(
+          timeEntries,
+          and(
+            eq(timeEntries.userId, users.id),
+            eq(timeEntries.date, dateStr)
+          )
+        )
+        .where(
+          and(
+            ne(users.id, user.id),
+            eq(users.status, 'ACTIVE')
+          )
+        )
+        .groupBy(users.id, users.name, users.position)
+        .having(sql`SUM(CAST(${timeEntries.hours} AS DECIMAL)) > 0`)
+        .orderBy(sql`SUM(CAST(${timeEntries.hours} AS DECIMAL)) DESC`);
+
+      return NextResponse.json({
+        entries: serializedEntries,
+        teamSummaries: teamSummaries.map((s) => ({
+          ...s,
+          userName: s.userName || "Unknown",
+          totalHours: Number(s.totalHours),
+        })),
+      });
+    }
+
+    // For regular users: return entries array directly (backward compatible)
+    return NextResponse.json(serializedEntries);
   } catch (error) {
     console.error("Database error fetching time entries:", error);
     return NextResponse.json(

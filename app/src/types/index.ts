@@ -52,6 +52,16 @@ export interface TimeEntry {
 }
 
 /**
+ * Summary of an employee's time entries for team view.
+ */
+export interface TeamSummary {
+  userId: string;
+  userName: string;
+  position: string;
+  totalHours: number;
+}
+
+/**
  * Form data for creating time entries.
  */
 export interface FormData {
@@ -147,3 +157,11 @@ export interface ServiceDescriptionListItem {
   totalAmount: number;
   updatedAt: string;
 }
+
+// M365 Activity types
+export type {
+  M365CalendarEvent,
+  M365Email,
+  M365ActivityResponse,
+  M365ActivityError,
+} from "./m365";

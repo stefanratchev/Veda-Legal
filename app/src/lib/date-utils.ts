@@ -57,7 +57,7 @@ export function toDecimalHours(hours: number, minutes: number): number {
 }
 
 /**
- * Get weekdays (Mon-Fri) for a given date's week
+ * Get all days (Mon-Sun) for a given date's week
  */
 export function getWeekDays(centerDate: Date): Date[] {
   const days: Date[] = [];
@@ -65,8 +65,8 @@ export function getWeekDays(centerDate: Date): Date[] {
   const monday = new Date(centerDate);
   monday.setDate(centerDate.getDate() - dayOfWeek);
 
-  for (let i = 0; i < 5; i++) {
-    // Mon-Fri only
+  for (let i = 0; i < 7; i++) {
+    // Mon-Sun (full week)
     const day = new Date(monday);
     day.setDate(monday.getDate() + i);
     days.push(day);

@@ -42,7 +42,7 @@ export const authOptions: NextAuthOptions = {
       tenantId: process.env.AZURE_AD_TENANT_ID!,
       authorization: {
         params: {
-          scope: "openid profile email User.Read",
+          scope: "openid profile email User.Read Calendars.Read Mail.Read offline_access",
         },
       },
     }),
@@ -98,13 +98,14 @@ export const authOptions: NextAuthOptions = {
       }
     },
     async jwt({ token, account, profile, user }) {
-      // Persist the Azure AD access token to the JWT
+      // Initial sign-in: store all token info
       if (account) {
         token.accessToken = account.access_token;
-        token.idToken = account.id_token;
+        token.refreshToken = account.refresh_token;
+        token.expiresAt = account.expires_at ? account.expires_at * 1000 : Date.now() + 3600 * 1000;
       }
+
       // Set email/name from user or profile on first sign-in
-      // Azure AD may provide email in different fields depending on configuration
       const azureProfile = profile as { email?: string; preferred_username?: string; name?: string } | undefined;
 
       if (user?.email) {
@@ -113,7 +114,6 @@ export const authOptions: NextAuthOptions = {
       if (user?.name) {
         token.name = user.name;
       }
-      // Azure AD often provides email in preferred_username
       if (azureProfile?.email) {
         token.email = azureProfile.email;
       } else if (azureProfile?.preferred_username) {
@@ -122,14 +122,58 @@ export const authOptions: NextAuthOptions = {
       if (azureProfile?.name) {
         token.name = azureProfile.name;
       }
+
+      // Return existing token if not expired (with 5min buffer)
+      if (token.expiresAt && Date.now() < token.expiresAt - 5 * 60 * 1000) {
+        return token;
+      }
+
+      // Token expired or about to expire - refresh it
+      if (token.refreshToken) {
+        try {
+          const response = await fetch(
+            `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/token`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({
+                client_id: process.env.AZURE_AD_CLIENT_ID!,
+                client_secret: process.env.AZURE_AD_CLIENT_SECRET!,
+                grant_type: "refresh_token",
+                refresh_token: token.refreshToken,
+              }),
+            }
+          );
+
+          const refreshed = await response.json();
+
+          if (!response.ok) {
+            console.error("Token refresh failed:", refreshed);
+            return { ...token, error: "RefreshTokenError" as const };
+          }
+
+          return {
+            ...token,
+            accessToken: refreshed.access_token,
+            refreshToken: refreshed.refresh_token ?? token.refreshToken,
+            expiresAt: Date.now() + refreshed.expires_in * 1000,
+            error: undefined,
+          };
+        } catch (error) {
+          console.error("Token refresh error:", error);
+          return { ...token, error: "RefreshTokenError" as const };
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
-      // Make the access token available to the client
       if (session.user) {
         session.user.name = token.name as string;
         session.user.email = token.email as string;
       }
+      session.accessToken = token.accessToken as string | undefined;
+      session.error = token.error;
       return session;
     },
   },

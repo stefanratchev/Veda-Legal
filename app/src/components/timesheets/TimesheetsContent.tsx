@@ -5,7 +5,9 @@ import { formatDateISO, toDecimalHours } from "@/lib/date-utils";
 import { WeekStrip } from "./WeekStrip";
 import { EntryForm } from "./EntryForm";
 import { EntriesList } from "./EntriesList";
-import type { Client, Topic, TimeEntry, FormData } from "@/types";
+import { TeamTimesheets } from "./TeamTimesheets";
+import { M365ActivityPanel } from "./M365ActivityPanel";
+import type { Client, Topic, TimeEntry, FormData, TeamSummary, M365ActivityResponse } from "@/types";
 import { initialFormData } from "@/types";
 
 interface TimesheetsContentProps {
@@ -17,11 +19,18 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   const today = useMemo(() => new Date(), []);
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [teamSummaries, setTeamSummaries] = useState<TeamSummary[]>([]);
   const [datesWithEntries, setDatesWithEntries] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // M365 Activity state
+  const [isM365PanelOpen, setIsM365PanelOpen] = useState(false);
+  const [isM365Loading, setIsM365Loading] = useState(false);
+  const [m365Data, setM365Data] = useState<M365ActivityResponse | null>(null);
+  const [m365Error, setM365Error] = useState<string | null>(null);
 
   // Fetch entries for selected date
   const fetchEntries = useCallback(async (date: Date) => {
@@ -30,7 +39,16 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
       const response = await fetch(`/api/timesheets?date=${formatDateISO(date)}`);
       if (response.ok) {
         const data = await response.json();
-        setEntries(data);
+        // Handle both response shapes:
+        // - Array for regular users (backward compatible)
+        // - Object with entries + teamSummaries for ADMIN/PARTNER
+        if (Array.isArray(data)) {
+          setEntries(data);
+          setTeamSummaries([]);
+        } else {
+          setEntries(data.entries || []);
+          setTeamSummaries(data.teamSummaries || []);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch entries:", err);
@@ -54,9 +72,45 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     }
   }, []);
 
+  // Fetch M365 activity for selected date
+  const fetchM365Activity = useCallback(async () => {
+    setIsM365Loading(true);
+    setM365Error(null);
+    setIsM365PanelOpen(true);
+
+    try {
+      const response = await fetch(`/api/m365/activity?date=${formatDateISO(selectedDate)}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        setM365Error(data.error || "Failed to fetch M365 activity");
+        setM365Data(null);
+        return;
+      }
+
+      setM365Data(data);
+    } catch {
+      setM365Error("Connection failed. Check your internet.");
+      setM365Data(null);
+    } finally {
+      setIsM365Loading(false);
+    }
+  }, [selectedDate]);
+
+  // Close M365 panel
+  const closeM365Panel = useCallback(() => {
+    setIsM365PanelOpen(false);
+    setM365Data(null);
+    setM365Error(null);
+  }, []);
+
   // Fetch on date change
   useEffect(() => {
     fetchEntries(selectedDate);
+    // Close M365 panel when date changes
+    setIsM365PanelOpen(false);
+    setM365Data(null);
+    setM365Error(null);
   }, [selectedDate, fetchEntries]);
 
   // Fetch dots when month changes
@@ -74,13 +128,8 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   const goToNextWeek = useCallback(() => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + 7);
-    if (formatDateISO(newDate) <= formatDateISO(today)) {
-      setSelectedDate(newDate);
-    } else {
-      // If selectedDate + 7 would be in the future, navigate to today instead
-      setSelectedDate(today);
-    }
-  }, [selectedDate, today]);
+    setSelectedDate(newDate);
+  }, [selectedDate]);
 
   const goToToday = useCallback(() => {
     setSelectedDate(today);
@@ -173,7 +222,21 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         onPrevWeek={goToPrevWeek}
         onNextWeek={goToNextWeek}
         onGoToToday={goToToday}
+        onFetchM365Activity={fetchM365Activity}
+        isM365Loading={isM365Loading}
+        isM365PanelOpen={isM365PanelOpen}
       />
+
+      {/* M365 Activity Panel */}
+      {isM365PanelOpen && (
+        <M365ActivityPanel
+          data={m365Data}
+          isLoading={isM365Loading}
+          error={m365Error}
+          onClose={closeM365Panel}
+          date={formatDateISO(selectedDate)}
+        />
+      )}
 
       {/* Entry Form */}
       <EntryForm
@@ -191,6 +254,12 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         entries={entries}
         isLoadingEntries={isLoadingEntries}
         onDeleteEntry={deleteEntry}
+      />
+
+      {/* Team Timesheets (only shown for ADMIN/PARTNER) */}
+      <TeamTimesheets
+        summaries={teamSummaries}
+        selectedDate={selectedDate}
       />
     </div>
   );

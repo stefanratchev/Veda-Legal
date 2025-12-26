@@ -15,7 +15,7 @@ A modern timesheet management application for legal practice, built with Next.js
 - **Framework:** Next.js 16 (App Router) with TypeScript
 - **Styling:** Tailwind CSS v4 with custom design system
 - **Auth:** NextAuth.js with Azure AD
-- **Database:** PostgreSQL with Prisma ORM v7
+- **Database:** PostgreSQL with Drizzle ORM
 - **Testing:** Vitest + React Testing Library
 - **Target Platform:** Azure (EU region)
 
@@ -42,7 +42,7 @@ npm install
 cp .env.example .env
 # Edit .env with your configuration
 
-# Generate Prisma client
+# Generate Drizzle client
 npm run db:generate
 
 # Run database migrations
@@ -66,7 +66,7 @@ veda-legal-timesheets/
 │   │   ├── lib/           # Utilities and configurations
 │   │   ├── test/          # Test setup and utilities
 │   │   └── types/         # Shared TypeScript types
-│   ├── prisma/            # Database schema and migrations
+│   ├── drizzle/           # Database migrations
 │   └── package.json
 ├── docs/                   # Documentation and plans
 ├── CLAUDE.md              # AI assistant instructions
@@ -83,9 +83,9 @@ npm run build          # Production build
 npm run lint           # Run ESLint
 npm run test           # Run tests (Vitest)
 npm run test:coverage  # Run tests with coverage
-npm run db:generate    # Generate Prisma client
+npm run db:generate    # Generate Drizzle migrations
 npm run db:migrate     # Run migrations
-npm run db:studio      # Open Prisma Studio
+npm run db:studio      # Open Drizzle Studio
 ```
 
 ## Environment Variables

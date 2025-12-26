@@ -24,5 +24,6 @@ export function createMockRequest(options: MockRequestOptions): NextRequest {
     requestInit.body = JSON.stringify(body);
   }
 
-  return new NextRequest(fullUrl, requestInit);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new NextRequest(fullUrl, requestInit as any);
 }

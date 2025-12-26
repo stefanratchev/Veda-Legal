@@ -194,7 +194,7 @@ export const TopicCascadeSelect = forwardRef<
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
         className={`
-          w-full px-3 py-2 rounded text-left text-sm
+          w-full px-3 py-2.5 min-h-[44px] rounded text-left text-sm
           bg-[var(--bg-surface)] border border-[var(--border-subtle)]
           text-[var(--text-primary)]
           focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
@@ -236,11 +236,11 @@ export const TopicCascadeSelect = forwardRef<
         >
           {/* Header with back button when viewing subtopics */}
           {currentTopic && (
-            <div className="px-3 py-2 border-b border-[var(--border-subtle)] flex items-center gap-2">
+            <div className="px-3 py-2.5 min-h-[44px] border-b border-[var(--border-subtle)] flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleBack}
-                className="p-1 rounded hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
                 <svg
                   className="w-4 h-4"
@@ -273,7 +273,7 @@ export const TopicCascadeSelect = forwardRef<
                 currentTopic ? "Search subtopics..." : "Search topics..."
               }
               className="
-                w-full px-3 py-2 rounded-sm text-sm
+                w-full px-3 py-2.5 min-h-[44px] rounded-sm text-sm
                 bg-[var(--bg-surface)] border border-[var(--border-subtle)]
                 text-[var(--text-primary)] placeholder-[var(--text-muted)]
                 focus:border-[var(--border-accent)] focus:outline-none
@@ -297,7 +297,7 @@ export const TopicCascadeSelect = forwardRef<
                   onClick={() => handleSubtopicClick(subtopic)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={`
-                    w-full px-3 py-2 text-left text-sm
+                    w-full px-3 py-2.5 min-h-[44px] text-left text-sm
                     transition-colors
                     flex items-center gap-2
                     ${index === highlightedIndex ? "bg-[var(--bg-surface)]" : ""}
@@ -323,7 +323,7 @@ export const TopicCascadeSelect = forwardRef<
                   onClick={() => handleTopicClick(topic.id)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={`
-                    w-full px-3 py-2 text-left text-sm
+                    w-full px-3 py-2.5 min-h-[44px] text-left text-sm
                     transition-colors
                     flex items-center justify-between
                     ${index === highlightedIndex ? "bg-[var(--bg-surface)]" : ""}

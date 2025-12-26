@@ -182,7 +182,7 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
         onClick={handleToggle}
         disabled={disabled}
         className={`
-          w-full px-3 py-2 rounded text-sm font-medium
+          w-full px-3 py-2.5 min-h-[44px] rounded text-sm font-medium
           bg-[var(--bg-surface)] border border-[var(--border-subtle)]
           text-[var(--text-primary)]
           focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
@@ -224,7 +224,7 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
                     onClick={() => handleSelectHours(h)}
                     onMouseEnter={() => setHighlightedIndex(idx)}
                     className={`
-                      py-2 rounded text-sm font-medium
+                      py-2.5 min-h-[44px] rounded text-sm font-medium
                       transition-all duration-150
                       ${idx === highlightedIndex
                         ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
@@ -244,7 +244,7 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
                   onClick={() => handleSelectHours(0)}
                   onMouseEnter={() => setHighlightedIndex(9)}
                   className={`
-                    py-2 rounded text-sm font-medium
+                    py-2.5 min-h-[44px] rounded text-sm font-medium
                     transition-all duration-150
                     ${9 === highlightedIndex
                       ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
@@ -266,7 +266,7 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
                 <button
                   type="button"
                   onClick={() => setStep("hours")}
-                  className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+                  className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 19l-7-7 7-7" />
@@ -284,7 +284,7 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
                     onClick={() => handleSelectMinutes(m)}
                     onMouseEnter={() => setHighlightedIndex(idx)}
                     className={`
-                      py-2 rounded text-sm font-medium
+                      py-2.5 min-h-[44px] rounded text-sm font-medium
                       transition-all duration-150
                       ${idx === highlightedIndex
                         ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"

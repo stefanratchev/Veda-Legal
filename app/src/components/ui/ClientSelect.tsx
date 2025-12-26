@@ -111,7 +111,7 @@ export function ClientSelect({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
         className={`
-          w-full px-3 py-2 rounded text-left text-sm
+          w-full px-3 py-2.5 min-h-[44px] rounded text-left text-sm
           bg-[var(--bg-surface)] border border-[var(--border-subtle)]
           text-[var(--text-primary)]
           focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
@@ -148,7 +148,7 @@ export function ClientSelect({
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search clients..."
               className="
-                w-full px-3 py-2 rounded-sm text-sm
+                w-full px-3 py-2.5 min-h-[44px] rounded-sm text-sm
                 bg-[var(--bg-surface)] border border-[var(--border-subtle)]
                 text-[var(--text-primary)] placeholder-[var(--text-muted)]
                 focus:border-[var(--border-accent)] focus:outline-none
@@ -171,7 +171,7 @@ export function ClientSelect({
                   onClick={() => handleSelect(client.id)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={`
-                    w-full px-3 py-2 text-left text-sm
+                    w-full px-3 py-2.5 min-h-[44px] text-left text-sm
                     transition-colors
                     ${index === highlightedIndex ? "bg-[var(--bg-surface)]" : ""}
                     ${value === client.id ? "text-[var(--accent-pink)]" : ""}

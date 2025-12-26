@@ -8,21 +8,39 @@ import {
 } from "@/test/mocks/factories";
 
 // Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireAuth, mockGetUserFromSession, mockDb } = vi.hoisted(() => ({
-  mockRequireAuth: vi.fn(),
-  mockGetUserFromSession: vi.fn(),
-  mockDb: {
-    query: {
-      timeEntries: {
-        findFirst: vi.fn(),
+const { mockRequireAuth, mockGetUserFromSession, mockDb, mockSelectResult } = vi.hoisted(() => {
+  const mockSelectResult = vi.fn();
+  return {
+    mockRequireAuth: vi.fn(),
+    mockGetUserFromSession: vi.fn(),
+    mockSelectResult,
+    mockDb: {
+      query: {
+        timeEntries: {
+          findFirst: vi.fn(),
+        },
+        subtopics: {
+          findFirst: vi.fn(),
+        },
+        clients: {
+          findFirst: vi.fn(),
+        },
       },
-      subtopics: {
-        findFirst: vi.fn(),
-      },
+      update: vi.fn(),
+      select: vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          innerJoin: vi.fn().mockReturnValue({
+            innerJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                limit: mockSelectResult,
+              }),
+            }),
+          }),
+        }),
+      }),
     },
-    update: vi.fn(),
-  },
-}));
+  };
+});
 
 vi.mock("@/lib/db", () => ({
   db: mockDb,
@@ -61,6 +79,8 @@ function setupAuthenticatedUser(user: MockUser) {
 describe("PATCH /api/timesheets/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: entry is not billed (empty array means no finalized service description)
+    mockSelectResult.mockResolvedValue([]);
   });
 
   describe("Authentication", () => {
@@ -142,13 +162,12 @@ describe("PATCH /api/timesheets/[id]", () => {
 
     it("returns 403 when entry is linked to finalized service description", async () => {
       const user = createMockUser({ id: "user-1" });
-      const billedEntry = createMockTimeEntry({
-        userId: user.id,
-        serviceDescriptionId: "sd-123", // Entry is part of a service description
-      } as Partial<typeof billedEntry>);
+      const entry = createMockTimeEntry({ userId: user.id });
 
       setupAuthenticatedUser(user);
-      mockDb.query.timeEntries.findFirst.mockResolvedValue(billedEntry);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      // Mock the billing check to return a result (entry IS billed)
+      mockSelectResult.mockResolvedValue([{ status: "FINALIZED" }]);
 
       const request = createMockRequest({
         method: "PATCH",

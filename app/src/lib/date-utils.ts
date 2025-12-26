@@ -50,6 +50,16 @@ export function parseHoursToComponents(hours: number): { hours: number; minutes:
 }
 
 /**
+ * Convert decimal hours to hours and minutes without rounding.
+ * Use this when you need exact values (e.g., for editing).
+ */
+export function toHoursAndMinutes(decimalHours: number): { hours: number; minutes: number } {
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  return { hours, minutes };
+}
+
+/**
  * Convert hours and minutes to decimal hours
  */
 export function toDecimalHours(hours: number, minutes: number): number {

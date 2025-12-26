@@ -15,6 +15,7 @@ export default async function AuthenticatedLayout({
           name: user.name,
           position: user.position,
           initials: user.initials,
+          image: user.image,
         }}
         className="animate-slide-in"
       />

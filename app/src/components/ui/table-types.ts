@@ -51,6 +51,9 @@ export interface DataTableProps<TData> {
 
   /** Callback when a row is clicked */
   onRowClick?: (row: TData) => void;
+
+  /** Default sort state */
+  defaultSort?: SortState;
 }
 
 export interface TableFiltersProps {

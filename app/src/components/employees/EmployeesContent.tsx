@@ -37,23 +37,23 @@ const positionStyles: Record<
   { dotColor: string; textColor: string; label: string }
 > = {
   ADMIN: {
-    dotColor: "var(--accent-pink)",
-    textColor: "var(--text-primary)",
+    dotColor: "var(--text-muted)",
+    textColor: "var(--text-muted)",
     label: "Admin",
   },
   PARTNER: {
-    dotColor: "var(--accent-pink)",
+    dotColor: "#FF9999",
     textColor: "var(--text-primary)",
     label: "Partner",
   },
   SENIOR_ASSOCIATE: {
-    dotColor: "var(--text-secondary)",
-    textColor: "var(--text-secondary)",
+    dotColor: "#E8A5A5",
+    textColor: "var(--text-primary)",
     label: "Senior Associate",
   },
   ASSOCIATE: {
-    dotColor: "var(--text-muted)",
-    textColor: "var(--text-muted)",
+    dotColor: "#D4B0B0",
+    textColor: "var(--text-primary)",
     label: "Associate",
   },
   CONSULTANT: {
@@ -61,6 +61,15 @@ const positionStyles: Record<
     textColor: "var(--text-muted)",
     label: "Consultant",
   },
+};
+
+// Sort priority: lower = higher in hierarchy
+const positionPriority: Record<Position, number> = {
+  PARTNER: 0,
+  SENIOR_ASSOCIATE: 1,
+  ASSOCIATE: 2,
+  CONSULTANT: 3,
+  ADMIN: 4,
 };
 
 const statusStyles: Record<
@@ -151,27 +160,35 @@ export function EmployeesContent({
 
   // Filtered employees
   const filteredEmployees = useMemo(() => {
-    return employees.filter((employee) => {
-      // Status filter
-      if (statusFilter === "ALL_ACTIVE" && employee.status === "INACTIVE") {
-        return false;
-      }
-      if (statusFilter === "PENDING" && employee.status !== "PENDING") {
-        return false;
-      }
-      // Position filter
-      if (positionFilter !== "ALL" && employee.position !== positionFilter) {
-        return false;
-      }
-      // Search
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesName = employee.name?.toLowerCase().includes(query) ?? false;
-        const matchesEmail = employee.email.toLowerCase().includes(query);
-        return matchesName || matchesEmail;
-      }
-      return true;
-    });
+    return employees
+      .filter((employee) => {
+        // Status filter
+        if (statusFilter === "ALL_ACTIVE" && employee.status === "INACTIVE") {
+          return false;
+        }
+        if (statusFilter === "PENDING" && employee.status !== "PENDING") {
+          return false;
+        }
+        // Position filter
+        if (positionFilter !== "ALL" && employee.position !== positionFilter) {
+          return false;
+        }
+        // Search
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          const matchesName = employee.name?.toLowerCase().includes(query) ?? false;
+          const matchesEmail = employee.email.toLowerCase().includes(query);
+          return matchesName || matchesEmail;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        // Primary: position hierarchy
+        const posDiff = positionPriority[a.position] - positionPriority[b.position];
+        if (posDiff !== 0) return posDiff;
+        // Secondary: oldest first (ascending createdAt)
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
   }, [employees, searchQuery, positionFilter, statusFilter]);
 
   // Modal handlers
@@ -224,7 +241,7 @@ export function EmployeesContent({
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Failed to update employee");
+        setError(data.error || "Failed to update");
         return;
       }
 
@@ -233,7 +250,7 @@ export function EmployeesContent({
       );
       closeModal();
     } catch {
-      setError("Failed to update employee");
+      setError("Failed to update");
     } finally {
       setIsLoading(false);
     }
@@ -258,14 +275,14 @@ export function EmployeesContent({
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Failed to create employee");
+        setError(data.error || "Failed to add team member");
         return;
       }
 
       setEmployees((prev) => [data, ...prev]);
       closeModal();
     } catch {
-      setError("Failed to create employee");
+      setError("Failed to add team member");
     } finally {
       setIsLoading(false);
     }
@@ -286,7 +303,7 @@ export function EmployeesContent({
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || "Failed to deactivate employee");
+        alert(data.error || "Failed to deactivate");
         return;
       }
 
@@ -295,7 +312,7 @@ export function EmployeesContent({
         prev.map((e) => (e.id === employee.id ? updated : e))
       );
     } catch {
-      alert("Failed to deactivate employee");
+      alert("Failed to deactivate");
     }
   }, []);
 
@@ -310,7 +327,7 @@ export function EmployeesContent({
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || "Failed to reactivate employee");
+        alert(data.error || "Failed to reactivate");
         return;
       }
 
@@ -319,7 +336,7 @@ export function EmployeesContent({
         prev.map((e) => (e.id === employee.id ? updated : e))
       );
     } catch {
-      alert("Failed to reactivate employee");
+      alert("Failed to reactivate");
     }
   }, []);
 
@@ -349,7 +366,7 @@ export function EmployeesContent({
       {
         id: "position",
         header: "Position",
-        accessor: (employee) => employee.position,
+        accessor: (employee) => positionPriority[employee.position],
         cell: (employee) => {
           const style = positionStyles[employee.position];
           return (
@@ -357,10 +374,26 @@ export function EmployeesContent({
               className="flex items-center gap-2 text-xs font-medium"
               style={{ color: style.textColor }}
             >
-              <span
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: style.dotColor }}
-              />
+              {employee.position === "PARTNER" ? (
+                <span
+                  className="text-[10px] flex-shrink-0"
+                  style={{ color: style.dotColor }}
+                >
+                  ★
+                </span>
+              ) : employee.position === "SENIOR_ASSOCIATE" ? (
+                <span
+                  className="text-[14px] flex-shrink-0"
+                  style={{ color: style.dotColor }}
+                >
+                  ◆
+                </span>
+              ) : employee.position === "ASSOCIATE" ? (
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: style.dotColor }}
+                />
+              ) : null}
               {style.label}
             </span>
           );
@@ -424,7 +457,7 @@ export function EmployeesContent({
               <button
                 onClick={() => openEditModal(employee)}
                 className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
-                title="Edit employee"
+                title="Edit"
               >
                 <svg
                   className="w-3.5 h-3.5"
@@ -444,7 +477,7 @@ export function EmployeesContent({
                 <button
                   onClick={() => handleReactivate(employee)}
                   className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-green-400 hover:bg-[var(--bg-surface)] transition-colors"
-                  title="Reactivate employee"
+                  title="Reactivate"
                 >
                   <svg
                     className="w-3.5 h-3.5"
@@ -469,7 +502,7 @@ export function EmployeesContent({
                       ? "text-[var(--text-muted)] opacity-30 cursor-not-allowed"
                       : "text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--bg-surface)]"
                   }`}
-                  title={isSelf ? "You cannot deactivate yourself" : "Deactivate employee"}
+                  title={isSelf ? "You cannot deactivate yourself" : "Deactivate"}
                 >
                   <svg
                     className="w-3.5 h-3.5"
@@ -518,7 +551,7 @@ export function EmployeesContent({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">
-            Employees
+            Team
           </h1>
           <p className="text-[var(--text-muted)] text-[13px] mt-0.5">
             {readOnly
@@ -529,12 +562,9 @@ export function EmployeesContent({
         {!readOnly && (
           <button
             onClick={openCreateModal}
-            className="flex items-center gap-2 px-3 py-1.5 rounded bg-[var(--accent-pink)] text-[var(--bg-deep)] text-[13px] font-medium hover:bg-[var(--accent-pink-dim)] transition-colors"
+            className="px-3 py-1.5 rounded bg-[var(--accent-pink)] text-[var(--bg-deep)] text-[13px] font-medium hover:bg-[var(--accent-pink-dim)] transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Employee
+            + Add Team Member
           </button>
         )}
       </div>
@@ -620,8 +650,9 @@ export function EmployeesContent({
         columns={columns}
         getRowKey={(employee) => employee.id}
         pageSize={25}
+        defaultSort={{ columnId: "position", direction: "asc" }}
         emptyMessage={
-          employees.length === 0 ? "No employees yet" : "No matching employees"
+          employees.length === 0 ? "No team members yet" : "No matching team members"
         }
         emptyIcon={emptyIcon}
       />

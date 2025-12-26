@@ -14,6 +14,11 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
 // Icons as constants to avoid repetition
 const Icons = {
   clients: (
@@ -48,13 +53,33 @@ const Icons = {
   ),
 };
 
-const navItems: NavItem[] = [
-  { name: "Clients", href: "/clients", icon: Icons.clients, adminOnly: true },
-  { name: "Topics", href: "/topics", icon: Icons.topics, adminOnly: true },
-  { name: "Team", href: "/team", icon: Icons.employees },
-  { name: "Timesheets", href: "/timesheets", icon: Icons.timesheets },
-  { name: "Billing", href: "/billing", icon: Icons.billing, adminOnly: true },
-  { name: "Reports", href: "/reports", icon: Icons.reports, adminOnly: true },
+const navSections: NavSection[] = [
+  {
+    label: "CLIENTS & MATTERS",
+    items: [
+      { name: "Clients", href: "/clients", icon: Icons.clients, adminOnly: true },
+      { name: "Topics", href: "/topics", icon: Icons.topics, adminOnly: true },
+    ],
+  },
+  {
+    label: "TIME RECORDING",
+    items: [
+      { name: "Timesheets", href: "/timesheets", icon: Icons.timesheets },
+    ],
+  },
+  {
+    label: "FINANCIALS",
+    items: [
+      { name: "Billing", href: "/billing", icon: Icons.billing, adminOnly: true },
+      { name: "Reports", href: "/reports", icon: Icons.reports, adminOnly: true },
+    ],
+  },
+  {
+    label: "PRACTICE",
+    items: [
+      { name: "Team", href: "/team", icon: Icons.employees },
+    ],
+  },
 ];
 
 // Format position for display (SENIOR_ASSOCIATE → "Senior Associate")
@@ -87,9 +112,6 @@ export function Sidebar({ user, className }: SidebarProps) {
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   useClickOutside(userMenuRef, () => setShowUserMenu(false), showUserMenu);
-
-  // Filter nav items based on role
-  const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = pathname === item.href;
@@ -131,11 +153,23 @@ export function Sidebar({ user, className }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-3">
-        <div className="space-y-1">
-          {visibleNavItems.map((item) => (
-            <NavItemComponent key={item.name} item={item} />
-          ))}
-        </div>
+        {navSections.map((section, sectionIndex) => {
+          const visibleItems = section.items.filter((item) => !item.adminOnly || isAdmin);
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={section.label} className={sectionIndex === 0 ? "" : "pt-4"}>
+              <p className="px-3 pb-2 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                {section.label}
+              </p>
+              <div className="space-y-1">
+                {visibleItems.map((item) => (
+                  <NavItemComponent key={item.name} item={item} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </nav>
 
       {/* User Profile Footer */}

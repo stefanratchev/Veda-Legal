@@ -58,10 +58,10 @@ describe("date-utils", () => {
   });
 
   describe("getWeekDays", () => {
-    it("returns 5 weekdays (Mon-Fri)", () => {
+    it("returns 7 days (Mon-Sun)", () => {
       const date = new Date("2024-12-18"); // Wednesday
       const days = getWeekDays(date);
-      expect(days).toHaveLength(5);
+      expect(days).toHaveLength(7);
     });
 
     it("starts on Monday", () => {
@@ -70,10 +70,10 @@ describe("date-utils", () => {
       expect(days[0].getDay()).toBe(1); // Monday
     });
 
-    it("ends on Friday", () => {
+    it("ends on Sunday", () => {
       const date = new Date("2024-12-18"); // Wednesday
       const days = getWeekDays(date);
-      expect(days[4].getDay()).toBe(5); // Friday
+      expect(days[6].getDay()).toBe(0); // Sunday
     });
   });
 

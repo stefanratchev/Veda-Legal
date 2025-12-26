@@ -85,13 +85,8 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   const goToNextWeek = useCallback(() => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + 7);
-    if (formatDateISO(newDate) <= formatDateISO(today)) {
-      setSelectedDate(newDate);
-    } else {
-      // If selectedDate + 7 would be in the future, navigate to today instead
-      setSelectedDate(today);
-    }
-  }, [selectedDate, today]);
+    setSelectedDate(newDate);
+  }, [selectedDate]);
 
   const goToToday = useCallback(() => {
     setSelectedDate(today);

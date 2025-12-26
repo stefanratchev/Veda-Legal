@@ -43,12 +43,14 @@ export function EntryCard({ entry, onEditClick, onDeleteClick, readOnly = false 
             <span className="text-[11px] text-[var(--text-muted)] italic">Billed</span>
           ) : (
             <>
-              <button
-                onClick={onEditClick}
-                className="px-2.5 py-1 rounded text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--accent-pink)] hover:bg-[var(--accent-pink-glow)] transition-colors"
-              >
-                Edit
-              </button>
+              {onEditClick && (
+                <button
+                  onClick={onEditClick}
+                  className="px-2.5 py-1 rounded text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--accent-pink)] hover:bg-[var(--accent-pink-glow)] transition-colors"
+                >
+                  Edit
+                </button>
+              )}
               <button
                 onClick={onDeleteClick}
                 className="px-2.5 py-1 rounded text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-colors"

@@ -8,28 +8,42 @@ import {
 } from "@/test/mocks/factories";
 
 // Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireAuth, mockGetUserFromSession, mockCanViewTeamTimesheets, mockDb } = vi.hoisted(() => ({
-  mockRequireAuth: vi.fn(),
-  mockGetUserFromSession: vi.fn(),
-  mockCanViewTeamTimesheets: vi.fn(),
-  mockDb: {
-    query: {
-      timeEntries: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
+const { mockRequireAuth, mockGetUserFromSession, mockCanViewTeamTimesheets, mockDb } = vi.hoisted(() => {
+  // Create a chainable mock for billing table queries (used by getLockedEntryIds)
+  // This chain uses innerJoin and is called first
+  const mockBillingChain = {
+    from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    where: vi.fn().mockResolvedValue([]), // Default: no entries are locked
+  };
+
+  // Main select mock - returns billing chain by default
+  // Tests that need team summaries will override this
+  const mockSelect = vi.fn().mockReturnValue(mockBillingChain);
+
+  return {
+    mockRequireAuth: vi.fn(),
+    mockGetUserFromSession: vi.fn(),
+    mockCanViewTeamTimesheets: vi.fn(),
+    mockDb: {
+      query: {
+        timeEntries: {
+          findMany: vi.fn(),
+          findFirst: vi.fn(),
+        },
+        clients: {
+          findFirst: vi.fn(),
+        },
+        subtopics: {
+          findFirst: vi.fn(),
+        },
       },
-      clients: {
-        findFirst: vi.fn(),
-      },
-      subtopics: {
-        findFirst: vi.fn(),
-      },
+      select: mockSelect,
+      insert: vi.fn(),
+      delete: vi.fn(),
     },
-    select: vi.fn(),
-    insert: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
+  };
+});
 
 vi.mock("@/lib/db", () => ({
   db: mockDb,
@@ -235,7 +249,15 @@ describe("GET /api/timesheets", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
-      mockDb.select.mockReturnValue({
+
+      // First call: billing check (innerJoin chain)
+      const billingChain = {
+        from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([]),
+      };
+      // Second call: team summaries (leftJoin chain)
+      const teamSummariesChain = {
         from: vi.fn().mockReturnValue({
           leftJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
@@ -247,7 +269,10 @@ describe("GET /api/timesheets", () => {
             }),
           }),
         }),
-      });
+      };
+      mockDb.select
+        .mockReturnValueOnce(billingChain)
+        .mockReturnValueOnce(teamSummariesChain);
 
       const request = createMockRequest({
         method: "GET",
@@ -269,7 +294,15 @@ describe("GET /api/timesheets", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
-      mockDb.select.mockReturnValue({
+
+      // First call: billing check (innerJoin chain)
+      const billingChain = {
+        from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([]),
+      };
+      // Second call: team summaries (leftJoin chain)
+      const teamSummariesChain = {
         from: vi.fn().mockReturnValue({
           leftJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
@@ -281,7 +314,10 @@ describe("GET /api/timesheets", () => {
             }),
           }),
         }),
-      });
+      };
+      mockDb.select
+        .mockReturnValueOnce(billingChain)
+        .mockReturnValueOnce(teamSummariesChain);
 
       const request = createMockRequest({
         method: "GET",

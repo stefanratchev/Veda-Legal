@@ -17,6 +17,9 @@ interface EntryFormProps {
   error: string | null;
   onFormChange: (updates: Partial<FormData>) => void;
   onSubmit: () => void;
+  // Edit mode props
+  isEditMode?: boolean;
+  onCancel?: () => void;
 }
 
 export function EntryForm({
@@ -27,6 +30,8 @@ export function EntryForm({
   error,
   onFormChange,
   onSubmit,
+  isEditMode = false,
+  onCancel,
 }: EntryFormProps) {
   const topicSelectRef = useRef<TopicCascadeSelectRef>(null);
   const durationPickerRef = useRef<DurationPickerRef>(null);
@@ -134,22 +139,39 @@ export function EntryForm({
           `}
         />
 
-        {/* Submit Button */}
-        <button
-          onClick={onSubmit}
-          disabled={!canSubmit || isLoading}
-          className="
-            px-4 py-2 rounded flex-shrink-0
-            bg-[var(--accent-pink)] text-[var(--bg-deep)]
-            font-semibold text-sm
-            hover:bg-[var(--accent-pink-dim)]
-            disabled:opacity-50 disabled:cursor-not-allowed
-            transition-all duration-200
-            shadow-lg shadow-[var(--accent-pink-glow)]
-          "
-        >
-          {isLoading ? "..." : "Log"}
-        </button>
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
+          {isEditMode && onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="
+                px-3 py-2 rounded flex-shrink-0
+                text-[var(--text-secondary)] text-sm
+                bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                hover:border-[var(--border-accent)]
+                transition-colors
+              "
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            onClick={onSubmit}
+            disabled={!canSubmit || isLoading}
+            className="
+              px-4 py-2 rounded flex-shrink-0
+              bg-[var(--accent-pink)] text-[var(--bg-deep)]
+              font-semibold text-sm
+              hover:bg-[var(--accent-pink-dim)]
+              disabled:opacity-50 disabled:cursor-not-allowed
+              transition-all duration-200
+              shadow-lg shadow-[var(--accent-pink-glow)]
+            "
+          >
+            {isLoading ? "..." : isEditMode ? "Save" : "Log"}
+          </button>
+        </div>
       </div>
 
       {/* Error Message */}

@@ -173,8 +173,8 @@ export function Sidebar({ user, className }: SidebarProps) {
       <aside
         ref={sidebarRef}
         className={`
-          fixed left-0 top-0 h-screen w-[240px]
-          bg-[var(--bg-elevated)] border-r border-[var(--border-subtle)]
+          fixed left-0 top-0 h-screen w-full lg:w-[240px]
+          bg-[var(--bg-elevated)] lg:border-r border-[var(--border-subtle)]
           flex flex-col z-50
           transition-transform duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
@@ -182,8 +182,8 @@ export function Sidebar({ user, className }: SidebarProps) {
           ${className || ""}
         `}
       >
-      {/* Logo */}
-      <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
+      {/* Header with Logo and Close button */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-subtle)]">
         <Image
           src="/logo.svg"
           alt="Veda Legal"
@@ -191,6 +191,16 @@ export function Sidebar({ user, className }: SidebarProps) {
           height={72}
           priority
         />
+        {/* Close button - mobile only */}
+        <button
+          onClick={close}
+          className="p-2 -mr-2 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors lg:hidden"
+          aria-label="Close navigation menu"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* Navigation */}

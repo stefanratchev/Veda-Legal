@@ -1,6 +1,51 @@
 import { vi } from "vitest";
 import type { MockUser } from "./factories";
 
+export type MockSession = {
+  user: {
+    name?: string | null;
+    email?: string | null;
+  };
+  expires: string;
+};
+
+export function createMockSession(user?: MockUser): MockSession {
+  return {
+    user: {
+      name: user?.name ?? "Test User",
+      email: user?.email ?? "test@example.com",
+    },
+    expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+// Helper to set up authenticated state for API route tests (alternative pattern)
+export function setupMockAuth(mocks: {
+  requireAuth: ReturnType<typeof vi.fn>;
+  getUserFromSession?: ReturnType<typeof vi.fn>;
+  user: MockUser;
+}) {
+  mocks.requireAuth.mockResolvedValue({
+    session: { user: { name: mocks.user.name, email: mocks.user.email } },
+  });
+
+  if (mocks.getUserFromSession) {
+    mocks.getUserFromSession.mockResolvedValue({
+      id: mocks.user.id,
+      email: mocks.user.email,
+      name: mocks.user.name,
+      position: mocks.user.position,
+    });
+  }
+}
+
+// Helper to set up unauthenticated state (alternative pattern)
+export function setupMockAuthUnauthorized(mocks: {
+  requireAuth: ReturnType<typeof vi.fn>;
+}) {
+  mocks.requireAuth.mockResolvedValue({ error: "Unauthorized", status: 401 });
+}
+
 // Store mock state
 let mockAuthState: {
   authenticated: boolean;

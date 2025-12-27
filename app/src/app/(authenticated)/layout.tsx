@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/user";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { MobileHeader } from "@/components/layout/MobileHeader";
 import { MobileNavProvider } from "@/contexts/MobileNavContext";
 
 export default async function AuthenticatedLayout({
@@ -21,7 +22,8 @@ export default async function AuthenticatedLayout({
           }}
           className="animate-slide-in"
         />
-        <main className="flex-1 lg:ml-[240px]">
+        <main className="flex-1 lg:ml-[240px] overflow-x-hidden min-w-0">
+          <MobileHeader />
           <div className="px-3 py-4 md:px-4 lg:px-6 lg:py-5">{children}</div>
         </main>
       </div>

@@ -1,5 +1,64 @@
 import { vi } from "vitest";
 
+/**
+ * Creates a mock database object for Drizzle ORM tests.
+ * Use with vi.mock('@/lib/db', () => ({ db: createMockDb() }))
+ */
+export function createMockDb() {
+  return {
+    query: {
+      users: { findFirst: vi.fn(), findMany: vi.fn() },
+      clients: { findFirst: vi.fn(), findMany: vi.fn() },
+      timeEntries: { findFirst: vi.fn(), findMany: vi.fn() },
+      topics: { findFirst: vi.fn(), findMany: vi.fn() },
+      subtopics: { findFirst: vi.fn(), findMany: vi.fn() },
+      billing: { findFirst: vi.fn(), findMany: vi.fn() },
+    },
+    select: vi.fn(),
+    insert: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  };
+}
+
+/**
+ * Helper to create chainable mock for insert().values().returning()
+ */
+export function mockInsertReturning<T>(data: T) {
+  return {
+    values: vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([data]),
+    }),
+  };
+}
+
+/**
+ * Helper to create chainable mock for update().set().where().returning()
+ */
+export function mockUpdateReturning<T>(data: T | null) {
+  return {
+    set: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue(data ? [data] : []),
+      }),
+    }),
+  };
+}
+
+/**
+ * Helper to create chainable mock for delete().where()
+ */
+export function mockDeleteWhere() {
+  return {
+    where: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+// ============================================================================
+// Legacy stateful mocking API (kept for backward compatibility)
+// Consider using createMockDb() and the chainable helpers above instead
+// ============================================================================
+
 // Store mock query results
 let mockQueryResults: {
   timeEntries: {
@@ -78,8 +137,11 @@ export const mockDbSelect = {
   },
 };
 
-// Create the mock db object
-export function createDbMock() {
+/**
+ * @deprecated Use createMockDb() instead
+ * Legacy stateful mock - creates a db mock that reads from module-level state
+ */
+export function createStatefulDbMock() {
   return {
     query: {
       timeEntries: {

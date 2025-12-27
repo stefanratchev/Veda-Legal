@@ -63,6 +63,7 @@ app/src/
 │   ├── timesheets/        # WeekStrip, EntryForm, EntryCard
 │   ├── topics/            # TopicsContent, TopicModal, SubtopicModal
 │   └── ui/                # DataTable, TableFilters, DurationPicker, ClientSelect, TopicCascadeSelect
+├── contexts/              # React context providers (MobileNavContext)
 ├── hooks/                 # Custom React hooks (useClickOutside)
 ├── lib/                   # Utilities
 │   ├── api-utils.ts       # Auth helpers, validation functions
@@ -147,11 +148,19 @@ Dark theme with CSS variables in `globals.css`:
 
 ## Testing
 
+**Requirement:** New features must include unit and integration tests. Tests are not optional—they are part of the definition of done for any feature work.
+
 Tests are colocated with source files (e.g., `lib/date-utils.test.ts`). Run with:
 ```bash
 npm run test              # Watch mode
 npm run test -- api-utils # Run specific file
+npm run test -- --run     # Run all tests once (no watch)
 ```
+
+**Test utilities in `src/test/`:**
+- `utils.tsx` - `renderWithProviders()` wraps components with required contexts
+- `mocks/auth.ts` - `createMockSession()`, `setupMockAuth()` for NextAuth mocking
+- `mocks/db.ts` - `createMockDb()` for Drizzle ORM mocking with chainable methods
 
 ## Environment Variables
 
@@ -186,6 +195,8 @@ DATABASE_URL="<prod-url>" npm run db:seed-topics          # Production
 ```
 
 ## Production Deployment
+
+**Pre-deployment requirement:** Always run tests before deploying to production. Deployment must fail if tests don't pass—never skip this step, even if not explicitly requested.
 
 **Deployment method:** Push to `prod` branch triggers GitHub Actions workflow (`.github/workflows/deploy-prod.yml`)
 

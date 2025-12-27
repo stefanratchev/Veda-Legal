@@ -121,6 +121,10 @@
 .delay-5 { animation-delay: 0.5s; }
 
 /* Base styles */
+html, body {
+  overflow-x: hidden;
+}
+
 body {
   background: var(--bg-deep);
   color: var(--text-primary);

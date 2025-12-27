@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Roboto, Roboto_Condensed } from "next/font/google";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
@@ -16,6 +16,13 @@ const robotoCondensed = Roboto_Condensed({
   weight: ["300", "400", "700"],
   display: "swap",
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+};
 
 export const metadata: Metadata = {
   title: "VEDA Legal - Practice Management",

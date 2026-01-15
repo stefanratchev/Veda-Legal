@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import { useMobileNav } from "@/contexts/MobileNavContext";
+import { useSidebar } from "@/contexts/SidebarContext";
 
 interface NavItem {
   name: string;
@@ -113,6 +114,11 @@ export function Sidebar({ user, className }: SidebarProps) {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const { isOpen, close } = useMobileNav();
+  const { isCollapsed, setIsCollapsed } = useSidebar();
+
+  // Drag resize state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
 
   useClickOutside(userMenuRef, () => setShowUserMenu(false), showUserMenu);
   useClickOutside(sidebarRef, () => {
@@ -136,28 +142,82 @@ export function Sidebar({ user, className }: SidebarProps) {
     };
   }, [isOpen]);
 
+  // Resize handle drag logic
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setDragWidth(isCollapsed ? 56 : 220);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Clamp between 40px and 300px during drag
+      const newWidth = Math.max(40, Math.min(300, e.clientX));
+      setDragWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      // Capture dragWidth before clearing (closure still has current value)
+      const finalWidth = dragWidth ?? (isCollapsed ? 56 : 220);
+
+      setIsDragging(false);
+      setDragWidth(null);
+
+      // Snap to collapsed if < 140px, otherwise expanded
+      const shouldCollapse = finalWidth < 140;
+      setIsCollapsed(shouldCollapse);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragWidth, isCollapsed]);
+
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = pathname === item.href;
+    const [showTooltip, setShowTooltip] = useState(false);
 
     return (
-      <Link
-        href={item.href}
-        className={`
-          relative flex items-center gap-2.5 px-3 py-2 rounded
-          text-[13px] font-medium transition-all duration-200
-          ${isActive
-            ? "text-[var(--text-primary)] bg-gradient-to-r from-[var(--accent-pink-glow)] to-transparent"
-            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-          }
-          before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2
-          before:w-[2px] before:rounded-r-sm before:bg-[var(--accent-pink)]
-          before:transition-all before:duration-200
-          ${isActive ? "before:h-6" : "before:h-0 hover:before:h-5"}
-        `}
-      >
-        <span className={`flex-shrink-0 ${isActive ? "text-[var(--accent-pink)]" : ""}`}>{item.icon}</span>
-        <span className="truncate">{item.name}</span>
-      </Link>
+      <div className="relative">
+        <Link
+          href={item.href}
+          onMouseEnter={() => isCollapsed && setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+          className={`
+            relative flex items-center gap-2.5 rounded
+            text-[13px] font-medium transition-all duration-200
+            ${isCollapsed ? 'px-0 py-2 justify-center' : 'px-3 py-2'}
+            ${isActive
+              ? "text-[var(--text-primary)] bg-gradient-to-r from-[var(--accent-pink-glow)] to-transparent"
+              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            }
+            before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2
+            before:w-[2px] before:rounded-r-sm before:bg-[var(--accent-pink)]
+            before:transition-all before:duration-200
+            ${isActive ? "before:h-6" : "before:h-0 hover:before:h-5"}
+          `}
+        >
+          <span className={`flex-shrink-0 ${isActive ? "text-[var(--accent-pink)]" : ""}`}>
+            {item.icon}
+          </span>
+          {!isCollapsed && <span className="truncate">{item.name}</span>}
+        </Link>
+
+        {/* Tooltip - collapsed state only */}
+        {showTooltip && isCollapsed && (
+          <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 pointer-events-none">
+            <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded px-2 py-1 text-[12px] text-[var(--text-primary)] whitespace-nowrap shadow-lg">
+              {item.name}
+            </div>
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -172,29 +232,51 @@ export function Sidebar({ user, className }: SidebarProps) {
       )}
       <aside
         ref={sidebarRef}
+        style={isDragging && dragWidth !== null ? { width: dragWidth } : undefined}
         className={`
-          fixed left-0 top-0 h-screen w-full lg:w-[240px]
+          fixed left-0 top-0 h-screen
+          ${isDragging ? 'w-auto' : isCollapsed ? 'w-full lg:w-[56px]' : 'w-full lg:w-[220px]'}
           bg-[var(--bg-elevated)] lg:border-r border-[var(--border-subtle)]
           flex flex-col z-50
           transition-transform duration-300 ease-in-out
-          ${isOpen ? "translate-x-0" : "-translate-x-full"}
-          lg:translate-x-0 lg:transition-none
-          ${className || ""}
+          ${!isDragging ? 'lg:transition-[width] lg:duration-200' : ''}
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0
+          ${className || ''}
         `}
       >
       {/* Header with Logo and Close button */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-subtle)]">
+      <div className={`
+        flex items-center border-b border-[var(--border-subtle)]
+        ${isCollapsed ? 'justify-center px-2 py-4' : 'justify-between px-5 py-4'}
+      `}>
+        {isCollapsed ? (
+          <Image
+            src="/logo-icon.svg"
+            alt="Veda Legal"
+            width={32}
+            height={32}
+            priority
+            className="hidden lg:block"
+          />
+        ) : null}
         <Image
           src="/logo.svg"
           alt="Veda Legal"
           width={180}
           height={72}
           priority
+          className={isCollapsed ? 'lg:hidden' : ''}
         />
         {/* Close button - mobile only */}
         <button
           onClick={close}
-          className="p-2 -mr-2 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors lg:hidden"
+          className={`
+            p-2 -mr-2 rounded text-[var(--text-secondary)]
+            hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]
+            transition-colors lg:hidden
+            ${isCollapsed ? 'mr-0' : '-mr-2'}
+          `}
           aria-label="Close navigation menu"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -211,9 +293,11 @@ export function Sidebar({ user, className }: SidebarProps) {
 
           return (
             <div key={section.label} className={sectionIndex === 0 ? "" : "pt-4"}>
-              <p className="px-3 pb-2 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                {section.label}
-              </p>
+              {!isCollapsed && (
+                <p className="px-3 pb-2 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                  {section.label}
+                </p>
+              )}
               <div className="space-y-1">
                 {visibleItems.map((item) => (
                   <NavItemComponent key={item.name} item={item} />
@@ -226,11 +310,14 @@ export function Sidebar({ user, className }: SidebarProps) {
 
       {/* User Profile Footer */}
       {user && (
-        <div className="p-3 border-t border-[var(--border-subtle)]" ref={userMenuRef}>
+        <div className={`p-3 border-t border-[var(--border-subtle)] ${isCollapsed ? 'flex justify-center' : ''}`} ref={userMenuRef}>
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+              className={`
+                flex items-center rounded hover:bg-[var(--bg-hover)] transition-colors cursor-pointer
+                ${isCollapsed ? 'p-1 justify-center' : 'w-full gap-2.5 px-2 py-2'}
+              `}
             >
               {user.image ? (
                 /* eslint-disable-next-line @next/next/no-img-element -- base64 data URL doesn't benefit from next/image optimization */
@@ -244,28 +331,35 @@ export function Sidebar({ user, className }: SidebarProps) {
                   {user.initials}
                 </div>
               )}
-              <div className="flex-1 min-w-0 text-left">
-                <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
-                  {user.name}
-                </p>
-                <p className="text-[11px] text-[var(--text-muted)] leading-tight">{formatPosition(user.position)}</p>
-              </div>
-              <svg
-                className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${showUserMenu ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 9l-7 7-7-7" />
-              </svg>
+              {!isCollapsed && (
+                <>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
+                      {user.name}
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)] leading-tight">{formatPosition(user.position)}</p>
+                  </div>
+                  <svg
+                    className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </>
+              )}
             </button>
 
             {/* Dropdown Menu */}
             {showUserMenu && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg shadow-lg overflow-hidden animate-fade-up">
+              <div className={`
+                absolute mb-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg shadow-lg overflow-hidden animate-fade-up
+                ${isCollapsed ? 'bottom-full left-full ml-1' : 'bottom-full left-0 right-0'}
+              `}>
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors whitespace-nowrap"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -275,14 +369,24 @@ export function Sidebar({ user, className }: SidebarProps) {
               </div>
             )}
           </div>
-          {/* Version indicator - admin only */}
-          {isAdmin && (
+          {/* Version indicator - admin only, hidden when collapsed */}
+          {isAdmin && !isCollapsed && (
             <p className="text-[9px] text-[var(--text-muted)] text-center mt-2 opacity-50">
               {process.env.NEXT_PUBLIC_BUILD_ID}
             </p>
           )}
         </div>
       )}
+
+      {/* Resize handle - desktop only */}
+      <div
+        onMouseDown={handleMouseDown}
+        className={`
+          hidden lg:block absolute right-0 top-0 bottom-0 w-2 cursor-col-resize
+          hover:bg-white/10 transition-colors
+          ${isDragging ? 'bg-white/10' : ''}
+        `}
+      />
       </aside>
     </>
   );

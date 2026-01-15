@@ -131,11 +131,11 @@ export function AddTopicModal({ isLoading, error, defaultHourlyRate, onSubmit, o
                   step="0.01"
                   min="0"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">BGN/h</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">EUR/h</span>
               </div>
               {defaultHourlyRate && !hourlyRate && (
                 <p className="mt-1 text-xs text-[var(--text-muted)]">
-                  Client default rate: {defaultHourlyRate} BGN/h
+                  Client default rate: {defaultHourlyRate} EUR/h
                 </p>
               )}
             </div>
@@ -154,7 +154,7 @@ export function AddTopicModal({ isLoading, error, defaultHourlyRate, onSubmit, o
                   step="0.01"
                   min="0"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">BGN</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">EUR</span>
               </div>
             </div>
           )}

@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { TableFilters } from "@/components/ui/TableFilters";
 import { ColumnDef } from "@/components/ui/table-types";
 import { CreateServiceDescriptionModal } from "./CreateServiceDescriptionModal";
+import { UnbilledClientsSection } from "./UnbilledClientsSection";
 import { ServiceDescriptionStatus } from "@/types";
 
 interface ServiceDescriptionListItem {
@@ -65,11 +66,6 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
       return true;
     });
   }, [serviceDescriptions, searchQuery, statusFilter]);
-
-  const openCreateModal = useCallback(() => {
-    setCreateError(null);
-    setShowCreateModal(true);
-  }, []);
 
   const closeCreateModal = useCallback(() => {
     setShowCreateModal(false);
@@ -164,7 +160,7 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
         align: "right",
         cell: (sd) => (
           <span className="text-[13px] text-[var(--text-secondary)]">
-            {sd.totalAmount > 0 ? `${sd.totalAmount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BGN` : "-"}
+            {sd.totalAmount > 0 ? `€${sd.totalAmount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
           </span>
         ),
       },
@@ -212,35 +208,31 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">Billing</h1>
-          <p className="text-[var(--text-muted)] text-[13px] mt-0.5">Manage service descriptions and billing</p>
-        </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-1.5 px-4 py-2 rounded bg-[var(--accent-pink)] text-[var(--bg-deep)] font-medium text-[13px] hover:bg-[var(--accent-pink-dim)] transition-colors duration-200"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-          </svg>
-          New Service Description
-        </button>
+      <div>
+        <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">Billing</h1>
+        <p className="text-[var(--text-muted)] text-[13px] mt-0.5">Manage service descriptions and billing</p>
       </div>
 
-      <TableFilters
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
-        searchPlaceholder="Search by client name..."
-        filterOptions={[
-          { value: "ALL", label: "All Status" },
-          { value: "DRAFT", label: "Draft" },
-          { value: "FINALIZED", label: "Finalized" },
-        ]}
-        filterValue={statusFilter}
-        onFilterChange={(value) => setStatusFilter(value as "ALL" | ServiceDescriptionStatus)}
-        resultCount={filteredDescriptions.length}
-      />
+      <UnbilledClientsSection onCreateServiceDescription={handleCreate} />
+
+      <div className="border-t border-[var(--bg-surface)] pt-6">
+        <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)] mb-4">
+          Service Descriptions
+        </h2>
+        <TableFilters
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search by client name..."
+          filterOptions={[
+            { value: "ALL", label: "All Status" },
+            { value: "DRAFT", label: "Draft" },
+            { value: "FINALIZED", label: "Finalized" },
+          ]}
+          filterValue={statusFilter}
+          onFilterChange={(value) => setStatusFilter(value as "ALL" | ServiceDescriptionStatus)}
+          resultCount={filteredDescriptions.length}
+        />
+      </div>
 
       <DataTable
         data={filteredDescriptions}

@@ -175,12 +175,14 @@ export function Sidebar({ user, className }: SidebarProps) {
       setDragWidth(newWidth);
     };
 
-    const handleMouseUp = (e: MouseEvent) => {
+    const handleMouseUp = () => {
+      // Capture dragWidth before clearing (closure still has current value)
+      const finalWidth = dragWidth ?? (isCollapsed ? 56 : 220);
+
       setIsDragging(false);
       setDragWidth(null);
 
       // Snap to collapsed if < 140px, otherwise expanded
-      const finalWidth = e.clientX;
       const shouldCollapse = finalWidth < 140;
       setIsCollapsed(shouldCollapse);
     };
@@ -192,7 +194,7 @@ export function Sidebar({ user, className }: SidebarProps) {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging]);
+  }, [isDragging, dragWidth, isCollapsed]);
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = pathname === item.href;

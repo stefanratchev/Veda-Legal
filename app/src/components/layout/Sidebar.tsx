@@ -117,6 +117,10 @@ export function Sidebar({ user, className }: SidebarProps) {
   // Collapsed state - persisted to localStorage
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // Drag resize state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+
   // Initialize from localStorage on mount (client-side only)
   // This pattern is intentional for SSR hydration safety: we initialize to false,
   // then sync with localStorage after mount to avoid hydration mismatches.
@@ -155,6 +159,41 @@ export function Sidebar({ user, className }: SidebarProps) {
     };
   }, [isOpen]);
 
+  // Resize handle drag logic
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setDragWidth(isCollapsed ? 56 : 220);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Clamp between 40px and 300px during drag
+      const newWidth = Math.max(40, Math.min(300, e.clientX));
+      setDragWidth(newWidth);
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      setIsDragging(false);
+      setDragWidth(null);
+
+      // Snap to collapsed if < 140px, otherwise expanded
+      const finalWidth = e.clientX;
+      const shouldCollapse = finalWidth < 140;
+      setIsCollapsed(shouldCollapse);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = pathname === item.href;
 
@@ -191,14 +230,17 @@ export function Sidebar({ user, className }: SidebarProps) {
       )}
       <aside
         ref={sidebarRef}
+        style={isDragging && dragWidth !== null ? { width: dragWidth } : undefined}
         className={`
-          fixed left-0 top-0 h-screen w-full lg:w-[220px]
+          fixed left-0 top-0 h-screen
+          ${isDragging ? 'w-auto' : isCollapsed ? 'w-full lg:w-[56px]' : 'w-full lg:w-[220px]'}
           bg-[var(--bg-elevated)] lg:border-r border-[var(--border-subtle)]
           flex flex-col z-50
           transition-transform duration-300 ease-in-out
-          ${isOpen ? "translate-x-0" : "-translate-x-full"}
-          lg:translate-x-0 lg:transition-none
-          ${className || ""}
+          ${!isDragging ? 'lg:transition-[width] lg:duration-200' : ''}
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0
+          ${className || ''}
         `}
       >
       {/* Header with Logo and Close button */}
@@ -302,6 +344,16 @@ export function Sidebar({ user, className }: SidebarProps) {
           )}
         </div>
       )}
+
+      {/* Resize handle - desktop only */}
+      <div
+        onMouseDown={handleMouseDown}
+        className={`
+          hidden lg:block absolute right-0 top-0 bottom-0 w-2 cursor-col-resize
+          hover:bg-white/10 transition-colors
+          ${isDragging ? 'bg-white/10' : ''}
+        `}
+      />
       </aside>
     </>
   );

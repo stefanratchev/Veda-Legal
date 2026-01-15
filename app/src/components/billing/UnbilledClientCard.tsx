@@ -134,7 +134,11 @@ export function UnbilledClientCard({
       <button
         onClick={handleClick}
         disabled={isCreating}
-        className="mt-1 w-full py-2 px-3 rounded text-[13px] font-medium text-[var(--bg-deep)] bg-[var(--accent-pink)] hover:bg-[var(--accent-pink-dim)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center gap-1.5"
+        className={`mt-1 w-full py-2 px-3 rounded text-[13px] font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center gap-1.5 ${
+          hasDraft
+            ? "text-[var(--bg-deep)] bg-[var(--warning)] hover:brightness-110"
+            : "text-[var(--bg-deep)] bg-[var(--accent-pink)] hover:bg-[var(--accent-pink-dim)]"
+        }`}
       >
         {isCreating ? (
           "Creating..."

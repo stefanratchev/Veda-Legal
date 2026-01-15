@@ -22,7 +22,7 @@ export default async function AuthenticatedLayout({
           }}
           className="animate-slide-in"
         />
-        <main className="flex-1 lg:ml-[240px] overflow-x-hidden min-w-0">
+        <main className="flex-1 lg:ml-[220px] overflow-x-hidden min-w-0">
           <MobileHeader />
           <div className="px-3 py-4 md:px-4 lg:px-6 lg:py-5">{children}</div>
         </main>

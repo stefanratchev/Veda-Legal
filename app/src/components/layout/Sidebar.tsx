@@ -173,7 +173,7 @@ export function Sidebar({ user, className }: SidebarProps) {
       <aside
         ref={sidebarRef}
         className={`
-          fixed left-0 top-0 h-screen w-full lg:w-[240px]
+          fixed left-0 top-0 h-screen w-full lg:w-[220px]
           bg-[var(--bg-elevated)] lg:border-r border-[var(--border-subtle)]
           flex flex-col z-50
           transition-transform duration-300 ease-in-out

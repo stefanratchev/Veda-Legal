@@ -39,7 +39,6 @@ describe("UnbilledClientCard", () => {
       render(<UnbilledClientCard {...defaultProps} />);
 
       expect(screen.getByText("€3,500.00")).toBeInTheDocument();
-      expect(screen.getByText("estimated unbilled")).toBeInTheDocument();
     });
 
     it("renders total hours", () => {

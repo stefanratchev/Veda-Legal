@@ -103,16 +103,11 @@ export function UnbilledClientCard({
       </div>
 
       {/* Estimated value - large accent color */}
-      <div className="flex flex-col gap-0.5">
+      <div>
         {estimatedValue !== null ? (
-          <>
-            <span className="text-xl font-semibold text-[var(--accent-pink)]">
-              €{formatCurrency(estimatedValue)}
-            </span>
-            <span className="text-[11px] text-[var(--text-muted)]">
-              estimated unbilled
-            </span>
-          </>
+          <span className="text-xl font-semibold text-[var(--accent-pink)]">
+            €{formatCurrency(estimatedValue)}
+          </span>
         ) : (
           <span className="text-lg font-medium text-[var(--text-muted)]">
             Rate not set

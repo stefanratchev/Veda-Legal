@@ -127,7 +127,6 @@ export function Sidebar({ user, className }: SidebarProps) {
   useEffect(() => {
     const stored = localStorage.getItem('sidebarCollapsed');
     if (stored === 'true') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SSR hydration: must read localStorage after mount
       setIsCollapsed(true);
     }
   }, []);

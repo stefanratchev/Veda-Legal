@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import { useMobileNav } from "@/contexts/MobileNavContext";
+import { useSidebar } from "@/contexts/SidebarContext";
 
 interface NavItem {
   name: string;
@@ -113,28 +114,11 @@ export function Sidebar({ user, className }: SidebarProps) {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const { isOpen, close } = useMobileNav();
-
-  // Collapsed state - persisted to localStorage
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { isCollapsed, setIsCollapsed } = useSidebar();
 
   // Drag resize state
   const [isDragging, setIsDragging] = useState(false);
   const [dragWidth, setDragWidth] = useState<number | null>(null);
-
-  // Initialize from localStorage on mount (client-side only)
-  // This pattern is intentional for SSR hydration safety: we initialize to false,
-  // then sync with localStorage after mount to avoid hydration mismatches.
-  useEffect(() => {
-    const stored = localStorage.getItem('sidebarCollapsed');
-    if (stored === 'true') {
-      setIsCollapsed(true);
-    }
-  }, []);
-
-  // Persist to localStorage when changed
-  useEffect(() => {
-    localStorage.setItem('sidebarCollapsed', String(isCollapsed));
-  }, [isCollapsed]);
 
   useClickOutside(userMenuRef, () => setShowUserMenu(false), showUserMenu);
   useClickOutside(sidebarRef, () => {

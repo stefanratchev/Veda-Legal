@@ -327,11 +327,14 @@ export function Sidebar({ user, className }: SidebarProps) {
 
       {/* User Profile Footer */}
       {user && (
-        <div className="p-3 border-t border-[var(--border-subtle)]" ref={userMenuRef}>
+        <div className={`p-3 border-t border-[var(--border-subtle)] ${isCollapsed ? 'flex justify-center' : ''}`} ref={userMenuRef}>
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+              className={`
+                flex items-center rounded hover:bg-[var(--bg-hover)] transition-colors cursor-pointer
+                ${isCollapsed ? 'p-1 justify-center' : 'w-full gap-2.5 px-2 py-2'}
+              `}
             >
               {user.image ? (
                 /* eslint-disable-next-line @next/next/no-img-element -- base64 data URL doesn't benefit from next/image optimization */
@@ -345,28 +348,35 @@ export function Sidebar({ user, className }: SidebarProps) {
                   {user.initials}
                 </div>
               )}
-              <div className="flex-1 min-w-0 text-left">
-                <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
-                  {user.name}
-                </p>
-                <p className="text-[11px] text-[var(--text-muted)] leading-tight">{formatPosition(user.position)}</p>
-              </div>
-              <svg
-                className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${showUserMenu ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 9l-7 7-7-7" />
-              </svg>
+              {!isCollapsed && (
+                <>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
+                      {user.name}
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)] leading-tight">{formatPosition(user.position)}</p>
+                  </div>
+                  <svg
+                    className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </>
+              )}
             </button>
 
             {/* Dropdown Menu */}
             {showUserMenu && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg shadow-lg overflow-hidden animate-fade-up">
+              <div className={`
+                absolute mb-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg shadow-lg overflow-hidden animate-fade-up
+                ${isCollapsed ? 'bottom-full left-full ml-1' : 'bottom-full left-0 right-0'}
+              `}>
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors whitespace-nowrap"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -376,8 +386,8 @@ export function Sidebar({ user, className }: SidebarProps) {
               </div>
             )}
           </div>
-          {/* Version indicator - admin only */}
-          {isAdmin && (
+          {/* Version indicator - admin only, hidden when collapsed */}
+          {isAdmin && !isCollapsed && (
             <p className="text-[9px] text-[var(--text-muted)] text-center mt-2 opacity-50">
               {process.env.NEXT_PUBLIC_BUILD_ID}
             </p>

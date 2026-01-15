@@ -34,25 +34,32 @@ function setupAuthenticatedUser(user: MockUser) {
   });
 }
 
-// Helper to create a chainable mock for the aggregation query
-function createSelectChain(result: unknown[]) {
+// Helper to create chainable mock for unbilled hours query (Query 1)
+function createUnbilledQueryChain(result: unknown[]) {
   return {
     from: vi.fn().mockReturnValue({
       innerJoin: vi.fn().mockReturnValue({
         leftJoin: vi.fn().mockReturnValue({
           leftJoin: vi.fn().mockReturnValue({
             leftJoin: vi.fn().mockReturnValue({
-              leftJoin: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                  groupBy: vi.fn().mockReturnValue({
-                    orderBy: vi.fn().mockResolvedValue(result),
-                  }),
+              where: vi.fn().mockReturnValue({
+                groupBy: vi.fn().mockReturnValue({
+                  orderBy: vi.fn().mockResolvedValue(result),
                 }),
               }),
             }),
           }),
         }),
       }),
+    }),
+  };
+}
+
+// Helper to create chainable mock for drafts query (Query 2)
+function createDraftsQueryChain(result: unknown[]) {
+  return {
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(result),
     }),
   };
 }
@@ -83,7 +90,12 @@ describe("GET /api/billing/unbilled-summary", () => {
     it("returns empty array when no unbilled entries", async () => {
       const user = createMockUser();
       setupAuthenticatedUser(user);
-      mockDb.select.mockReturnValue(createSelectChain([]));
+
+      // First call: unbilled query returns empty
+      // Second call: drafts query returns empty
+      mockDb.select
+        .mockReturnValueOnce(createUnbilledQueryChain([]))
+        .mockReturnValueOnce(createDraftsQueryChain([]));
 
       const request = createMockRequest({
         method: "GET",
@@ -102,8 +114,8 @@ describe("GET /api/billing/unbilled-summary", () => {
       const user = createMockUser();
       setupAuthenticatedUser(user);
 
-      // Mock aggregated result from database
-      const dbResult = [
+      // Mock unbilled result (Query 1)
+      const unbilledResult = [
         {
           clientId: "client-1",
           clientName: "Acme Corp",
@@ -111,9 +123,6 @@ describe("GET /api/billing/unbilled-summary", () => {
           totalUnbilledHours: "10.50",
           oldestEntryDate: "2024-01-10",
           newestEntryDate: "2024-01-20",
-          existingDraftId: null,
-          existingDraftPeriodStart: null,
-          existingDraftPeriodEnd: null,
         },
         {
           clientId: "client-2",
@@ -122,13 +131,15 @@ describe("GET /api/billing/unbilled-summary", () => {
           totalUnbilledHours: "5.00",
           oldestEntryDate: "2024-01-15",
           newestEntryDate: "2024-01-18",
-          existingDraftId: null,
-          existingDraftPeriodStart: null,
-          existingDraftPeriodEnd: null,
         },
       ];
 
-      mockDb.select.mockReturnValue(createSelectChain(dbResult));
+      // Mock drafts result (Query 2) - no drafts
+      const draftsResult: unknown[] = [];
+
+      mockDb.select
+        .mockReturnValueOnce(createUnbilledQueryChain(unbilledResult))
+        .mockReturnValueOnce(createDraftsQueryChain(draftsResult));
 
       const request = createMockRequest({
         method: "GET",
@@ -164,7 +175,8 @@ describe("GET /api/billing/unbilled-summary", () => {
       const user = createMockUser();
       setupAuthenticatedUser(user);
 
-      const dbResult = [
+      // Mock unbilled result
+      const unbilledResult = [
         {
           clientId: "client-1",
           clientName: "Acme Corp",
@@ -172,13 +184,22 @@ describe("GET /api/billing/unbilled-summary", () => {
           totalUnbilledHours: "8.00",
           oldestEntryDate: "2024-01-10",
           newestEntryDate: "2024-01-20",
-          existingDraftId: "draft-123",
-          existingDraftPeriodStart: "2024-01-01",
-          existingDraftPeriodEnd: "2024-01-31",
         },
       ];
 
-      mockDb.select.mockReturnValue(createSelectChain(dbResult));
+      // Mock drafts result - has a draft for client-1
+      const draftsResult = [
+        {
+          clientId: "client-1",
+          draftId: "draft-123",
+          periodStart: "2024-01-01",
+          periodEnd: "2024-01-31",
+        },
+      ];
+
+      mockDb.select
+        .mockReturnValueOnce(createUnbilledQueryChain(unbilledResult))
+        .mockReturnValueOnce(createDraftsQueryChain(draftsResult));
 
       const request = createMockRequest({
         method: "GET",
@@ -202,7 +223,9 @@ describe("GET /api/billing/unbilled-summary", () => {
 
       // Empty result means no clients with unbilled entries
       // (all entries are in finalized service descriptions)
-      mockDb.select.mockReturnValue(createSelectChain([]));
+      mockDb.select
+        .mockReturnValueOnce(createUnbilledQueryChain([]))
+        .mockReturnValueOnce(createDraftsQueryChain([]));
 
       const request = createMockRequest({
         method: "GET",
@@ -220,7 +243,7 @@ describe("GET /api/billing/unbilled-summary", () => {
       const user = createMockUser();
       setupAuthenticatedUser(user);
 
-      const dbResult = [
+      const unbilledResult = [
         {
           clientId: "client-1",
           clientName: "Pro Bono Client",
@@ -228,13 +251,12 @@ describe("GET /api/billing/unbilled-summary", () => {
           totalUnbilledHours: "10.00",
           oldestEntryDate: "2024-01-10",
           newestEntryDate: "2024-01-20",
-          existingDraftId: null,
-          existingDraftPeriodStart: null,
-          existingDraftPeriodEnd: null,
         },
       ];
 
-      mockDb.select.mockReturnValue(createSelectChain(dbResult));
+      mockDb.select
+        .mockReturnValueOnce(createUnbilledQueryChain(unbilledResult))
+        .mockReturnValueOnce(createDraftsQueryChain([]));
 
       const request = createMockRequest({
         method: "GET",
@@ -255,7 +277,7 @@ describe("GET /api/billing/unbilled-summary", () => {
       setupAuthenticatedUser(user);
 
       // Database returns pre-sorted by estimated value desc
-      const dbResult = [
+      const unbilledResult = [
         {
           clientId: "client-1",
           clientName: "Big Spender",
@@ -263,9 +285,6 @@ describe("GET /api/billing/unbilled-summary", () => {
           totalUnbilledHours: "20.00",
           oldestEntryDate: "2024-01-10",
           newestEntryDate: "2024-01-20",
-          existingDraftId: null,
-          existingDraftPeriodStart: null,
-          existingDraftPeriodEnd: null,
         },
         {
           clientId: "client-2",
@@ -274,9 +293,6 @@ describe("GET /api/billing/unbilled-summary", () => {
           totalUnbilledHours: "10.00",
           oldestEntryDate: "2024-01-15",
           newestEntryDate: "2024-01-18",
-          existingDraftId: null,
-          existingDraftPeriodStart: null,
-          existingDraftPeriodEnd: null,
         },
         {
           clientId: "client-3",
@@ -285,13 +301,12 @@ describe("GET /api/billing/unbilled-summary", () => {
           totalUnbilledHours: "50.00",
           oldestEntryDate: "2024-01-01",
           newestEntryDate: "2024-01-25",
-          existingDraftId: null,
-          existingDraftPeriodStart: null,
-          existingDraftPeriodEnd: null,
         },
       ];
 
-      mockDb.select.mockReturnValue(createSelectChain(dbResult));
+      mockDb.select
+        .mockReturnValueOnce(createUnbilledQueryChain(unbilledResult))
+        .mockReturnValueOnce(createDraftsQueryChain([]));
 
       const request = createMockRequest({
         method: "GET",
@@ -316,18 +331,16 @@ describe("GET /api/billing/unbilled-summary", () => {
       const user = createMockUser();
       setupAuthenticatedUser(user);
 
-      // Create a chain that throws an error
+      // Create a chain that throws an error on the first query
       mockDb.select.mockReturnValue({
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
             leftJoin: vi.fn().mockReturnValue({
               leftJoin: vi.fn().mockReturnValue({
                 leftJoin: vi.fn().mockReturnValue({
-                  leftJoin: vi.fn().mockReturnValue({
-                    where: vi.fn().mockReturnValue({
-                      groupBy: vi.fn().mockReturnValue({
-                        orderBy: vi.fn().mockRejectedValue(new Error("Database connection failed")),
-                      }),
+                  where: vi.fn().mockReturnValue({
+                    groupBy: vi.fn().mockReturnValue({
+                      orderBy: vi.fn().mockRejectedValue(new Error("Database connection failed")),
                     }),
                   }),
                 }),

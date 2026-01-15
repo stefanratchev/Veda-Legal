@@ -11,25 +11,6 @@ import {
 import { eq, and, isNull, sql, min, max, sum } from "drizzle-orm";
 
 /**
- * Type for the raw SQL result from the unbilled summary query.
- * Includes both Drizzle-selected fields and fields from the raw SQL subquery.
- */
-type UnbilledSummaryQueryResult = {
-  clientId: string;
-  clientName: string;
-  hourlyRate: string | null;
-  totalUnbilledHours: string | null;
-  oldestEntryDate: string | null;
-  newestEntryDate: string | null;
-  existingDraftId: string | null;
-  existingDraftPeriodStart: string | null;
-  existingDraftPeriodEnd: string | null;
-  draft_id?: string | null;
-  draft_period_start?: string | null;
-  draft_period_end?: string | null;
-};
-
-/**
  * GET /api/billing/unbilled-summary
  *
  * Returns aggregated unbilled hours per client with:
@@ -50,18 +31,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Query to get unbilled hours aggregated per client
-    // We need to:
-    // 1. Get all time entries
-    // 2. Join with clients to get client info
-    // 3. Left join with service_description_line_items to find billed entries
-    // 4. Left join with service_description_topics and service_descriptions to check status
-    // 5. Filter to only include entries not in FINALIZED service descriptions
-    // 6. Filter to only ACTIVE clients
-    // 7. Group by client and aggregate
-    // 8. Also get existing DRAFT service description if any
-
-    const results = await db
+    // Query 1: Get unbilled hours aggregated per client
+    // - Join time entries with clients
+    // - Left join with service description chain to find entries in FINALIZED SDs
+    // - Filter to ACTIVE clients and exclude FINALIZED entries
+    const unbilledResults = await db
       .select({
         clientId: clients.id,
         clientName: clients.name,
@@ -69,9 +43,6 @@ export async function GET(request: NextRequest) {
         totalUnbilledHours: sum(timeEntries.hours),
         oldestEntryDate: min(timeEntries.date),
         newestEntryDate: max(timeEntries.date),
-        existingDraftId: serviceDescriptions.id,
-        existingDraftPeriodStart: serviceDescriptions.periodStart,
-        existingDraftPeriodEnd: serviceDescriptions.periodEnd,
       })
       .from(timeEntries)
       .innerJoin(clients, eq(timeEntries.clientId, clients.id))
@@ -90,15 +61,6 @@ export async function GET(request: NextRequest) {
           eq(serviceDescriptions.status, "FINALIZED")
         )
       )
-      // Left join again for draft service descriptions (separate from the finalized check)
-      .leftJoin(
-        sql`(
-          SELECT id as draft_id, "clientId" as draft_client_id, "periodStart" as draft_period_start, "periodEnd" as draft_period_end
-          FROM service_descriptions
-          WHERE status = 'DRAFT'
-        ) AS drafts`,
-        sql`drafts.draft_client_id = ${clients.id}`
-      )
       .where(
         and(
           eq(clients.status, "ACTIVE"),
@@ -106,21 +68,29 @@ export async function GET(request: NextRequest) {
           isNull(serviceDescriptions.id)
         )
       )
-      .groupBy(
-        clients.id,
-        clients.name,
-        clients.hourlyRate,
-        serviceDescriptions.id,
-        serviceDescriptions.periodStart,
-        serviceDescriptions.periodEnd
-      )
+      .groupBy(clients.id, clients.name, clients.hourlyRate)
       .orderBy(
-        // Sort by estimated value descending (nulls last)
         sql`(${sum(timeEntries.hours)} * ${clients.hourlyRate}) DESC NULLS LAST`
       );
 
-    // Transform results to response format
-    const response = results.map((row: UnbilledSummaryQueryResult) => {
+    // Query 2: Get all DRAFT service descriptions (separate query for clarity)
+    const drafts = await db
+      .select({
+        clientId: serviceDescriptions.clientId,
+        draftId: serviceDescriptions.id,
+        periodStart: serviceDescriptions.periodStart,
+        periodEnd: serviceDescriptions.periodEnd,
+      })
+      .from(serviceDescriptions)
+      .where(eq(serviceDescriptions.status, "DRAFT"));
+
+    // Create a map of clientId -> draft info for quick lookup
+    const draftsByClient = new Map(
+      drafts.map((d) => [d.clientId, d])
+    );
+
+    // Transform and merge results
+    const response = unbilledResults.map((row) => {
       const hourlyRate = serializeDecimal(row.hourlyRate);
       const totalUnbilledHours = serializeDecimal(row.totalUnbilledHours);
       const estimatedValue =
@@ -128,11 +98,8 @@ export async function GET(request: NextRequest) {
           ? hourlyRate * totalUnbilledHours
           : null;
 
-      // Handle draft info - access raw SQL fields from the result
-      // The raw SQL subquery returns draft_id, draft_period_start, draft_period_end fields
-      const draftId = row.draft_id || row.existingDraftId;
-      const draftPeriodStart = row.draft_period_start || row.existingDraftPeriodStart;
-      const draftPeriodEnd = row.draft_period_end || row.existingDraftPeriodEnd;
+      // Look up draft for this client
+      const draft = draftsByClient.get(row.clientId);
 
       return {
         clientId: row.clientId,
@@ -142,11 +109,10 @@ export async function GET(request: NextRequest) {
         estimatedValue,
         oldestEntryDate: row.oldestEntryDate,
         newestEntryDate: row.newestEntryDate,
-        existingDraftId: draftId || null,
-        existingDraftPeriod:
-          draftId && draftPeriodStart && draftPeriodEnd
-            ? `${draftPeriodStart} - ${draftPeriodEnd}`
-            : null,
+        existingDraftId: draft?.draftId || null,
+        existingDraftPeriod: draft
+          ? `${draft.periodStart} - ${draft.periodEnd}`
+          : null,
       };
     });
 

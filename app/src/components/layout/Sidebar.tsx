@@ -246,18 +246,37 @@ export function Sidebar({ user, className }: SidebarProps) {
         `}
       >
       {/* Header with Logo and Close button */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-subtle)]">
+      <div className={`
+        flex items-center border-b border-[var(--border-subtle)]
+        ${isCollapsed ? 'justify-center px-2 py-4' : 'justify-between px-5 py-4'}
+      `}>
+        {isCollapsed ? (
+          <Image
+            src="/logo-icon.svg"
+            alt="Veda Legal"
+            width={32}
+            height={32}
+            priority
+            className="hidden lg:block"
+          />
+        ) : null}
         <Image
           src="/logo.svg"
           alt="Veda Legal"
           width={180}
           height={72}
           priority
+          className={isCollapsed ? 'lg:hidden' : ''}
         />
         {/* Close button - mobile only */}
         <button
           onClick={close}
-          className="p-2 -mr-2 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors lg:hidden"
+          className={`
+            p-2 -mr-2 rounded text-[var(--text-secondary)]
+            hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]
+            transition-colors lg:hidden
+            ${isCollapsed ? 'mr-0' : '-mr-2'}
+          `}
           aria-label="Close navigation menu"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

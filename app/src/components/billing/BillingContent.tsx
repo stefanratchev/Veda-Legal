@@ -67,11 +67,6 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
     });
   }, [serviceDescriptions, searchQuery, statusFilter]);
 
-  const openCreateModal = useCallback(() => {
-    setCreateError(null);
-    setShowCreateModal(true);
-  }, []);
-
   const closeCreateModal = useCallback(() => {
     setShowCreateModal(false);
     setCreateError(null);
@@ -213,20 +208,9 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">Billing</h1>
-          <p className="text-[var(--text-muted)] text-[13px] mt-0.5">Manage service descriptions and billing</p>
-        </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-1.5 px-4 py-2 rounded bg-[var(--accent-pink)] text-[var(--bg-deep)] font-medium text-[13px] hover:bg-[var(--accent-pink-dim)] transition-colors duration-200"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-          </svg>
-          New Service Description
-        </button>
+      <div>
+        <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">Billing</h1>
+        <p className="text-[var(--text-muted)] text-[13px] mt-0.5">Manage service descriptions and billing</p>
       </div>
 
       <UnbilledClientsSection onCreateServiceDescription={handleCreate} />

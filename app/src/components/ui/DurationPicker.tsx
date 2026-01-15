@@ -9,6 +9,7 @@ interface DurationPickerProps {
   onChange: (hours: number, minutes: number) => void;
   disabled?: boolean;
   className?: string;
+  align?: "left" | "right";
 }
 
 export interface DurationPickerRef {
@@ -21,6 +22,7 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
   onChange,
   disabled = false,
   className = "",
+  align = "left",
 }, ref) {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<"hours" | "minutes">("hours");
@@ -205,7 +207,7 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
       {/* Dropdown Panel */}
       {isOpen && (
         <div
-          className="absolute z-50 mt-1 left-0 w-[200px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded shadow-xl overflow-hidden animate-fade-up"
+          className={`absolute z-50 mt-1 w-[200px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded shadow-xl overflow-hidden animate-fade-up ${align === "right" ? "right-0" : "left-0"}`}
           onKeyDown={handleKeyDown}
           tabIndex={-1}
           ref={(el) => el?.focus()}

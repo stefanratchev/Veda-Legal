@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { ServiceDescriptionLineItem } from "@/types";
+import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicker";
 
 interface LineItemRowProps {
   item: ServiceDescriptionLineItem;
@@ -24,15 +25,26 @@ function formatHours(hours: number | null): string {
   return `${h}h ${m}m`;
 }
 
+function decimalToHoursMinutes(decimal: number | null): { hours: number; minutes: number } {
+  if (decimal === null || decimal === 0) return { hours: 0, minutes: 0 };
+  const hours = Math.floor(decimal);
+  const minutes = Math.round((decimal - hours) * 60);
+  // Round to nearest 15-minute increment
+  const roundedMinutes = Math.round(minutes / 15) * 15;
+  return { hours, minutes: roundedMinutes >= 60 ? 0 : roundedMinutes };
+}
+
+function hoursMinutesToDecimal(hours: number, minutes: number): number {
+  return hours + minutes / 60;
+}
+
 export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRowProps) {
   const [isEditingDescription, setIsEditingDescription] = useState(false);
-  const [isEditingHours, setIsEditingHours] = useState(false);
   const [editDescription, setEditDescription] = useState(item.description);
-  const [editHours, setEditHours] = useState(item.hours?.toString() || "");
   const [isUpdating, setIsUpdating] = useState(false);
 
   const descriptionInputRef = useRef<HTMLInputElement>(null);
-  const hoursInputRef = useRef<HTMLInputElement>(null);
+  const durationPickerRef = useRef<DurationPickerRef>(null);
 
   // Check if values differ from original
   const hasDescriptionChange = item.originalDescription !== undefined && item.description !== item.originalDescription;
@@ -46,24 +58,23 @@ export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRo
     }
   }, [isEditingDescription]);
 
-  useEffect(() => {
-    if (isEditingHours && hoursInputRef.current) {
-      hoursInputRef.current.focus();
-      hoursInputRef.current.select();
-    }
-  }, [isEditingHours]);
-
   const handleDescriptionClick = useCallback(() => {
     if (!isEditable) return;
     setEditDescription(item.description);
     setIsEditingDescription(true);
   }, [isEditable, item.description]);
 
-  const handleHoursClick = useCallback(() => {
-    if (!isEditable) return;
-    setEditHours(item.hours?.toString() || "");
-    setIsEditingHours(true);
-  }, [isEditable, item.hours]);
+  const handleDurationChange = useCallback(async (hours: number, minutes: number) => {
+    const newDecimal = hoursMinutesToDecimal(hours, minutes);
+    if (newDecimal === item.hours) return;
+
+    setIsUpdating(true);
+    try {
+      await onUpdate(item.id, { hours: newDecimal || undefined });
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [item.id, item.hours, onUpdate]);
 
   const handleDescriptionBlur = useCallback(async () => {
     setIsEditingDescription(false);
@@ -82,23 +93,6 @@ export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRo
     }
   }, [editDescription, item.id, item.description, onUpdate]);
 
-  const handleHoursBlur = useCallback(async () => {
-    setIsEditingHours(false);
-    const value = parseFloat(editHours);
-    if (isNaN(value) || value === item.hours) {
-      setEditHours(item.hours?.toString() || "");
-      return;
-    }
-    setIsUpdating(true);
-    try {
-      await onUpdate(item.id, { hours: value || undefined });
-    } catch {
-      setEditHours(item.hours?.toString() || "");
-    } finally {
-      setIsUpdating(false);
-    }
-  }, [editHours, item.id, item.hours, onUpdate]);
-
   const handleDescriptionKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
@@ -110,19 +104,6 @@ export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRo
       }
     },
     [handleDescriptionBlur, item.description]
-  );
-
-  const handleHoursKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        handleHoursBlur();
-      } else if (e.key === "Escape") {
-        setEditHours(item.hours?.toString() || "");
-        setIsEditingHours(false);
-      }
-    },
-    [handleHoursBlur, item.hours]
   );
 
   const handleDelete = useCallback(() => {
@@ -172,30 +153,24 @@ export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRo
 
       {/* Hours */}
       <td className="px-4 py-2 text-right">
-        {isEditingHours ? (
-          <input
-            ref={hoursInputRef}
-            type="number"
-            value={editHours}
-            onChange={(e) => setEditHours(e.target.value)}
-            onBlur={handleHoursBlur}
-            onKeyDown={handleHoursKeyDown}
-            className="w-20 px-2 py-1 text-sm text-right bg-[var(--bg-surface)] border border-[var(--accent-pink)] rounded text-[var(--text-primary)] focus:outline-none"
-            step="0.25"
-            min="0"
-          />
-        ) : (
+        {isEditable ? (
           <div
-            onClick={handleHoursClick}
-            className={`text-sm text-[var(--text-secondary)] ${
-              isEditable ? "cursor-pointer hover:bg-[var(--bg-surface)] px-2 py-1 -mx-2 -my-1 rounded inline-block" : ""
-            }`}
+            className="inline-block"
             title={hasHoursChange ? `Original: ${formatHours(item.originalHours ?? null)}` : undefined}
           >
-            <span className={hasHoursChange ? "border-b border-dashed border-[var(--warning)]" : ""}>
-              {formatHours(item.hours)}
-            </span>
+            <DurationPicker
+              ref={durationPickerRef}
+              hours={decimalToHoursMinutes(item.hours).hours}
+              minutes={decimalToHoursMinutes(item.hours).minutes}
+              onChange={handleDurationChange}
+              align="right"
+              className={hasHoursChange ? "[&_button]:border-b [&_button]:border-dashed [&_button]:border-[var(--warning)]" : ""}
+            />
           </div>
+        ) : (
+          <span className="text-sm text-[var(--text-secondary)]">
+            {formatHours(item.hours)}
+          </span>
         )}
       </td>
 

@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { TableFilters } from "@/components/ui/TableFilters";
 import { ColumnDef } from "@/components/ui/table-types";
 import { CreateServiceDescriptionModal } from "./CreateServiceDescriptionModal";
+import { UnbilledClientsSection } from "./UnbilledClientsSection";
 import { ServiceDescriptionStatus } from "@/types";
 
 interface ServiceDescriptionListItem {
@@ -228,19 +229,26 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
         </button>
       </div>
 
-      <TableFilters
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
-        searchPlaceholder="Search by client name..."
-        filterOptions={[
-          { value: "ALL", label: "All Status" },
-          { value: "DRAFT", label: "Draft" },
-          { value: "FINALIZED", label: "Finalized" },
-        ]}
-        filterValue={statusFilter}
-        onFilterChange={(value) => setStatusFilter(value as "ALL" | ServiceDescriptionStatus)}
-        resultCount={filteredDescriptions.length}
-      />
+      <UnbilledClientsSection onCreateServiceDescription={handleCreate} />
+
+      <div className="border-t border-[var(--bg-surface)] pt-6">
+        <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)] mb-4">
+          Service Descriptions
+        </h2>
+        <TableFilters
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search by client name..."
+          filterOptions={[
+            { value: "ALL", label: "All Status" },
+            { value: "DRAFT", label: "Draft" },
+            { value: "FINALIZED", label: "Finalized" },
+          ]}
+          filterValue={statusFilter}
+          onFilterChange={(value) => setStatusFilter(value as "ALL" | ServiceDescriptionStatus)}
+          resultCount={filteredDescriptions.length}
+        />
+      </div>
 
       <DataTable
         data={filteredDescriptions}

@@ -192,7 +192,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
           const topicTotal = calculateTopicTotal(topic);
 
           return (
-            <View key={topic.id} wrap={false}>
+            <View key={topic.id}>
               {/* Topic name header */}
               <View style={styles.topicHeader}>
                 <Text style={styles.topicName}>{topic.topicName}</Text>
@@ -207,7 +207,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
 
               {/* Line items */}
               {topic.lineItems.map((item) => (
-                <View key={item.id} style={styles.tableRow}>
+                <View key={item.id} style={styles.tableRow} wrap={false}>
                   <Text style={styles.dateCol}>{formatDate(item.date)}</Text>
                   <Text style={styles.serviceCol}>{item.description}</Text>
                   <Text style={styles.timeCol}>
@@ -217,7 +217,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
               ))}
 
               {/* Topic footer */}
-              <View style={styles.topicFooter}>
+              <View style={styles.topicFooter} wrap={false}>
                 <View style={styles.footerRow}>
                   <Text style={styles.footerLabel}>Total time:</Text>
                   <Text style={styles.footerValue}>{formatTime(totalHours)}</Text>

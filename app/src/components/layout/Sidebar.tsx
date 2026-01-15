@@ -198,26 +198,43 @@ export function Sidebar({ user, className }: SidebarProps) {
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = pathname === item.href;
+    const [showTooltip, setShowTooltip] = useState(false);
 
     return (
-      <Link
-        href={item.href}
-        className={`
-          relative flex items-center gap-2.5 px-3 py-2 rounded
-          text-[13px] font-medium transition-all duration-200
-          ${isActive
-            ? "text-[var(--text-primary)] bg-gradient-to-r from-[var(--accent-pink-glow)] to-transparent"
-            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-          }
-          before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2
-          before:w-[2px] before:rounded-r-sm before:bg-[var(--accent-pink)]
-          before:transition-all before:duration-200
-          ${isActive ? "before:h-6" : "before:h-0 hover:before:h-5"}
-        `}
-      >
-        <span className={`flex-shrink-0 ${isActive ? "text-[var(--accent-pink)]" : ""}`}>{item.icon}</span>
-        <span className="truncate">{item.name}</span>
-      </Link>
+      <div className="relative">
+        <Link
+          href={item.href}
+          onMouseEnter={() => isCollapsed && setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+          className={`
+            relative flex items-center gap-2.5 rounded
+            text-[13px] font-medium transition-all duration-200
+            ${isCollapsed ? 'px-0 py-2 justify-center' : 'px-3 py-2'}
+            ${isActive
+              ? "text-[var(--text-primary)] bg-gradient-to-r from-[var(--accent-pink-glow)] to-transparent"
+              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+            }
+            before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2
+            before:w-[2px] before:rounded-r-sm before:bg-[var(--accent-pink)]
+            before:transition-all before:duration-200
+            ${isActive ? "before:h-6" : "before:h-0 hover:before:h-5"}
+          `}
+        >
+          <span className={`flex-shrink-0 ${isActive ? "text-[var(--accent-pink)]" : ""}`}>
+            {item.icon}
+          </span>
+          {!isCollapsed && <span className="truncate">{item.name}</span>}
+        </Link>
+
+        {/* Tooltip - collapsed state only */}
+        {showTooltip && isCollapsed && (
+          <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 pointer-events-none">
+            <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded px-2 py-1 text-[12px] text-[var(--text-primary)] whitespace-nowrap shadow-lg">
+              {item.name}
+            </div>
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -293,9 +310,11 @@ export function Sidebar({ user, className }: SidebarProps) {
 
           return (
             <div key={section.label} className={sectionIndex === 0 ? "" : "pt-4"}>
-              <p className="px-3 pb-2 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                {section.label}
-              </p>
+              {!isCollapsed && (
+                <p className="px-3 pb-2 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                  {section.label}
+                </p>
+              )}
               <div className="space-y-1">
                 {visibleItems.map((item) => (
                   <NavItemComponent key={item.name} item={item} />

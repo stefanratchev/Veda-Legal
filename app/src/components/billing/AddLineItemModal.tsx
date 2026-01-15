@@ -179,7 +179,7 @@ export function AddLineItemModal({ isLoading, error, onSubmit, onClose }: AddLin
                   step="0.01"
                   min="0"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">BGN</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">EUR</span>
               </div>
             </div>
           )}

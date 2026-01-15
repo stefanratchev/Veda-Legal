@@ -20,7 +20,7 @@ function formatPeriod(start: string, end: string): string {
 }
 
 function formatCurrency(amount: number): string {
-  return amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " BGN";
+  return "€" + amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function calculateTopicTotal(topic: ServiceDescriptionTopic): number {

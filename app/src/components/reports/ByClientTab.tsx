@@ -290,12 +290,12 @@ function formatDateDisplay(dateStr: string): string {
 }
 
 /**
- * Format currency for display (e.g., "£1,234.56")
+ * Format currency for display (e.g., "€1,234.56")
  */
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "GBP",
+    currency: "EUR",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);

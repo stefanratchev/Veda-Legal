@@ -144,7 +144,7 @@ export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRo
             </span>
             {item.fixedAmount !== null && item.fixedAmount > 0 && (
               <span className="ml-2 text-xs text-[var(--text-muted)]">
-                (+{item.fixedAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })} BGN)
+                (+€{item.fixedAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })})
               </span>
             )}
           </div>

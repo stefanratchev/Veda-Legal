@@ -107,7 +107,7 @@ export function UnbilledClientCard({
         {estimatedValue !== null ? (
           <>
             <span className="text-xl font-semibold text-[var(--accent-pink)]">
-              {formatCurrency(estimatedValue)} BGN
+              €{formatCurrency(estimatedValue)}
             </span>
             <span className="text-[11px] text-[var(--text-muted)]">
               estimated unbilled

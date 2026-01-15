@@ -18,7 +18,7 @@ interface TopicSectionProps {
 }
 
 function formatCurrency(amount: number): string {
-  return amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " BGN";
+  return "€" + amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatHours(hours: number): string {
@@ -249,7 +249,7 @@ export function TopicSection({
                     step="0.01"
                     min="0"
                   />
-                  <span className="text-xs text-[var(--text-muted)]">BGN/h</span>
+                  <span className="text-xs text-[var(--text-muted)]">EUR/h</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -265,7 +265,7 @@ export function TopicSection({
                     step="0.01"
                     min="0"
                   />
-                  <span className="text-xs text-[var(--text-muted)]">BGN</span>
+                  <span className="text-xs text-[var(--text-muted)]">EUR</span>
                 </div>
               )}
             </div>

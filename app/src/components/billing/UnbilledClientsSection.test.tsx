@@ -99,8 +99,8 @@ describe("UnbilledClientsSection", () => {
       });
 
       expect(screen.getByText("TechStart Ltd")).toBeInTheDocument();
-      expect(screen.getByText("3,500.00 BGN")).toBeInTheDocument();
-      expect(screen.getByText("1,600.00 BGN")).toBeInTheDocument();
+      expect(screen.getByText("€3,500.00")).toBeInTheDocument();
+      expect(screen.getByText("€1,600.00")).toBeInTheDocument();
     });
 
     it("shows section heading with count badge", async () => {

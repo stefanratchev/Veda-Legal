@@ -38,7 +38,7 @@ describe("UnbilledClientCard", () => {
     it("renders estimated value formatted as currency", () => {
       render(<UnbilledClientCard {...defaultProps} />);
 
-      expect(screen.getByText("3,500.00 BGN")).toBeInTheDocument();
+      expect(screen.getByText("€3,500.00")).toBeInTheDocument();
       expect(screen.getByText("estimated unbilled")).toBeInTheDocument();
     });
 
@@ -64,7 +64,7 @@ describe("UnbilledClientCard", () => {
       );
 
       expect(screen.getByText("Rate not set")).toBeInTheDocument();
-      expect(screen.queryByText(/BGN/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/€/)).not.toBeInTheDocument();
     });
   });
 
@@ -216,7 +216,7 @@ describe("UnbilledClientCard", () => {
         />
       );
 
-      expect(screen.getByText("125,000.50 BGN")).toBeInTheDocument();
+      expect(screen.getByText("€125,000.50")).toBeInTheDocument();
     });
 
     it("formats zero hours correctly", () => {

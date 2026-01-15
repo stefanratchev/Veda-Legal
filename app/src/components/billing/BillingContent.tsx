@@ -160,7 +160,7 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
         align: "right",
         cell: (sd) => (
           <span className="text-[13px] text-[var(--text-secondary)]">
-            {sd.totalAmount > 0 ? `${sd.totalAmount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BGN` : "-"}
+            {sd.totalAmount > 0 ? `€${sd.totalAmount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
           </span>
         ),
       },

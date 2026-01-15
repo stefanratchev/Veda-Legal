@@ -103,12 +103,8 @@ const styles = StyleSheet.create({
   },
 });
 
-// EUR to BGN fixed rate
-const EUR_TO_BGN = 1.95583;
-
-function formatCurrency(amount: number, currency: "EUR" | "BGN" = "EUR"): string {
-  const symbol = currency === "EUR" ? "\u20AC" : "BGN";
-  return `${symbol} ${amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function formatCurrency(amount: number): string {
+  return `€${amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatTime(hours: number): string {
@@ -146,7 +142,6 @@ interface ServiceDescriptionPDFProps {
 
 export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
   const grandTotal = data.topics.reduce((sum, topic) => sum + calculateTopicTotal(topic), 0);
-  const grandTotalBGN = grandTotal * EUR_TO_BGN;
 
   return (
     <Document>
@@ -178,9 +173,6 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
         <View style={styles.totalRow}>
           <Text style={{ fontWeight: "bold", marginRight: 20 }}>Total Fees:</Text>
           <Text style={{ fontWeight: "bold" }}>{formatCurrency(grandTotal)} excl. VAT</Text>
-        </View>
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2 }}>
-          <Text>{formatCurrency(grandTotalBGN, "BGN")} excl. VAT</Text>
         </View>
 
         {/* Description of services */}

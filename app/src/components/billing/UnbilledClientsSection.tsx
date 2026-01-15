@@ -37,7 +37,7 @@ export function UnbilledClientsSection({
           throw new Error("Failed to fetch");
         }
         const data = await response.json();
-        setClients(data.clients);
+        setClients(data);
       } catch {
         setError("Failed to load unbilled clients");
       } finally {

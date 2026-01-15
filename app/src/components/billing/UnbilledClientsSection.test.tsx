@@ -61,7 +61,7 @@ describe("UnbilledClientsSection", () => {
     it("shows empty message when no clients have unbilled hours", async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ clients: [] }),
+        json: () => Promise.resolve([]),
       });
 
       render(
@@ -85,7 +85,7 @@ describe("UnbilledClientsSection", () => {
     it("renders cards for each client", async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ clients: mockClients }),
+        json: () => Promise.resolve(mockClients),
       });
 
       render(
@@ -106,7 +106,7 @@ describe("UnbilledClientsSection", () => {
     it("shows section heading with count badge", async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ clients: mockClients }),
+        json: () => Promise.resolve(mockClients),
       });
 
       render(

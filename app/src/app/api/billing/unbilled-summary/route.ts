@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
       // Left join again for draft service descriptions (separate from the finalized check)
       .leftJoin(
         sql`(
-          SELECT id as draft_id, client_id as draft_client_id, period_start as draft_period_start, period_end as draft_period_end
+          SELECT id as draft_id, "clientId" as draft_client_id, "periodStart" as draft_period_start, "periodEnd" as draft_period_end
           FROM service_descriptions
           WHERE status = 'DRAFT'
         ) AS drafts`,

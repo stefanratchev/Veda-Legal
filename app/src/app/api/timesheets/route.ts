@@ -21,6 +21,7 @@ import {
   isNotFutureDate,
   MAX_HOURS_PER_ENTRY,
   canViewTeamTimesheets,
+  hasAdminAccess,
 } from "@/lib/api-utils";
 
 function serializeTimeEntry(entry: {
@@ -233,6 +234,11 @@ export async function POST(request: NextRequest) {
   }
   if (client.status !== "ACTIVE") {
     return errorResponse("Cannot log time for inactive clients", 400);
+  }
+
+  // Non-admin users cannot log time for MANAGEMENT clients
+  if (client.clientType === "MANAGEMENT" && !hasAdminAccess(user.position)) {
+    return errorResponse("Cannot log time for this client", 403);
   }
 
   // Determine if this is an internal/management entry

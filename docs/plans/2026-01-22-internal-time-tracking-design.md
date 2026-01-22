@@ -54,11 +54,11 @@ All internal/management topics have no subtopics.
 
 ### Topic Management (Partners/Admins)
 
-- **Topic list:** Add "Type" column with badges (Regular / Internal / Management)
+- **Topic list:** Show badge next to topic name for non-regular topics ("Internal" or "Management")
 - **Topic list filtering:** Dropdown to filter by topic type
 - **Create topic modal:** Add "Topic Type" dropdown (defaults to Regular)
 - **Edit topic modal:** Include "Topic Type" dropdown
-- **Subtopic section:** Hidden when topic type is `INTERNAL` or `MANAGEMENT`
+- **Subtopic panel:** Hidden when selected topic is `INTERNAL` or `MANAGEMENT` type
 
 ### Timesheet Entry Form
 

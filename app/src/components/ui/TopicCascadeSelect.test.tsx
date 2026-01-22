@@ -62,6 +62,7 @@ describe("TopicCascadeSelect", () => {
       name: "Company Incorporation",
       displayOrder: 1,
       status: "ACTIVE",
+      topicType: "REGULAR",
       subtopics: mockSubtopics1,
     },
     {
@@ -69,6 +70,7 @@ describe("TopicCascadeSelect", () => {
       name: "M&A Advisory",
       displayOrder: 2,
       status: "ACTIVE",
+      topicType: "REGULAR",
       subtopics: mockSubtopics2,
     },
     {
@@ -76,6 +78,7 @@ describe("TopicCascadeSelect", () => {
       name: "Litigation",
       displayOrder: 3,
       status: "ACTIVE",
+      topicType: "REGULAR",
       subtopics: [],
     },
   ];

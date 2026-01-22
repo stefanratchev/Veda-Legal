@@ -154,6 +154,7 @@ describe("EntriesList", () => {
       name: "M&A Advisory",
       displayOrder: 1,
       status: "ACTIVE",
+      topicType: "REGULAR",
       subtopics: [],
     },
   ];

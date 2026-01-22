@@ -102,6 +102,7 @@ describe("EntryForm", () => {
       name: "M&A Advisory",
       displayOrder: 1,
       status: "ACTIVE",
+      topicType: "REGULAR",
       subtopics: [
         {
           id: "subtopic-1",

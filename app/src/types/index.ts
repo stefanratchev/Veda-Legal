@@ -11,6 +11,18 @@ export interface Client {
 }
 
 /**
+ * Client type for categorization.
+ */
+export type ClientType = "REGULAR" | "INTERNAL" | "MANAGEMENT";
+
+/**
+ * Extended client with type information.
+ */
+export interface ClientWithType extends Client {
+  clientType: ClientType;
+}
+
+/**
  * Subtopic within a topic category.
  */
 export interface Subtopic {
@@ -22,6 +34,11 @@ export interface Subtopic {
 }
 
 /**
+ * Topic type for categorization.
+ */
+export type TopicType = "REGULAR" | "INTERNAL" | "MANAGEMENT";
+
+/**
  * Topic category containing subtopics.
  */
 export interface Topic {
@@ -29,6 +46,7 @@ export interface Topic {
   name: string;
   displayOrder: number;
   status: "ACTIVE" | "INACTIVE";
+  topicType: TopicType;
   subtopics: Subtopic[];
 }
 

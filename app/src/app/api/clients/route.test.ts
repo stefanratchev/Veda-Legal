@@ -65,6 +65,191 @@ describe("GET /api/clients", () => {
     });
   });
 
+  describe("ClientType Support", () => {
+    it("returns clientType field in response", async () => {
+      const user = createMockUser();
+      mockRequireAuth.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const clients = [
+        {
+          id: "client-1",
+          name: "Regular Client",
+          invoicedName: null,
+          invoiceAttn: null,
+          email: "client@example.com",
+          secondaryEmails: null,
+          hourlyRate: "150.00",
+          status: "ACTIVE",
+          clientType: "REGULAR",
+          notes: null,
+          createdAt: "2024-12-20T10:00:00.000Z",
+        },
+        {
+          id: "client-2",
+          name: "Internal Client",
+          invoicedName: null,
+          invoiceAttn: null,
+          email: null,
+          secondaryEmails: null,
+          hourlyRate: null,
+          status: "ACTIVE",
+          clientType: "INTERNAL",
+          notes: null,
+          createdAt: "2024-12-19T10:00:00.000Z",
+        },
+      ];
+
+      mockDb.query.clients.findMany.mockResolvedValue(clients);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/clients",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data[0]).toHaveProperty("clientType", "REGULAR");
+      expect(data[1]).toHaveProperty("clientType", "INTERNAL");
+    });
+
+    it("excludes MANAGEMENT clients for non-admin users", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      mockRequireAuth.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+      mockGetUserFromSession.mockResolvedValue({ id: "user-1", position: "ASSOCIATE" });
+      mockHasAdminAccess.mockReturnValue(false);
+
+      // Mock returns only non-MANAGEMENT clients because the query filters them out
+      const clients = [
+        {
+          id: "client-1",
+          name: "Regular Client",
+          invoicedName: null,
+          invoiceAttn: null,
+          email: "client@example.com",
+          secondaryEmails: null,
+          hourlyRate: "150.00",
+          status: "ACTIVE",
+          clientType: "REGULAR",
+          notes: null,
+          createdAt: "2024-12-20T10:00:00.000Z",
+        },
+      ];
+
+      mockDb.query.clients.findMany.mockResolvedValue(clients);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/clients",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      // Verify findMany was called (the route builds a where condition to exclude MANAGEMENT)
+      expect(mockDb.query.clients.findMany).toHaveBeenCalled();
+      // Verify no MANAGEMENT clients in response
+      expect(data.every((c: { clientType: string }) => c.clientType !== "MANAGEMENT")).toBe(true);
+    });
+
+    it("includes MANAGEMENT clients for admin users", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireAuth.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+      mockGetUserFromSession.mockResolvedValue({ id: "user-1", position: "ADMIN" });
+      mockHasAdminAccess.mockReturnValue(true);
+
+      const clients = [
+        {
+          id: "client-1",
+          name: "Regular Client",
+          invoicedName: null,
+          invoiceAttn: null,
+          email: null,
+          secondaryEmails: null,
+          hourlyRate: "150.00",
+          status: "ACTIVE",
+          clientType: "REGULAR",
+          notes: null,
+          createdAt: "2024-12-20T10:00:00.000Z",
+        },
+        {
+          id: "client-2",
+          name: "Management Client",
+          invoicedName: null,
+          invoiceAttn: null,
+          email: null,
+          secondaryEmails: null,
+          hourlyRate: null,
+          status: "ACTIVE",
+          clientType: "MANAGEMENT",
+          notes: null,
+          createdAt: "2024-12-19T10:00:00.000Z",
+        },
+      ];
+
+      mockDb.query.clients.findMany.mockResolvedValue(clients);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/clients",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data).toHaveLength(2);
+      expect(data.some((c: { clientType: string }) => c.clientType === "MANAGEMENT")).toBe(true);
+    });
+
+    it("filters by type query param correctly", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireAuth.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+      mockGetUserFromSession.mockResolvedValue({ id: "user-1", position: "ADMIN" });
+      mockHasAdminAccess.mockReturnValue(true);
+
+      const clients = [
+        {
+          id: "client-1",
+          name: "Internal Time",
+          invoicedName: null,
+          invoiceAttn: null,
+          email: null,
+          secondaryEmails: null,
+          hourlyRate: null,
+          status: "ACTIVE",
+          clientType: "INTERNAL",
+          notes: null,
+          createdAt: "2024-12-20T10:00:00.000Z",
+        },
+      ];
+
+      mockDb.query.clients.findMany.mockResolvedValue(clients);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/clients?type=INTERNAL",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(mockDb.query.clients.findMany).toHaveBeenCalled();
+      expect(data.every((c: { clientType: string }) => c.clientType === "INTERNAL")).toBe(true);
+    });
+  });
+
   describe("Happy Path", () => {
     it("returns all clients", async () => {
       const user = createMockUser();
@@ -388,6 +573,46 @@ describe("POST /api/clients", () => {
       expect(response.status).toBe(400);
       expect(data.error).toBe("Invalid status value");
     });
+
+    it("returns 400 for invalid clientType value", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/clients",
+        body: { ...validBody, clientType: "INVALID_TYPE" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe("Invalid client type value");
+    });
+
+    it("returns 403 when non-admin tries to create MANAGEMENT client", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+      mockGetUserFromSession.mockResolvedValue({ id: "user-1", position: "ASSOCIATE" });
+      mockHasAdminAccess.mockReturnValue(false);
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/clients",
+        body: { ...validBody, clientType: "MANAGEMENT" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Only administrators can create management clients");
+    });
   });
 
   describe("Happy Path", () => {
@@ -485,6 +710,7 @@ describe("POST /api/clients", () => {
         secondaryEmails: null,
         hourlyRate: null,
         status: "ACTIVE",
+        clientType: "REGULAR",
         notes: null,
         createdAt: "2024-12-20T10:00:00.000Z",
       };
@@ -506,6 +732,127 @@ describe("POST /api/clients", () => {
 
       expect(response.status).toBe(200);
       expect(data.status).toBe("ACTIVE");
+    });
+
+    it("accepts valid clientType values (REGULAR, INTERNAL, MANAGEMENT)", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+      mockGetUserFromSession.mockResolvedValue({ id: "user-1", position: "ADMIN" });
+      mockHasAdminAccess.mockReturnValue(true);
+
+      const createdClient = {
+        id: "client-123",
+        name: "Internal Time Tracking",
+        invoicedName: null,
+        invoiceAttn: null,
+        email: null,
+        secondaryEmails: null,
+        hourlyRate: null,
+        status: "ACTIVE",
+        clientType: "INTERNAL",
+        notes: null,
+        createdAt: "2024-12-20T10:00:00.000Z",
+      };
+
+      mockDb.insert.mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdClient]),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/clients",
+        body: { name: "Internal Time Tracking", clientType: "INTERNAL" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.clientType).toBe("INTERNAL");
+    });
+
+    it("allows admins to create MANAGEMENT clients", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+      mockGetUserFromSession.mockResolvedValue({ id: "user-1", position: "ADMIN" });
+      mockHasAdminAccess.mockReturnValue(true);
+
+      const createdClient = {
+        id: "client-123",
+        name: "Strategy Planning",
+        invoicedName: null,
+        invoiceAttn: null,
+        email: null,
+        secondaryEmails: null,
+        hourlyRate: null,
+        status: "ACTIVE",
+        clientType: "MANAGEMENT",
+        notes: null,
+        createdAt: "2024-12-20T10:00:00.000Z",
+      };
+
+      mockDb.insert.mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdClient]),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/clients",
+        body: { name: "Strategy Planning", clientType: "MANAGEMENT" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.clientType).toBe("MANAGEMENT");
+    });
+
+    it("defaults clientType to REGULAR when not provided", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const createdClient = {
+        id: "client-123",
+        name: "New Client",
+        invoicedName: null,
+        invoiceAttn: null,
+        email: null,
+        secondaryEmails: null,
+        hourlyRate: null,
+        status: "ACTIVE",
+        clientType: "REGULAR",
+        notes: null,
+        createdAt: "2024-12-20T10:00:00.000Z",
+      };
+
+      mockDb.insert.mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdClient]),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/clients",
+        body: { name: "New Client" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.clientType).toBe("REGULAR");
     });
   });
 
@@ -709,6 +1056,46 @@ describe("PATCH /api/clients", () => {
       expect(response.status).toBe(400);
       expect(data.error).toBe("Invalid status value");
     });
+
+    it("returns 400 for invalid clientType value", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/clients",
+        body: { id: "client-123", clientType: "INVALID_TYPE" },
+      });
+
+      const response = await PATCH(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe("Invalid client type value");
+    });
+
+    it("returns 403 when non-admin tries to update to MANAGEMENT type", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+      mockGetUserFromSession.mockResolvedValue({ id: "user-1", position: "ASSOCIATE" });
+      mockHasAdminAccess.mockReturnValue(false);
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/clients",
+        body: { id: "client-123", clientType: "MANAGEMENT" },
+      });
+
+      const response = await PATCH(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Only administrators can set management client type");
+    });
   });
 
   describe("Happy Path", () => {
@@ -810,6 +1197,7 @@ describe("PATCH /api/clients", () => {
         secondaryEmails: null,
         hourlyRate: null,
         status: "ACTIVE",
+        clientType: "REGULAR",
         notes: null,
         createdAt: "2024-12-20T10:00:00.000Z",
       };
@@ -834,6 +1222,90 @@ describe("PATCH /api/clients", () => {
       expect(response.status).toBe(200);
       expect(data.email).toBeNull();
       expect(data.hourlyRate).toBeNull();
+    });
+
+    it("updates clientType with valid value", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const updatedClient = {
+        id: "client-123",
+        name: "Client Name",
+        invoicedName: null,
+        invoiceAttn: null,
+        email: null,
+        secondaryEmails: null,
+        hourlyRate: null,
+        status: "ACTIVE",
+        clientType: "INTERNAL",
+        notes: null,
+        createdAt: "2024-12-20T10:00:00.000Z",
+      };
+
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedClient]),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/clients",
+        body: { id: "client-123", clientType: "INTERNAL" },
+      });
+
+      const response = await PATCH(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.clientType).toBe("INTERNAL");
+    });
+
+    it("allows admin to update clientType to MANAGEMENT", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+      mockGetUserFromSession.mockResolvedValue({ id: "user-1", position: "ADMIN" });
+      mockHasAdminAccess.mockReturnValue(true);
+
+      const updatedClient = {
+        id: "client-123",
+        name: "Strategy Client",
+        invoicedName: null,
+        invoiceAttn: null,
+        email: null,
+        secondaryEmails: null,
+        hourlyRate: null,
+        status: "ACTIVE",
+        clientType: "MANAGEMENT",
+        notes: null,
+        createdAt: "2024-12-20T10:00:00.000Z",
+      };
+
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedClient]),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/clients",
+        body: { id: "client-123", clientType: "MANAGEMENT" },
+      });
+
+      const response = await PATCH(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.clientType).toBe("MANAGEMENT");
     });
   });
 

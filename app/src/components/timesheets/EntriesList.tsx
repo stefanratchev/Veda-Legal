@@ -5,7 +5,7 @@ import { formatHours } from "@/lib/date-utils";
 import { EntryRow } from "./EntryRow";
 import { EntryCard } from "./EntryCard";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import type { TimeEntry, Client, Topic } from "@/types";
+import type { TimeEntry, ClientWithType, Topic } from "@/types";
 
 interface EntriesListProps {
   entries: TimeEntry[];
@@ -13,7 +13,7 @@ interface EntriesListProps {
   onDeleteEntry?: (entryId: string) => void;
   onUpdateEntry?: (updatedEntry: TimeEntry) => void;
   readOnly?: boolean;
-  clients?: Client[];
+  clients?: ClientWithType[];
   topics?: Topic[];
 }
 

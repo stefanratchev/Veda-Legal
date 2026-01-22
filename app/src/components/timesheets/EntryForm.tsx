@@ -7,10 +7,10 @@ import {
   TopicCascadeSelectRef,
 } from "@/components/ui/TopicCascadeSelect";
 import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicker";
-import type { Client, Topic, Subtopic, FormData } from "@/types";
+import type { Topic, Subtopic, FormData, ClientWithType } from "@/types";
 
 interface EntryFormProps {
-  clients: Client[];
+  clients: ClientWithType[];
   topics: Topic[];
   formData: FormData;
   isLoading: boolean;
@@ -46,9 +46,14 @@ export function EntryForm({
     }
   }, [highlightDescription]);
 
+  // Filter topics based on selected client's type
+  const selectedClient = clients.find((c) => c.id === formData.clientId);
+  const clientType = selectedClient?.clientType || "REGULAR";
+  const filteredTopics = topics.filter((t) => t.topicType === clientType);
+
   const canSubmit =
     formData.clientId &&
-    formData.subtopicId &&
+    (formData.subtopicId || formData.topicId) && // Either subtopic or topic selected
     (formData.hours > 0 || formData.minutes > 0);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -58,19 +63,28 @@ export function EntryForm({
     }
   };
 
-  const handleSubtopicSelect = (
-    subtopicId: string,
-    subtopic: Subtopic
+  const handleTopicSelect = (
+    id: string,
+    subtopic: Subtopic | null,
+    topic: Topic
   ) => {
-    // Pre-fill description with subtopic name
-    const description = subtopic.isPrefix ? `${subtopic.name} ` : subtopic.name;
-    onFormChange({ subtopicId, description });
+    if (subtopic) {
+      // Regular topic with subtopic
+      const description = subtopic.isPrefix
+        ? `${subtopic.name} `
+        : subtopic.name;
+      onFormChange({ subtopicId: id, topicId: "", description });
 
-    // For prefix subtopics, highlight description to indicate user should add details later
-    if (subtopic.isPrefix) {
-      setHighlightDescription(true);
+      // For prefix subtopics, highlight description to indicate user should add details later
+      if (subtopic.isPrefix) {
+        setHighlightDescription(true);
+      }
+    } else {
+      // Internal/management topic (no subtopic)
+      onFormChange({ topicId: id, subtopicId: "", description: topic.name });
     }
-    // Auto-open duration picker after subtopic selection (only in create mode)
+
+    // Auto-open duration picker after topic/subtopic selection (only in create mode)
     if (!isEditMode) {
       setTimeout(() => durationPickerRef.current?.open(), 0);
     }
@@ -92,7 +106,8 @@ export function EntryForm({
           clients={clients}
           value={formData.clientId}
           onChange={(clientId) => {
-            onFormChange({ clientId });
+            // Clear topic selection when client changes (filtered topics will change)
+            onFormChange({ clientId, topicId: "", subtopicId: "", description: "" });
             // Auto-open topic picker after client selection (only in create mode)
             if (!isEditMode) {
               setTimeout(() => topicSelectRef.current?.open(), 0);
@@ -105,9 +120,9 @@ export function EntryForm({
         {/* Topic/Subtopic Cascade Selector */}
         <TopicCascadeSelect
           ref={topicSelectRef}
-          topics={topics}
-          value={formData.subtopicId}
-          onChange={handleSubtopicSelect}
+          topics={filteredTopics}
+          value={formData.subtopicId || formData.topicId}
+          onChange={handleTopicSelect}
           placeholder="Select topic..."
           className="w-full lg:w-[160px] lg:flex-shrink-0"
         />

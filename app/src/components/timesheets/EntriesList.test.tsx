@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { EntriesList } from "./EntriesList";
-import type { TimeEntry, Client, Topic } from "@/types";
+import type { TimeEntry, ClientWithType, Topic } from "@/types";
 
 // Mock the child components
 vi.mock("./EntryRow", () => ({
@@ -14,7 +14,7 @@ vi.mock("./EntryRow", () => ({
     onDeleteClick?: () => void;
     onUpdate?: (updatedEntry: TimeEntry) => void;
     readOnly?: boolean;
-    clients?: Client[];
+    clients?: ClientWithType[];
     topics?: Topic[];
   }) => (
     <tr data-testid={`entry-row-${entry.id}`}>
@@ -143,9 +143,9 @@ describe("EntriesList", () => {
     },
   ];
 
-  const mockClients: Client[] = [
-    { id: "client-1", name: "Acme Corporation" },
-    { id: "client-2", name: "Beta Industries" },
+  const mockClients: ClientWithType[] = [
+    { id: "client-1", name: "Acme Corporation", clientType: "REGULAR" },
+    { id: "client-2", name: "Beta Industries", clientType: "REGULAR" },
   ];
 
   const mockTopics: Topic[] = [

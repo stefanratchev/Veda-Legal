@@ -3,12 +3,13 @@ import { db, clients, topics, subtopics } from "@/lib/db";
 import { TimesheetsContent } from "@/components/timesheets/TimesheetsContent";
 
 export default async function TimesheetsPage() {
-  // Fetch active clients for the dropdown
+  // Fetch active clients for the dropdown (including clientType for filtering topics)
   const clientsList = await db.query.clients.findMany({
     where: eq(clients.status, "ACTIVE"),
     columns: {
       id: true,
       name: true,
+      clientType: true,
     },
     orderBy: [asc(clients.name)],
   });

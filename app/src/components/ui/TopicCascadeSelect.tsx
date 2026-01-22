@@ -13,8 +13,8 @@ import type { Topic, Subtopic } from "@/types";
 
 interface TopicCascadeSelectProps {
   topics: Topic[];
-  value: string; // subtopicId
-  onChange: (subtopicId: string, subtopic: Subtopic, topic: Topic) => void;
+  value: string; // subtopicId or topicId (for topics without subtopics)
+  onChange: (id: string, subtopic: Subtopic | null, topic: Topic) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
@@ -62,14 +62,21 @@ export const TopicCascadeSelect = forwardRef<
     [disabled]
   );
 
-  // Find selected subtopic and its topic
-  const selectedTopic = topics.find((t) =>
+  // Find selected subtopic and its topic, or topic-only selection
+  const selectedTopicWithSubtopic = topics.find((t) =>
     t.subtopics.some((s) => s.id === value)
   );
-  const selectedSubtopic = selectedTopic?.subtopics.find((s) => s.id === value);
-  const selectedData =
-    selectedTopic && selectedSubtopic
-      ? { topic: selectedTopic, subtopic: selectedSubtopic }
+  const selectedSubtopic = selectedTopicWithSubtopic?.subtopics.find(
+    (s) => s.id === value
+  );
+  // Check if value is a topic ID (for topics without subtopics)
+  const selectedTopicOnly = topics.find(
+    (t) => t.id === value && t.subtopics.length === 0
+  );
+  const selectedData = selectedTopicWithSubtopic && selectedSubtopic
+    ? { topic: selectedTopicWithSubtopic, subtopic: selectedSubtopic }
+    : selectedTopicOnly
+      ? { topic: selectedTopicOnly, subtopic: null }
       : null;
 
   // Get current topic (when drilling into subtopics)
@@ -121,9 +128,22 @@ export const TopicCascadeSelect = forwardRef<
   }, [highlightedIndex, isOpen]);
 
   const handleTopicClick = (topicId: string) => {
-    setSelectedTopicId(topicId);
-    setSearch("");
-    setHighlightedIndex(0);
+    const topic = topics.find((t) => t.id === topicId);
+    if (!topic) return;
+
+    if (topic.subtopics.length === 0) {
+      // For topics without subtopics, select the topic directly
+      onChange(topic.id, null, topic);
+      setIsOpen(false);
+      setSelectedTopicId(null);
+      setSearch("");
+      setHighlightedIndex(0);
+    } else {
+      // Normal drill-down for topics with subtopics
+      setSelectedTopicId(topicId);
+      setSearch("");
+      setHighlightedIndex(0);
+    }
   };
 
   const handleSubtopicClick = (subtopic: Subtopic) => {
@@ -183,7 +203,9 @@ export const TopicCascadeSelect = forwardRef<
 
   // Display text for button
   const displayText = selectedData
-    ? `${selectedData.topic.name} > ${selectedData.subtopic.name}`
+    ? selectedData.subtopic
+      ? `${selectedData.topic.name} > ${selectedData.subtopic.name}`
+      : selectedData.topic.name
     : placeholder;
 
   return (
@@ -204,7 +226,9 @@ export const TopicCascadeSelect = forwardRef<
         `}
         title={
           selectedData
-            ? `${selectedData.topic.name} > ${selectedData.subtopic.name}`
+            ? selectedData.subtopic
+              ? `${selectedData.topic.name} > ${selectedData.subtopic.name}`
+              : selectedData.topic.name
             : undefined
         }
       >
@@ -327,29 +351,36 @@ export const TopicCascadeSelect = forwardRef<
                     transition-colors
                     flex items-center justify-between
                     ${index === highlightedIndex ? "bg-[var(--bg-surface)]" : ""}
+                    ${value === topic.id ? "text-[var(--accent-pink)]" : ""}
                   `}
                 >
                   <span className="text-[var(--text-primary)]">
                     {topic.name}
                   </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-[var(--text-muted)]">
-                      {topic.subtopics.length}
+                  {topic.subtopics.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-[var(--text-muted)]">
+                        {topic.subtopics.length}
+                      </span>
+                      <svg
+                        className="w-4 h-4 text-[var(--text-muted)]"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.5"
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded">
+                      direct
                     </span>
-                    <svg
-                      className="w-4 h-4 text-[var(--text-muted)]"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="1.5"
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </div>
+                  )}
                 </button>
               ))
             )}

@@ -147,10 +147,11 @@ describe("TopicCascadeSelect", () => {
       expect(screen.getByText("M&A Advisory")).toBeInTheDocument();
       expect(screen.getByText("Litigation")).toBeInTheDocument();
 
-      // Shows subtopic count for each topic
+      // Shows subtopic count for topics with subtopics
       expect(screen.getByText("3")).toBeInTheDocument(); // Company Incorporation has 3
       expect(screen.getByText("2")).toBeInTheDocument(); // M&A Advisory has 2
-      expect(screen.getByText("0")).toBeInTheDocument(); // Litigation has 0
+      // Topics without subtopics show "direct" indicator instead of count
+      expect(screen.getByText("direct")).toBeInTheDocument(); // Litigation has 0 subtopics
     });
 
     it("closes dropdown on second click", () => {

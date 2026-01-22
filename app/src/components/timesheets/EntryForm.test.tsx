@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { EntryForm } from "./EntryForm";
-import type { Client, Topic, FormData } from "@/types";
+import type { ClientWithType, Topic, FormData } from "@/types";
 
 // Mock child components
 vi.mock("@/components/ui/ClientSelect", () => ({
@@ -11,7 +11,7 @@ vi.mock("@/components/ui/ClientSelect", () => ({
     placeholder,
     className,
   }: {
-    clients: Client[];
+    clients: ClientWithType[];
     value: string;
     onChange: (id: string) => void;
     placeholder?: string;
@@ -38,7 +38,7 @@ vi.mock("@/components/ui/TopicCascadeSelect", () => ({
     }: {
       topics: Topic[];
       value: string;
-      onChange: (subtopicId: string, subtopic: { id: string; name: string; isPrefix: boolean }) => void;
+      onChange: (id: string, subtopic: { id: string; name: string; isPrefix: boolean } | null, topic: Topic) => void;
       placeholder?: string;
       className?: string;
     }) => (
@@ -47,11 +47,22 @@ vi.mock("@/components/ui/TopicCascadeSelect", () => ({
         data-value={value}
         className={className}
         onClick={() =>
-          onChange("subtopic-1", {
-            id: "subtopic-1",
-            name: "Client correspondence:",
-            isPrefix: true,
-          })
+          onChange(
+            "subtopic-1",
+            {
+              id: "subtopic-1",
+              name: "Client correspondence:",
+              isPrefix: true,
+            },
+            {
+              id: "topic-1",
+              name: "M&A Advisory",
+              displayOrder: 1,
+              status: "ACTIVE",
+              topicType: "REGULAR",
+              subtopics: [],
+            }
+          )
         }
       >
         {value || placeholder || "Select topic..."}
@@ -91,9 +102,9 @@ describe("EntryForm", () => {
   const mockOnSubmit = vi.fn();
   const mockOnCancel = vi.fn();
 
-  const mockClients: Client[] = [
-    { id: "client-1", name: "Acme Corporation" },
-    { id: "client-2", name: "Beta Industries" },
+  const mockClients: ClientWithType[] = [
+    { id: "client-1", name: "Acme Corporation", clientType: "REGULAR" },
+    { id: "client-2", name: "Beta Industries", clientType: "REGULAR" },
   ];
 
   const mockTopics: Topic[] = [
@@ -124,6 +135,7 @@ describe("EntryForm", () => {
 
   const defaultFormData: FormData = {
     clientId: "",
+    topicId: "",
     subtopicId: "",
     hours: 1,
     minutes: 0,
@@ -189,6 +201,7 @@ describe("EntryForm", () => {
     it("displays current form data in fields", () => {
       const populatedFormData: FormData = {
         clientId: "client-1",
+        topicId: "",
         subtopicId: "subtopic-1",
         hours: 2,
         minutes: 30,
@@ -219,6 +232,7 @@ describe("EntryForm", () => {
     it("edit mode populates existing values correctly", () => {
       const editFormData: FormData = {
         clientId: "client-2",
+        topicId: "",
         subtopicId: "subtopic-2",
         hours: 3,
         minutes: 15,
@@ -246,7 +260,13 @@ describe("EntryForm", () => {
 
       fireEvent.click(screen.getByTestId("client-select"));
 
-      expect(mockOnFormChange).toHaveBeenCalledWith({ clientId: "client-1" });
+      // When client changes, it clears topic selection since filtered topics change
+      expect(mockOnFormChange).toHaveBeenCalledWith({
+        clientId: "client-1",
+        topicId: "",
+        subtopicId: "",
+        description: "",
+      });
     });
 
     it("calls onFormChange when subtopic is selected", () => {
@@ -256,6 +276,7 @@ describe("EntryForm", () => {
 
       expect(mockOnFormChange).toHaveBeenCalledWith({
         subtopicId: "subtopic-1",
+        topicId: "",
         description: "Client correspondence: ",
       });
     });
@@ -291,6 +312,7 @@ describe("EntryForm", () => {
     it("submit button is enabled when form is complete", () => {
       const completeFormData: FormData = {
         clientId: "client-1",
+        topicId: "",
         subtopicId: "subtopic-1",
         hours: 1,
         minutes: 0,
@@ -308,6 +330,7 @@ describe("EntryForm", () => {
     it("submit button is enabled with just minutes (no hours)", () => {
       const minutesOnlyFormData: FormData = {
         clientId: "client-1",
+        topicId: "",
         subtopicId: "subtopic-1",
         hours: 0,
         minutes: 30,
@@ -325,6 +348,7 @@ describe("EntryForm", () => {
     it("calls onSubmit when submit button is clicked", () => {
       const completeFormData: FormData = {
         clientId: "client-1",
+        topicId: "",
         subtopicId: "subtopic-1",
         hours: 1,
         minutes: 0,
@@ -342,6 +366,7 @@ describe("EntryForm", () => {
     it("calls onSubmit on Enter key in description field when form is complete", () => {
       const completeFormData: FormData = {
         clientId: "client-1",
+        topicId: "",
         subtopicId: "subtopic-1",
         hours: 1,
         minutes: 0,
@@ -370,6 +395,7 @@ describe("EntryForm", () => {
     it("shows loading indicator when isLoading is true", () => {
       const completeFormData: FormData = {
         clientId: "client-1",
+        topicId: "",
         subtopicId: "subtopic-1",
         hours: 1,
         minutes: 0,
@@ -385,6 +411,7 @@ describe("EntryForm", () => {
     it("disables submit button when loading", () => {
       const completeFormData: FormData = {
         clientId: "client-1",
+        topicId: "",
         subtopicId: "subtopic-1",
         hours: 1,
         minutes: 0,
@@ -402,6 +429,7 @@ describe("EntryForm", () => {
     it("does not call onSubmit on Enter when loading", () => {
       const completeFormData: FormData = {
         clientId: "client-1",
+        topicId: "",
         subtopicId: "subtopic-1",
         hours: 1,
         minutes: 0,

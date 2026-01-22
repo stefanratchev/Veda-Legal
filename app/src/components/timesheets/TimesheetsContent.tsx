@@ -7,11 +7,11 @@ import { EntryForm } from "./EntryForm";
 import { EntriesList } from "./EntriesList";
 import { TeamTimesheets } from "./TeamTimesheets";
 import { M365ActivityPanel } from "./M365ActivityPanel";
-import type { Client, Topic, TimeEntry, FormData, TeamSummary, M365ActivityResponse } from "@/types";
+import type { ClientWithType, Topic, TimeEntry, FormData, TeamSummary, M365ActivityResponse } from "@/types";
 import { initialFormData } from "@/types";
 
 interface TimesheetsContentProps {
-  clients: Client[];
+  clients: ClientWithType[];
   topics: Topic[];
 }
 
@@ -141,7 +141,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!formData.clientId || !formData.subtopicId) return;
+    if (!formData.clientId || (!formData.subtopicId && !formData.topicId)) return;
     if (formData.hours === 0 && formData.minutes === 0) return;
 
     setIsLoading(true);
@@ -156,7 +156,8 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         body: JSON.stringify({
           date: formatDateISO(selectedDate),
           clientId: formData.clientId,
-          subtopicId: formData.subtopicId,
+          subtopicId: formData.subtopicId || null,
+          topicId: formData.topicId || null,
           hours: totalHours,
           description: formData.description.trim(),
         }),
@@ -171,10 +172,11 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
 
       setEntries((prev) => [data, ...prev]);
       setDatesWithEntries((prev) => new Set([...prev, formatDateISO(selectedDate)]));
-      // Keep client and subtopic selected, only reset duration and description
+      // Keep client and topic/subtopic selected, only reset duration and description
       setFormData((prev) => ({
         ...initialFormData,
         clientId: prev.clientId,
+        topicId: prev.topicId,
         subtopicId: prev.subtopicId,
       }));
     } catch {

@@ -85,6 +85,7 @@ export interface TeamSummary {
  */
 export interface FormData {
   clientId: string;
+  topicId: string; // Used for internal/management topics (no subtopic)
   subtopicId: string;
   hours: number;
   minutes: number;
@@ -96,6 +97,7 @@ export interface FormData {
  */
 export const initialFormData: FormData = {
   clientId: "",
+  topicId: "",
   subtopicId: "",
   hours: 1,
   minutes: 0,

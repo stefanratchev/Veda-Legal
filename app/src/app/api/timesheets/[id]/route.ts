@@ -62,7 +62,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { hours, description, subtopicId } = body;
+  const { hours, description, subtopicId, clientId } = body;
 
   try {
     // Find the existing entry
@@ -131,6 +131,7 @@ export async function PATCH(
       subtopicId?: string;
       topicName?: string;
       subtopicName?: string;
+      clientId?: string;
       updatedAt: string;
     } = {
       updatedAt: new Date().toISOString(),
@@ -182,6 +183,23 @@ export async function PATCH(
       updateData.subtopicId = subtopicId;
       updateData.topicName = subtopic.topic.name;
       updateData.subtopicName = subtopic.name;
+    }
+
+    // Validate and include clientId if provided
+    if (clientId !== undefined) {
+      const client = await db.query.clients.findFirst({
+        where: eq(clients.id, clientId),
+        columns: { id: true, status: true },
+      });
+
+      if (!client) {
+        return errorResponse("Client not found", 404);
+      }
+      if (client.status !== "ACTIVE") {
+        return errorResponse("Cannot assign entry to inactive client", 400);
+      }
+
+      updateData.clientId = clientId;
     }
 
     // Perform the update

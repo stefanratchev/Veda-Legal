@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { eq, asc, desc } from "drizzle-orm";
+import { eq, asc, desc, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/user";
 import { db, clients, serviceDescriptions } from "@/lib/db";
 import { BillingContent } from "@/components/billing/BillingContent";
@@ -74,9 +74,12 @@ export default async function BillingPage() {
     };
   });
 
-  // Fetch clients for the create modal
+  // Fetch clients for the create modal (only REGULAR clients for billing)
   const clientsList = await db.query.clients.findMany({
-    where: eq(clients.status, "ACTIVE"),
+    where: and(
+      eq(clients.status, "ACTIVE"),
+      eq(clients.clientType, "REGULAR")
+    ),
     columns: { id: true, name: true },
     orderBy: [asc(clients.name)],
   });

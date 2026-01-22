@@ -377,8 +377,15 @@ export const TopicCascadeSelect = forwardRef<
                       </svg>
                     </div>
                   ) : (
-                    <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-surface)] px-1.5 py-0.5 rounded">
-                      direct
+                    <span className={`
+                      px-1.5 py-0.5 text-[10px] font-medium rounded
+                      ${topic.topicType === "INTERNAL"
+                        ? "bg-[var(--info-bg)] text-[var(--info)]"
+                        : topic.topicType === "MANAGEMENT"
+                          ? "bg-[var(--warning-bg)] text-[var(--warning)]"
+                          : "bg-[var(--bg-surface)] text-[var(--text-muted)]"}
+                    `}>
+                      {topic.topicType === "INTERNAL" ? "Internal" : topic.topicType === "MANAGEMENT" ? "Mgmt" : "direct"}
                     </span>
                   )}
                 </button>

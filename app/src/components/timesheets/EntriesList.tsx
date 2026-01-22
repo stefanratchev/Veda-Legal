@@ -40,7 +40,7 @@ export function EntriesList({
   };
 
   return (
-    <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded overflow-hidden">
+    <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded">
       {isLoadingEntries ? (
         <div className="flex items-center justify-center py-8">
           <svg className="w-6 h-6 animate-spin text-[var(--accent-pink)]" fill="none" viewBox="0 0 24 24">

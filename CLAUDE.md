@@ -15,6 +15,7 @@ Veda Legal Timesheets - A Next.js application for legal practice management and 
 - **Auth:** NextAuth.js with Microsoft 365 (Azure AD) SSO
 - **Database:** PostgreSQL with Drizzle ORM
 - **Testing:** Vitest + React Testing Library
+- **Runtime:** Node.js 22 (production)
 - **Hosting target:** Azure (EU region)
 
 ## Commands
@@ -82,22 +83,27 @@ app/src/
 - **Client Components** (`"use client"`) handle interactivity, call API routes for mutations
 - **API Routes** use shared helpers from `lib/api-utils.ts`:
   - `requireAuth()` - Validates session (supports both server session and JWT)
-  - `requireWriteAccess()` - Checks user has ADMIN, PARTNER, or ASSOCIATE role
+  - `requireWriteAccess()` - Checks user has any valid position (all positions can write)
 
 ### Shared Code
 - **Types:** Import from `@/types` for Client, TimeEntry, FormData interfaces
 - **Hooks:** `useClickOutside` for dropdown/modal close behavior
 - **Validation:** Use `isValidEmail`, `isValidHours`, `isValidDescription` from api-utils
 
-### Role-Based Access
-Current schema has `ADMIN` and `EMPLOYEE` roles. The `api-utils.ts` WRITE_ROLES array determines write access:
+### Position-Based Access
+The schema uses a `Position` enum with five levels. Access is controlled via position groups in `api-utils.ts`:
 
-| Role | Read | Write |
-|------|------|-------|
-| ADMIN | Yes | Yes |
-| EMPLOYEE | Yes | No |
+| Position | Admin Access | Write Access | Team View |
+|----------|--------------|--------------|-----------|
+| ADMIN | ✓ | ✓ | ✓ |
+| PARTNER | ✓ | ✓ | ✓ |
+| SENIOR_ASSOCIATE | | ✓ | |
+| ASSOCIATE | | ✓ | |
+| CONSULTANT | | ✓ | |
 
-**Note:** Code references PARTNER/ASSOCIATE roles for future expansion; add to schema when needed.
+- **Admin Access:** Can manage clients, reports, billing
+- **Write Access:** Can log time entries
+- **Team View:** Can view other users' timesheets
 
 ### Time Entry Editing
 Time entries can be edited by their owner via `PATCH /api/timesheets/[id]`. Editable fields: client, topic/subtopic, hours, description. Date cannot be changed.
@@ -181,6 +187,9 @@ AZURE_AD_TENANT_ID=<from Azure Portal>
 - **Topic**: High-level work category (e.g., "Company Incorporation", "M&A Advisory")
 - **Subtopic**: Specific task type within a topic (e.g., "Client correspondence:", "Drafting documents:")
 - **isPrefix**: Subtopics ending with ":" are prefixes - user should add details after selecting
+- **ServiceDescription**: Invoice-like document grouping time entries for a client and period
+- **ServiceDescriptionTopic**: A topic section within a service description with pricing mode (hourly/fixed)
+- **LineItem**: Individual line within a service description topic (linked to a time entry or manual)
 
 ## Topic/Subtopic Hierarchy
 

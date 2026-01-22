@@ -66,12 +66,14 @@ export function EntryForm({
     const description = subtopic.isPrefix ? `${subtopic.name} ` : subtopic.name;
     onFormChange({ subtopicId, description });
 
-    // Always open duration picker after subtopic selection
     // For prefix subtopics, highlight description to indicate user should add details later
     if (subtopic.isPrefix) {
       setHighlightDescription(true);
     }
-    setTimeout(() => durationPickerRef.current?.open(), 0);
+    // Auto-open duration picker after subtopic selection (only in create mode)
+    if (!isEditMode) {
+      setTimeout(() => durationPickerRef.current?.open(), 0);
+    }
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,8 +93,10 @@ export function EntryForm({
           value={formData.clientId}
           onChange={(clientId) => {
             onFormChange({ clientId });
-            // Auto-open topic picker after client selection
-            setTimeout(() => topicSelectRef.current?.open(), 0);
+            // Auto-open topic picker after client selection (only in create mode)
+            if (!isEditMode) {
+              setTimeout(() => topicSelectRef.current?.open(), 0);
+            }
           }}
           placeholder="Select client..."
           className="w-full lg:w-[160px] lg:flex-shrink-0"
@@ -116,8 +120,10 @@ export function EntryForm({
             minutes={formData.minutes}
             onChange={(hours, minutes) => {
               onFormChange({ hours, minutes });
-              // Auto-focus description after duration selection
-              setTimeout(() => descriptionInputRef.current?.focus(), 0);
+              // Auto-focus description after duration selection (only in create mode)
+              if (!isEditMode) {
+                setTimeout(() => descriptionInputRef.current?.focus(), 0);
+              }
             }}
             className="w-[100px] flex-shrink-0"
           />

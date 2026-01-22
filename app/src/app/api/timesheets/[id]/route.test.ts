@@ -243,6 +243,51 @@ describe("PATCH /api/timesheets/[id]", () => {
       expect(response.status).toBe(400);
       expect(data.error).toBe("Hours must be between 0 and 12");
     });
+
+    it("returns 404 when clientId does not exist", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({ userId: user.id });
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      mockDb.query.clients.findFirst.mockResolvedValue(null);
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { clientId: "nonexistent-client" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(404);
+      expect(data.error).toBe("Client not found");
+    });
+
+    it("returns 400 when client is inactive", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({ userId: user.id });
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      mockDb.query.clients.findFirst.mockResolvedValue({
+        id: "inactive-client",
+        status: "INACTIVE",
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { clientId: "inactive-client" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe("Cannot assign entry to inactive client");
+    });
   });
 
   describe("Happy Path", () => {
@@ -367,6 +412,47 @@ describe("PATCH /api/timesheets/[id]", () => {
 
       expect(response.status).toBe(200);
       expect(data.description).toBe("New description");
+    });
+
+    it("updates clientId when client exists and is active", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+        clientId: "old-client",
+      });
+
+      const updatedEntry = {
+        ...entry,
+        clientId: "new-client",
+        updatedAt: new Date().toISOString(),
+      };
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      mockDb.query.clients.findFirst.mockResolvedValue({
+        id: "new-client",
+        status: "ACTIVE",
+      });
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedEntry]),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { clientId: "new-client" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.clientId).toBe("new-client");
     });
   });
 });

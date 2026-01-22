@@ -25,6 +25,7 @@ export default async function ClientsPage() {
       address: true,
       practiceArea: true,
       status: true,
+      clientType: true,
       notes: true,
       createdAt: true,
     },

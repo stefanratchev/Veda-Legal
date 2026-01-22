@@ -21,6 +21,7 @@ export default async function TimesheetsPage() {
       name: true,
       displayOrder: true,
       status: true,
+      topicType: true,
     },
     with: {
       subtopics: {

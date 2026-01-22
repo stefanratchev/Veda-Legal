@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 type ClientStatus = "ACTIVE" | "INACTIVE";
+type ClientType = "REGULAR" | "INTERNAL" | "MANAGEMENT";
 
 interface FormData {
   name: string;
@@ -12,6 +13,7 @@ interface FormData {
   secondaryEmails: string;
   hourlyRate: string;
   status: ClientStatus;
+  clientType: ClientType;
   notes: string;
 }
 
@@ -227,6 +229,32 @@ export function ClientModal({
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
                 </select>
+              </div>
+
+              {/* Client Type */}
+              <div>
+                <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
+                  Client Type
+                </label>
+                <select
+                  value={formData.clientType}
+                  onChange={(e) => onFormChange({ clientType: e.target.value as ClientType })}
+                  className="
+                    w-full px-3 py-2 rounded text-[13px]
+                    bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                    text-[var(--text-primary)]
+                    focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+                    focus:outline-none transition-all duration-200
+                    cursor-pointer
+                  "
+                >
+                  <option value="REGULAR">Regular</option>
+                  <option value="INTERNAL">Internal</option>
+                  <option value="MANAGEMENT">Management</option>
+                </select>
+                <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                  Internal: visible to all. Management: Partners/Admins only.
+                </p>
               </div>
 
               {/* Notes */}

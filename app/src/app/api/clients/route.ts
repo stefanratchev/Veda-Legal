@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, ne, and } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import { clients } from "@/lib/schema";
@@ -9,12 +9,17 @@ import {
   isValidEmail,
   serializeDecimal,
   errorResponse,
+  getUserFromSession,
+  hasAdminAccess,
   MAX_NAME_LENGTH,
   MAX_EMAIL_LENGTH,
 } from "@/lib/api-utils";
 
 // Valid status values
 const VALID_STATUS = ["ACTIVE", "INACTIVE"] as const;
+
+// Valid client types
+const VALID_CLIENT_TYPES = ["REGULAR", "INTERNAL", "MANAGEMENT"] as const;
 
 function serializeClient<T extends { hourlyRate: string | null }>(client: T) {
   return {
@@ -31,6 +36,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Get user to check admin access
+    const user = await getUserFromSession(auth.session.user?.email);
+    const isAdmin = user ? hasAdminAccess(user.position) : false;
+
+    // Get optional type filter from query params
+    const { searchParams } = new URL(request.url);
+    const typeFilter = searchParams.get("type");
+
+    // Build where conditions
+    const conditions = [];
+
+    // Filter by type if provided
+    if (typeFilter && VALID_CLIENT_TYPES.includes(typeFilter as typeof VALID_CLIENT_TYPES[number])) {
+      conditions.push(eq(clients.clientType, typeFilter as typeof VALID_CLIENT_TYPES[number]));
+    }
+
+    // Non-admin users cannot see MANAGEMENT clients
+    if (!isAdmin) {
+      conditions.push(ne(clients.clientType, "MANAGEMENT"));
+    }
+
     const allClients = await db.query.clients.findMany({
       columns: {
         id: true,
@@ -41,9 +67,11 @@ export async function GET(request: NextRequest) {
         secondaryEmails: true,
         hourlyRate: true,
         status: true,
+        clientType: true,
         notes: true,
         createdAt: true,
       },
+      where: conditions.length > 0 ? and(...conditions) : undefined,
       orderBy: [desc(clients.createdAt)],
     });
 
@@ -71,7 +99,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { name, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes } = body;
+  const { name, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes, clientType } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return errorResponse("Name is required", 400);
@@ -102,6 +130,20 @@ export async function POST(request: NextRequest) {
     return errorResponse("Invalid status value", 400);
   }
 
+  // Validate clientType
+  const validatedClientType = clientType || "REGULAR";
+  if (!VALID_CLIENT_TYPES.includes(validatedClientType)) {
+    return errorResponse("Invalid client type value", 400);
+  }
+
+  // Only admins can create MANAGEMENT clients
+  if (validatedClientType === "MANAGEMENT") {
+    const postUser = await getUserFromSession(auth.session.user?.email);
+    if (!postUser || !hasAdminAccess(postUser.position)) {
+      return errorResponse("Only administrators can create management clients", 403);
+    }
+  }
+
   try {
     const now = new Date().toISOString();
     const [client] = await db.insert(clients).values({
@@ -113,6 +155,7 @@ export async function POST(request: NextRequest) {
       secondaryEmails: secondaryEmails?.trim() || null,
       hourlyRate: hourlyRate ? String(hourlyRate) : null,
       status: clientStatus,
+      clientType: validatedClientType,
       notes: notes?.trim() || null,
       updatedAt: now,
     }).returning({
@@ -124,6 +167,7 @@ export async function POST(request: NextRequest) {
       secondaryEmails: clients.secondaryEmails,
       hourlyRate: clients.hourlyRate,
       status: clients.status,
+      clientType: clients.clientType,
       notes: clients.notes,
       createdAt: clients.createdAt,
     });
@@ -152,7 +196,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, name, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes } = body;
+  const { id, name, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes, clientType } = body;
 
   if (!id) {
     return NextResponse.json(
@@ -191,6 +235,19 @@ export async function PATCH(request: NextRequest) {
     return errorResponse("Invalid status value", 400);
   }
 
+  // Validate clientType if provided
+  if (clientType !== undefined && !VALID_CLIENT_TYPES.includes(clientType)) {
+    return errorResponse("Invalid client type value", 400);
+  }
+
+  // Only admins can set clientType to MANAGEMENT
+  if (clientType === "MANAGEMENT") {
+    const patchUser = await getUserFromSession(auth.session.user?.email);
+    if (!patchUser || !hasAdminAccess(patchUser.position)) {
+      return errorResponse("Only administrators can set management client type", 403);
+    }
+  }
+
   // Build update object - always set updatedAt
   const updateData: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
@@ -204,6 +261,7 @@ export async function PATCH(request: NextRequest) {
     updateData.hourlyRate = hourlyRate ? String(hourlyRate) : null;
   }
   if (status !== undefined) updateData.status = status;
+  if (clientType !== undefined) updateData.clientType = clientType;
   if (notes !== undefined) updateData.notes = notes?.trim() || null;
 
   try {
@@ -219,6 +277,7 @@ export async function PATCH(request: NextRequest) {
         secondaryEmails: clients.secondaryEmails,
         hourlyRate: clients.hourlyRate,
         status: clients.status,
+        clientType: clients.clientType,
         notes: clients.notes,
         createdAt: clients.createdAt,
       });

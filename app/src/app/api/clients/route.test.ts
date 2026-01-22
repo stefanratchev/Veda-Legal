@@ -4,9 +4,11 @@ import { createMockRequest } from "@/test/helpers/api";
 import { createMockUser, createMockClient } from "@/test/mocks/factories";
 
 // Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireAuth, mockRequireWriteAccess, mockDb } = vi.hoisted(() => ({
+const { mockRequireAuth, mockRequireWriteAccess, mockGetUserFromSession, mockHasAdminAccess, mockDb } = vi.hoisted(() => ({
   mockRequireAuth: vi.fn(),
   mockRequireWriteAccess: vi.fn(),
+  mockGetUserFromSession: vi.fn(),
+  mockHasAdminAccess: vi.fn(),
   mockDb: {
     query: {
       clients: {
@@ -30,6 +32,8 @@ vi.mock("@/lib/api-utils", async (importOriginal) => {
     ...original,
     requireAuth: mockRequireAuth,
     requireWriteAccess: mockRequireWriteAccess,
+    getUserFromSession: mockGetUserFromSession,
+    hasAdminAccess: mockHasAdminAccess,
   };
 });
 
@@ -39,6 +43,9 @@ import { GET, POST, PATCH, DELETE } from "./route";
 describe("GET /api/clients", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: mock a regular non-admin user
+    mockGetUserFromSession.mockResolvedValue({ id: "user-1", position: "ASSOCIATE" });
+    mockHasAdminAccess.mockReturnValue(false);
   });
 
   describe("Authentication", () => {

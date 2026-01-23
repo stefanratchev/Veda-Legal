@@ -70,18 +70,28 @@ export function EntryForm({
   ) => {
     if (subtopic) {
       // Regular topic with subtopic
-      const description = subtopic.isPrefix
-        ? `${subtopic.name} `
-        : subtopic.name;
-      onFormChange({ subtopicId: id, topicId: "", description });
+      if (isEditMode) {
+        // In edit mode, preserve existing description
+        onFormChange({ subtopicId: id, topicId: "" });
+      } else {
+        const description = subtopic.isPrefix
+          ? `${subtopic.name} `
+          : subtopic.name;
+        onFormChange({ subtopicId: id, topicId: "", description });
 
-      // For prefix subtopics, highlight description to indicate user should add details later
-      if (subtopic.isPrefix) {
-        setHighlightDescription(true);
+        // For prefix subtopics, highlight description to indicate user should add details later
+        if (subtopic.isPrefix) {
+          setHighlightDescription(true);
+        }
       }
     } else {
       // Internal/management topic (no subtopic)
-      onFormChange({ topicId: id, subtopicId: "", description: topic.name });
+      if (isEditMode) {
+        // In edit mode, preserve existing description
+        onFormChange({ topicId: id, subtopicId: "" });
+      } else {
+        onFormChange({ topicId: id, subtopicId: "", description: topic.name });
+      }
     }
 
     // Auto-open duration picker after topic/subtopic selection (only in create mode)
@@ -106,10 +116,32 @@ export function EntryForm({
           clients={clients}
           value={formData.clientId}
           onChange={(clientId) => {
-            // Clear topic selection when client changes (filtered topics will change)
-            onFormChange({ clientId, topicId: "", subtopicId: "", description: "" });
-            // Auto-open topic picker after client selection (only in create mode)
-            if (!isEditMode) {
+            if (isEditMode) {
+              // In edit mode, preserve description and only clear topic if invalid for new client type
+              const newClient = clients.find((c) => c.id === clientId);
+              const newClientType = newClient?.clientType || "REGULAR";
+              const validTopics = topics.filter((t) => t.topicType === newClientType);
+
+              // Check if current selection is valid for new client type
+              let isTopicValid = false;
+              if (formData.subtopicId) {
+                // Find the parent topic of current subtopic
+                const parentTopic = topics.find((t) =>
+                  t.subtopics?.some((s) => s.id === formData.subtopicId)
+                );
+                isTopicValid = validTopics.some((t) => t.id === parentTopic?.id);
+              } else if (formData.topicId) {
+                isTopicValid = validTopics.some((t) => t.id === formData.topicId);
+              }
+
+              if (isTopicValid) {
+                onFormChange({ clientId });
+              } else {
+                onFormChange({ clientId, topicId: "", subtopicId: "" });
+              }
+            } else {
+              // Create mode: clear topic selection when client changes
+              onFormChange({ clientId, topicId: "", subtopicId: "", description: "" });
               setTimeout(() => topicSelectRef.current?.open(), 0);
             }
           }}

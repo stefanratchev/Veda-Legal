@@ -57,7 +57,7 @@ export function ClientModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Modal Content */}
-      <div className="relative bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded w-full max-w-md mx-4 animate-fade-up">
+      <div className="relative bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded w-full max-w-md mx-4 animate-fade-up max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
           <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)]">
@@ -68,7 +68,7 @@ export function ClientModal({
         </div>
 
         {/* Body */}
-        <div className="p-5">
+        <div className="p-5 overflow-y-auto flex-1 min-h-0">
           {mode === "delete" ? (
             <div>
               <p className="text-[var(--text-secondary)] text-[13px]">

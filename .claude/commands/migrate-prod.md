@@ -11,7 +11,9 @@ Run Drizzle migrations against the production database.
 3. Run the migration command using credentials from `.env.prod`:
 
 ```bash
-cd app && source .env.prod && npx drizzle-kit migrate
+cd app && npx dotenv -e .env.prod -- npx drizzle-kit migrate
 ```
+
+**Note:** We use `dotenv -e .env.prod --` instead of `source .env.prod` because drizzle-kit has its own `.env` loading behavior that would override shell environment variables. The `dotenv` approach ensures `.env.prod` takes precedence.
 
 4. Report the results

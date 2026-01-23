@@ -78,7 +78,7 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
   }, []);
 
   const handleSaveTopic = useCallback(
-    async (data: { name: string }) => {
+    async (data: { name: string; topicType: "REGULAR" | "INTERNAL" | "MANAGEMENT" }) => {
       setError(null);
 
       try {
@@ -87,7 +87,7 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
           const response = await fetch(`/api/topics/${editingTopic.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            body: JSON.stringify({ name: data.name, topicType: data.topicType }),
           });
 
           const result = await response.json();
@@ -105,7 +105,7 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
           const response = await fetch("/api/topics", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            body: JSON.stringify({ name: data.name, topicType: data.topicType }),
           });
 
           const result = await response.json();
@@ -620,7 +620,7 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
                 </p>
               )}
             </div>
-            {selectedTopic && (
+            {selectedTopic && selectedTopic.topicType === "REGULAR" && (
               <button
                 onClick={openCreateSubtopic}
                 className="
@@ -639,6 +639,10 @@ export function TopicsContent({ initialTopics }: TopicsContentProps) {
           {!selectedTopic ? (
             <div className="p-8 text-center text-[var(--text-muted)] text-sm">
               Select a topic to view its subtopics
+            </div>
+          ) : selectedTopic.topicType !== "REGULAR" ? (
+            <div className="p-8 text-center text-[var(--text-muted)] text-sm">
+              {selectedTopic.topicType === "INTERNAL" ? "Internal" : "Management"} topics don&apos;t have subtopics
             </div>
           ) : activeSubtopics.length === 0 && inactiveSubtopics.length === 0 ? (
             <div className="p-8 text-center text-[var(--text-muted)] text-sm">
@@ -778,6 +782,16 @@ function TopicRowWithHandle({
         >
           {topic.name}
         </span>
+        {topic.topicType !== "REGULAR" && (
+          <span className={`
+            px-1.5 py-0.5 text-[10px] font-medium rounded
+            ${topic.topicType === "INTERNAL"
+              ? "bg-[var(--info-bg)] text-[var(--info)]"
+              : "bg-[var(--warning-bg)] text-[var(--warning)]"}
+          `}>
+            {topic.topicType === "INTERNAL" ? "Internal" : "Mgmt"}
+          </span>
+        )}
         <span className="text-[var(--text-muted)] text-xs shrink-0">
           ({topic.subtopics.length})
         </span>

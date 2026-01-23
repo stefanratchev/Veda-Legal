@@ -7,6 +7,7 @@ import { ColumnDef } from "@/components/ui/table-types";
 import { ClientModal } from "./ClientModal";
 
 type ClientStatus = "ACTIVE" | "INACTIVE";
+type ClientType = "REGULAR" | "INTERNAL" | "MANAGEMENT";
 
 interface Client {
   id: string;
@@ -20,6 +21,7 @@ interface Client {
   address: string | null;
   practiceArea: string | null;
   status: ClientStatus;
+  clientType: ClientType;
   notes: string | null;
   createdAt: string;
 }
@@ -38,6 +40,7 @@ interface FormData {
   secondaryEmails: string;
   hourlyRate: string;
   status: ClientStatus;
+  clientType: ClientType;
   notes: string;
 }
 
@@ -49,6 +52,7 @@ const initialFormData: FormData = {
   secondaryEmails: "",
   hourlyRate: "",
   status: "ACTIVE",
+  clientType: "REGULAR",
   notes: "",
 };
 
@@ -102,6 +106,7 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
       secondaryEmails: client.secondaryEmails || "",
       hourlyRate: client.hourlyRate?.toString() || "",
       status: client.status,
+      clientType: client.clientType || "REGULAR",
       notes: client.notes || "",
     });
     setSelectedClient(client);
@@ -227,9 +232,21 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
         header: "Name",
         accessor: (client) => client.name,
         cell: (client) => (
-          <span className="font-medium text-[13px] text-[var(--text-primary)]">
-            {client.name}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-[13px] text-[var(--text-primary)]">
+              {client.name}
+            </span>
+            {client.clientType !== "REGULAR" && (
+              <span className={`
+                px-1.5 py-0.5 text-[10px] font-medium rounded
+                ${client.clientType === "INTERNAL"
+                  ? "bg-[var(--info-bg)] text-[var(--info)]"
+                  : "bg-[var(--warning-bg)] text-[var(--warning)]"}
+              `}>
+                {client.clientType === "INTERNAL" ? "Internal" : "Mgmt"}
+              </span>
+            )}
+          </div>
         ),
       },
       {
@@ -335,6 +352,7 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
       "Address",
       "Practice Area",
       "Status",
+      "Client Type",
       "Notes",
       "Created",
     ];
@@ -359,6 +377,7 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
       escapeCSV(client.address),
       escapeCSV(client.practiceArea),
       client.status,
+      client.clientType,
       escapeCSV(client.notes),
       new Date(client.createdAt).toISOString().split("T")[0],
     ]);

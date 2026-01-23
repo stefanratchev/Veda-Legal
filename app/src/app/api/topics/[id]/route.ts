@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { topics, subtopics } from "@/lib/schema";
 import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
 
+const VALID_TOPIC_TYPES = ["REGULAR", "INTERNAL", "MANAGEMENT"] as const;
+
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
@@ -24,7 +26,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { name, displayOrder, status } = body;
+  const { name, displayOrder, status, topicType } = body;
 
   const updateData: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
@@ -54,6 +56,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     updateData.status = status;
   }
 
+  if (topicType !== undefined) {
+    if (!VALID_TOPIC_TYPES.includes(topicType)) {
+      return errorResponse(`Invalid topicType. Must be one of: ${VALID_TOPIC_TYPES.join(", ")}`, 400);
+    }
+    updateData.topicType = topicType;
+  }
+
   try {
     const [updatedTopic] = await db.update(topics)
       .set(updateData)
@@ -61,6 +70,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       .returning({
         id: topics.id,
         name: topics.name,
+        topicType: topics.topicType,
         displayOrder: topics.displayOrder,
         status: topics.status,
       });
@@ -85,6 +95,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({
       id: updatedTopic.id,
       name: updatedTopic.name,
+      topicType: updatedTopic.topicType,
       displayOrder: updatedTopic.displayOrder,
       status: updatedTopic.status,
       subtopics: topicSubtopics,

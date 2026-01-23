@@ -210,6 +210,25 @@ describe("PATCH /api/topics/[id]", () => {
       expect(response.status).toBe(400);
       expect(data.error).toBe("Invalid status");
     });
+
+    it("returns 400 for invalid topicType value", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/topics/topic-123",
+        body: { topicType: "INVALID_TYPE" },
+      });
+
+      const response = await PATCH(request, createRouteContext("topic-123"));
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toContain("Invalid topicType");
+    });
   });
 
   describe("Happy Path", () => {
@@ -334,6 +353,7 @@ describe("PATCH /api/topics/[id]", () => {
       const updatedTopic = {
         id: "topic-123",
         name: "New Name",
+        topicType: "REGULAR",
         displayOrder: 10,
         status: "ACTIVE",
       };
@@ -361,6 +381,80 @@ describe("PATCH /api/topics/[id]", () => {
       expect(data.name).toBe("New Name");
       expect(data.displayOrder).toBe(10);
       expect(data.status).toBe("ACTIVE");
+    });
+
+    it("updates topicType with valid value", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const updatedTopic = {
+        id: "topic-123",
+        name: "Holiday",
+        topicType: "INTERNAL",
+        displayOrder: 1,
+        status: "ACTIVE",
+      };
+
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedTopic]),
+          }),
+        }),
+      });
+
+      mockDb.query.subtopics.findMany.mockResolvedValue([]);
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/topics/topic-123",
+        body: { topicType: "INTERNAL" },
+      });
+
+      const response = await PATCH(request, createRouteContext("topic-123"));
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.topicType).toBe("INTERNAL");
+    });
+
+    it("updates topicType to MANAGEMENT", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const updatedTopic = {
+        id: "topic-123",
+        name: "Strategy",
+        topicType: "MANAGEMENT",
+        displayOrder: 1,
+        status: "ACTIVE",
+      };
+
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedTopic]),
+          }),
+        }),
+      });
+
+      mockDb.query.subtopics.findMany.mockResolvedValue([]);
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/topics/topic-123",
+        body: { topicType: "MANAGEMENT" },
+      });
+
+      const response = await PATCH(request, createRouteContext("topic-123"));
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.topicType).toBe("MANAGEMENT");
     });
 
     it("trims whitespace from name", async () => {

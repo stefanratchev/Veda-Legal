@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, asc, max } from "drizzle-orm";
+import { eq, asc, max, and } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import { topics, subtopics } from "@/lib/schema";
 import { requireAuth, requireWriteAccess, errorResponse } from "@/lib/api-utils";
+
+const VALID_TOPIC_TYPES = ["REGULAR", "INTERNAL", "MANAGEMENT"] as const;
+type TopicType = (typeof VALID_TOPIC_TYPES)[number];
 
 // GET /api/topics - List topics with subtopics
 export async function GET(request: NextRequest) {
@@ -14,10 +17,25 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const includeInactive = searchParams.get("includeInactive") === "true";
+  const typeFilter = searchParams.get("type") as TopicType | null;
+
+  // Validate type filter if provided
+  if (typeFilter && !VALID_TOPIC_TYPES.includes(typeFilter)) {
+    return errorResponse(`Invalid type. Must be one of: ${VALID_TOPIC_TYPES.join(", ")}`, 400);
+  }
 
   try {
+    // Build where conditions
+    const conditions = [];
+    if (!includeInactive) {
+      conditions.push(eq(topics.status, "ACTIVE"));
+    }
+    if (typeFilter) {
+      conditions.push(eq(topics.topicType, typeFilter));
+    }
+
     const allTopics = await db.query.topics.findMany({
-      where: includeInactive ? undefined : eq(topics.status, "ACTIVE"),
+      where: conditions.length > 0 ? and(...conditions) : undefined,
       with: {
         subtopics: {
           where: includeInactive ? undefined : eq(subtopics.status, "ACTIVE"),
@@ -38,6 +56,7 @@ export async function GET(request: NextRequest) {
       allTopics.map((t) => ({
         id: t.id,
         name: t.name,
+        topicType: t.topicType,
         displayOrder: t.displayOrder,
         status: t.status,
         subtopics: t.subtopics,
@@ -63,13 +82,16 @@ export async function POST(request: NextRequest) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { name } = body;
+  const { name, topicType = "REGULAR" } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return errorResponse("Name is required", 400);
   }
   if (name.trim().length > 100) {
     return errorResponse("Name must be 100 characters or less", 400);
+  }
+  if (!VALID_TOPIC_TYPES.includes(topicType)) {
+    return errorResponse(`Invalid topicType. Must be one of: ${VALID_TOPIC_TYPES.join(", ")}`, 400);
   }
 
   try {
@@ -83,11 +105,13 @@ export async function POST(request: NextRequest) {
     const [topic] = await db.insert(topics).values({
       id: createId(),
       name: name.trim(),
+      topicType,
       displayOrder: nextOrder,
       updatedAt: now,
     }).returning({
       id: topics.id,
       name: topics.name,
+      topicType: topics.topicType,
       displayOrder: topics.displayOrder,
       status: topics.status,
     });
@@ -95,6 +119,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       id: topic.id,
       name: topic.name,
+      topicType: topic.topicType,
       displayOrder: topic.displayOrder,
       status: topic.status,
       subtopics: [],

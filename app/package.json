@@ -13,7 +13,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed-topics": "npx tsx scripts/seed-topics.ts"
+    "db:seed-topics": "npx tsx scripts/seed-topics.ts",
+    "db:seed-internal-topics": "npx tsx scripts/seed-internal-topics.ts"
   },
   "dependencies": {
     "@azure/msal-node": "^3.8.4",

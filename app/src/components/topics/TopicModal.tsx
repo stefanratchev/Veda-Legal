@@ -3,14 +3,17 @@
 import { useState, useRef, useEffect } from "react";
 import { Topic } from "@/types";
 
+type TopicType = "REGULAR" | "INTERNAL" | "MANAGEMENT";
+
 interface TopicModalProps {
   topic: Topic | null;
-  onSave: (data: { name: string }) => void;
+  onSave: (data: { name: string; topicType: TopicType }) => void;
   onClose: () => void;
 }
 
 export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
   const [name, setName] = useState(topic?.name || "");
+  const [topicType, setTopicType] = useState<TopicType>(topic?.topicType || "REGULAR");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,7 +34,7 @@ export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
     if (!name.trim()) return;
 
     setIsSubmitting(true);
-    await onSave({ name: name.trim() });
+    await onSave({ name: name.trim(), topicType });
     setIsSubmitting(false);
   };
 
@@ -68,6 +71,30 @@ export function TopicModal({ topic, onSave, onClose }: TopicModalProps) {
               />
               <p className="mt-1 text-[11px] text-[var(--text-muted)]">
                 Category for grouping related subtopics
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-medium text-[var(--text-secondary)] mb-1">
+                Type
+              </label>
+              <select
+                value={topicType}
+                onChange={(e) => setTopicType(e.target.value as TopicType)}
+                className="
+                  w-full px-4 py-2.5 rounded
+                  bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                  text-[var(--text-primary)]
+                  focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+                  focus:outline-none transition-all duration-200
+                "
+              >
+                <option value="REGULAR">Regular</option>
+                <option value="INTERNAL">Internal</option>
+                <option value="MANAGEMENT">Management</option>
+              </select>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                Internal/Management topics have no subtopics
               </p>
             </div>
           </div>

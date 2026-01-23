@@ -9,6 +9,7 @@ export default async function TopicsPage() {
       name: true,
       displayOrder: true,
       status: true,
+      topicType: true,
     },
     with: {
       subtopics: {

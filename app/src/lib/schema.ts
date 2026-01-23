@@ -9,6 +9,8 @@ export const serviceDescriptionStatus = pgEnum("ServiceDescriptionStatus", ['DRA
 export const subtopicStatus = pgEnum("SubtopicStatus", ['ACTIVE', 'INACTIVE'])
 export const topicStatus = pgEnum("TopicStatus", ['ACTIVE', 'INACTIVE'])
 export const userStatus = pgEnum("UserStatus", ['PENDING', 'ACTIVE', 'INACTIVE'])
+export const clientType = pgEnum("ClientType", ['REGULAR', 'INTERNAL', 'MANAGEMENT'])
+export const topicType = pgEnum("TopicType", ['REGULAR', 'INTERNAL', 'MANAGEMENT'])
 
 
 export const serviceDescriptionTopics = pgTable("service_description_topics", {
@@ -110,6 +112,7 @@ export const clients = pgTable("clients", {
 	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ precision: 3, mode: 'string' }).notNull(),
 	secondaryEmails: text(),
+	clientType: clientType().default('REGULAR').notNull(),
 });
 
 export const topics = pgTable("topics", {
@@ -117,6 +120,7 @@ export const topics = pgTable("topics", {
 	name: text().notNull(),
 	displayOrder: integer().default(0).notNull(),
 	status: topicStatus().default('ACTIVE').notNull(),
+	topicType: topicType().default('REGULAR').notNull(),
 	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ precision: 3, mode: 'string' }).notNull(),
 });

@@ -56,6 +56,115 @@ describe("GET /api/topics", () => {
     });
   });
 
+  describe("TopicType Support", () => {
+    it("returns topicType field in response", async () => {
+      const user = createMockUser();
+      mockRequireAuth.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const topics = [
+        {
+          id: "topic-1",
+          name: "General Advisory",
+          topicType: "REGULAR",
+          displayOrder: 1,
+          status: "ACTIVE",
+          subtopics: [],
+        },
+        {
+          id: "topic-2",
+          name: "Holiday",
+          topicType: "INTERNAL",
+          displayOrder: 2,
+          status: "ACTIVE",
+          subtopics: [],
+        },
+        {
+          id: "topic-3",
+          name: "Strategy",
+          topicType: "MANAGEMENT",
+          displayOrder: 3,
+          status: "ACTIVE",
+          subtopics: [],
+        },
+      ];
+
+      mockDb.query.topics.findMany.mockResolvedValue(topics);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/topics",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data[0]).toHaveProperty("topicType", "REGULAR");
+      expect(data[1]).toHaveProperty("topicType", "INTERNAL");
+      expect(data[2]).toHaveProperty("topicType", "MANAGEMENT");
+    });
+
+    it("filters by type query param correctly", async () => {
+      const user = createMockUser();
+      mockRequireAuth.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const topics = [
+        {
+          id: "topic-1",
+          name: "Holiday",
+          topicType: "INTERNAL",
+          displayOrder: 1,
+          status: "ACTIVE",
+          subtopics: [],
+        },
+        {
+          id: "topic-2",
+          name: "Sick Leave",
+          topicType: "INTERNAL",
+          displayOrder: 2,
+          status: "ACTIVE",
+          subtopics: [],
+        },
+      ];
+
+      mockDb.query.topics.findMany.mockResolvedValue(topics);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/topics?type=INTERNAL",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(mockDb.query.topics.findMany).toHaveBeenCalled();
+      expect(data.every((t: { topicType: string }) => t.topicType === "INTERNAL")).toBe(true);
+    });
+
+    it("returns 400 for invalid type query param", async () => {
+      const user = createMockUser();
+      mockRequireAuth.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/topics?type=INVALID_TYPE",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toContain("Invalid type");
+    });
+  });
+
   describe("Happy Path", () => {
     it("returns all active topics with subtopics", async () => {
       const user = createMockUser();
@@ -67,6 +176,7 @@ describe("GET /api/topics", () => {
         {
           id: "topic-1",
           name: "General Advisory",
+          topicType: "REGULAR",
           displayOrder: 1,
           status: "ACTIVE",
           subtopics: [
@@ -77,6 +187,7 @@ describe("GET /api/topics", () => {
         {
           id: "topic-2",
           name: "Litigation",
+          topicType: "REGULAR",
           displayOrder: 2,
           status: "ACTIVE",
           subtopics: [
@@ -323,6 +434,25 @@ describe("POST /api/topics", () => {
       expect(response.status).toBe(400);
       expect(data.error).toBe("Name must be 100 characters or less");
     });
+
+    it("returns 400 for invalid topicType value", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/topics",
+        body: { name: "New Topic", topicType: "INVALID_TYPE" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toContain("Invalid topicType");
+    });
   });
 
   describe("Happy Path", () => {
@@ -410,6 +540,7 @@ describe("POST /api/topics", () => {
       const createdTopic = {
         id: "topic-123",
         name: "New Topic",
+        topicType: "REGULAR",
         displayOrder: 5,
         status: "ACTIVE",
       };
@@ -435,6 +566,117 @@ describe("POST /api/topics", () => {
 
       expect(response.status).toBe(200);
       expect(data.displayOrder).toBe(5);
+    });
+
+    it("accepts valid topicType values (REGULAR, INTERNAL, MANAGEMENT)", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const createdTopic = {
+        id: "topic-123",
+        name: "Holiday",
+        topicType: "INTERNAL",
+        displayOrder: 1,
+        status: "ACTIVE",
+      };
+
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockResolvedValue([{ maxOrder: 0 }]),
+      });
+
+      mockDb.insert.mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdTopic]),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/topics",
+        body: { name: "Holiday", topicType: "INTERNAL" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.topicType).toBe("INTERNAL");
+    });
+
+    it("defaults topicType to REGULAR when not provided", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const createdTopic = {
+        id: "topic-123",
+        name: "New Topic",
+        topicType: "REGULAR",
+        displayOrder: 1,
+        status: "ACTIVE",
+      };
+
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockResolvedValue([{ maxOrder: 0 }]),
+      });
+
+      mockDb.insert.mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdTopic]),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/topics",
+        body: { name: "New Topic" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.topicType).toBe("REGULAR");
+    });
+
+    it("creates topic with MANAGEMENT type", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      mockRequireWriteAccess.mockResolvedValue({
+        session: { user: { name: user.name, email: user.email } },
+      });
+
+      const createdTopic = {
+        id: "topic-123",
+        name: "Strategy Planning",
+        topicType: "MANAGEMENT",
+        displayOrder: 1,
+        status: "ACTIVE",
+      };
+
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockResolvedValue([{ maxOrder: 0 }]),
+      });
+
+      mockDb.insert.mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdTopic]),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/topics",
+        body: { name: "Strategy Planning", topicType: "MANAGEMENT" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.topicType).toBe("MANAGEMENT");
     });
   });
 

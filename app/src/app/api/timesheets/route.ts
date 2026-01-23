@@ -6,6 +6,7 @@ import {
   timeEntries,
   clients,
   subtopics,
+  topics,
   users,
   serviceDescriptionLineItems,
   serviceDescriptionTopics,
@@ -20,6 +21,7 @@ import {
   isNotFutureDate,
   MAX_HOURS_PER_ENTRY,
   canViewTeamTimesheets,
+  hasAdminAccess,
 } from "@/lib/api-utils";
 
 function serializeTimeEntry(entry: {
@@ -203,7 +205,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { date, clientId, subtopicId, hours, description } = body;
+  const { date, clientId, topicId, subtopicId, hours, description } = body;
 
   // Validate date
   if (!date) {
@@ -225,7 +227,7 @@ export async function POST(request: NextRequest) {
   }
   const client = await db.query.clients.findFirst({
     where: eq(clients.id, clientId),
-    columns: { id: true, status: true },
+    columns: { id: true, status: true, clientType: true },
   });
   if (!client) {
     return errorResponse("Client not found", 404);
@@ -234,31 +236,70 @@ export async function POST(request: NextRequest) {
     return errorResponse("Cannot log time for inactive clients", 400);
   }
 
-  // Validate subtopic (required for new entries)
-  if (!subtopicId) {
-    return errorResponse("Subtopic is required", 400);
+  // Non-admin users cannot log time for MANAGEMENT clients
+  if (client.clientType === "MANAGEMENT" && !hasAdminAccess(user.position)) {
+    return errorResponse("Cannot log time for this client", 403);
   }
-  const subtopic = await db.query.subtopics.findFirst({
-    where: eq(subtopics.id, subtopicId),
-    columns: {
-      id: true,
-      name: true,
-      status: true,
-    },
-    with: {
-      topic: {
-        columns: { name: true, status: true },
+
+  // Determine if this is an internal/management entry
+  const isInternalEntry = client.clientType === "INTERNAL" || client.clientType === "MANAGEMENT";
+
+  // Variables to hold topic/subtopic data for the entry
+  let topicName: string;
+  let subtopicName: string;
+  let finalSubtopicId: string | null;
+
+  if (isInternalEntry) {
+    // Internal/Management entries require topicId, no subtopicId
+    if (!topicId) {
+      return errorResponse("Topic is required for internal entries", 400);
+    }
+    const topic = await db.query.topics.findFirst({
+      where: eq(topics.id, topicId),
+      columns: { id: true, name: true, status: true, topicType: true },
+    });
+    if (!topic) {
+      return errorResponse("Topic not found", 404);
+    }
+    if (topic.status !== "ACTIVE") {
+      return errorResponse("Cannot log time with inactive topic", 400);
+    }
+    if (topic.topicType !== client.clientType) {
+      return errorResponse("Topic type must match client type", 400);
+    }
+    topicName = topic.name;
+    subtopicName = "";
+    finalSubtopicId = null;
+  } else {
+    // Regular entries require subtopicId
+    if (!subtopicId) {
+      return errorResponse("Subtopic is required", 400);
+    }
+    const subtopic = await db.query.subtopics.findFirst({
+      where: eq(subtopics.id, subtopicId),
+      columns: {
+        id: true,
+        name: true,
+        status: true,
       },
-    },
-  });
-  if (!subtopic) {
-    return errorResponse("Subtopic not found", 404);
-  }
-  if (subtopic.status !== "ACTIVE") {
-    return errorResponse("Cannot log time with inactive subtopic", 400);
-  }
-  if (subtopic.topic.status !== "ACTIVE") {
-    return errorResponse("Cannot log time with inactive topic", 400);
+      with: {
+        topic: {
+          columns: { name: true, status: true },
+        },
+      },
+    });
+    if (!subtopic) {
+      return errorResponse("Subtopic not found", 404);
+    }
+    if (subtopic.status !== "ACTIVE") {
+      return errorResponse("Cannot log time with inactive subtopic", 400);
+    }
+    if (subtopic.topic.status !== "ACTIVE") {
+      return errorResponse("Cannot log time with inactive topic", 400);
+    }
+    topicName = subtopic.topic.name;
+    subtopicName = subtopic.name;
+    finalSubtopicId = subtopicId;
   }
 
   // Validate hours
@@ -286,9 +327,9 @@ export async function POST(request: NextRequest) {
       description: (description || "").trim(),
       userId: user.id,
       clientId: clientId,
-      subtopicId: subtopicId,
-      topicName: subtopic.topic.name,
-      subtopicName: subtopic.name,
+      subtopicId: finalSubtopicId,
+      topicName: topicName,
+      subtopicName: subtopicName,
       updatedAt: now,
     }).returning({
       id: timeEntries.id,

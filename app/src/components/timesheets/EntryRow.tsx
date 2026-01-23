@@ -3,14 +3,14 @@
 import { useState, useMemo } from "react";
 import { formatHours, toHoursAndMinutes } from "@/lib/date-utils";
 import { EntryForm } from "./EntryForm";
-import type { TimeEntry, Client, Topic, FormData } from "@/types";
+import type { TimeEntry, ClientWithType, Topic, FormData } from "@/types";
 
 interface EntryRowProps {
   entry: TimeEntry;
   onDeleteClick?: () => void;
   onUpdate?: (updatedEntry: TimeEntry) => void;
   readOnly?: boolean;
-  clients?: Client[];
+  clients?: ClientWithType[];
   topics?: Topic[];
 }
 
@@ -29,14 +29,24 @@ export function EntryRow({
   // Convert entry to form data for editing
   const initialFormData = useMemo((): FormData => {
     const { hours, minutes } = toHoursAndMinutes(entry.hours);
+
+    // If subtopicId is null, this was a topic-only selection (internal/management)
+    // Find the topic by name to get the topicId
+    let topicId = "";
+    if (!entry.subtopicId && entry.topicName) {
+      const topic = topics.find((t) => t.name === entry.topicName);
+      topicId = topic?.id || "";
+    }
+
     return {
       clientId: entry.clientId,
+      topicId,
       subtopicId: entry.subtopicId || "",
       hours,
       minutes,
       description: entry.description,
     };
-  }, [entry]);
+  }, [entry, topics]);
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
 
@@ -57,6 +67,7 @@ export function EntryRow({
         body: JSON.stringify({
           clientId: formData.clientId,
           subtopicId: formData.subtopicId || null,
+          topicId: formData.topicId || null,
           hours: totalHours,
           description: formData.description.trim(),
         }),

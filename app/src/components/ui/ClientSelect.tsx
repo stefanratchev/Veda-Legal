@@ -3,9 +3,12 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useClickOutside } from "@/hooks/useClickOutside";
 
+type ClientType = "REGULAR" | "INTERNAL" | "MANAGEMENT";
+
 interface Client {
   id: string;
   name: string;
+  clientType?: ClientType;
 }
 
 interface ClientSelectProps {
@@ -172,12 +175,22 @@ export function ClientSelect({
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={`
                     w-full px-3 py-2.5 min-h-[44px] text-left text-sm
-                    transition-colors
+                    transition-colors flex items-center justify-between gap-2
                     ${index === highlightedIndex ? "bg-[var(--bg-surface)]" : ""}
                     ${value === client.id ? "text-[var(--accent-pink)]" : ""}
                   `}
                 >
                   <span className="text-[var(--text-primary)] truncate">{client.name}</span>
+                  {client.clientType && client.clientType !== "REGULAR" && (
+                    <span className={`
+                      px-1.5 py-0.5 text-[10px] font-medium rounded flex-shrink-0
+                      ${client.clientType === "INTERNAL"
+                        ? "bg-[var(--info-bg)] text-[var(--info)]"
+                        : "bg-[var(--warning-bg)] text-[var(--warning)]"}
+                    `}>
+                      {client.clientType === "INTERNAL" ? "Internal" : "Mgmt"}
+                    </span>
+                  )}
                 </button>
               ))
             )}

@@ -7,6 +7,8 @@ import { EntryForm } from "./EntryForm";
 import { EntriesList } from "./EntriesList";
 import { TeamTimesheets } from "./TeamTimesheets";
 import { M365ActivityPanel } from "./M365ActivityPanel";
+import { SubmitButton } from "./SubmitButton";
+import { SubmitPromptModal } from "./SubmitPromptModal";
 import type { ClientWithType, Topic, TimeEntry, FormData, TeamSummary, M365ActivityResponse } from "@/types";
 import { initialFormData } from "@/types";
 
@@ -209,7 +211,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     setIsLoading(true);
     setError(null);
 
-    const totalHours = toDecimalHours(formData.hours, formData.minutes);
+    const totalHoursForEntry = toDecimalHours(formData.hours, formData.minutes);
 
     try {
       const response = await fetch("/api/timesheets", {
@@ -220,7 +222,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
           clientId: formData.clientId,
           subtopicId: formData.subtopicId || null,
           topicId: formData.topicId || null,
-          hours: totalHours,
+          hours: totalHoursForEntry,
           description: formData.description.trim(),
         }),
       });
@@ -241,6 +243,13 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         topicId: prev.topicId,
         subtopicId: prev.subtopicId,
       }));
+
+      // Update total hours and check if we should prompt for submission
+      const newTotalHours = totalHours + totalHoursForEntry;
+      setTotalHours(newTotalHours);
+      if (newTotalHours >= 8 && !isSubmitted) {
+        setShowSubmitPrompt(true);
+      }
     } catch {
       setError("Failed to create entry");
     } finally {
@@ -331,11 +340,29 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         topics={topics}
       />
 
+      {/* Submit Button */}
+      <SubmitButton
+        totalHours={totalHours}
+        isSubmitted={isSubmitted}
+        isLoading={isLoading}
+        onSubmit={handleTimesheetSubmit}
+      />
+
       {/* Team Timesheets (only shown for ADMIN/PARTNER) */}
       <TeamTimesheets
         summaries={teamSummaries}
         selectedDate={selectedDate}
       />
+
+      {/* Submit Prompt Modal */}
+      {showSubmitPrompt && (
+        <SubmitPromptModal
+          date={formatDateISO(selectedDate)}
+          totalHours={totalHours}
+          onSubmit={handleTimesheetSubmit}
+          onDismiss={() => setShowSubmitPrompt(false)}
+        />
+      )}
     </div>
   );
 }

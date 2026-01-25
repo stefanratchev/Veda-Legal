@@ -8,6 +8,8 @@ interface WeekStripProps {
   selectedDate: Date;
   today: Date;
   datesWithEntries: Set<string>;
+  submittedDates?: Set<string>;
+  overdueDates?: Set<string>;
   onSelectDate: (date: Date) => void;
   onPrevWeek: () => void;
   onNextWeek: () => void;
@@ -18,10 +20,51 @@ interface WeekStripProps {
   isM365PanelOpen: boolean;
 }
 
+/**
+ * Returns the appropriate status icon for a date based on submission status.
+ * Priority: submitted > overdue > null (fall back to entry dot)
+ */
+function getStatusIcon(dateStr: string, submittedDates: Set<string>, overdueDates: Set<string>, isSelected: boolean) {
+  if (submittedDates.has(dateStr)) {
+    // Green checkmark for submitted days
+    return (
+      <svg
+        className={`w-4 h-4 ${isSelected ? "text-[var(--bg-deep)]" : "text-[var(--success)]"}`}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+      </svg>
+    );
+  }
+
+  if (overdueDates.has(dateStr)) {
+    // Red clock for overdue days
+    return (
+      <svg
+        className={`w-4 h-4 ${isSelected ? "text-[var(--bg-deep)]" : "text-[var(--danger)]"}`}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    );
+  }
+
+  return null;
+}
+
+// Default empty sets for optional props
+const EMPTY_SET = new Set<string>();
+
 export function WeekStrip({
   selectedDate,
   today,
   datesWithEntries,
+  submittedDates = EMPTY_SET,
+  overdueDates = EMPTY_SET,
   onSelectDate,
   onPrevWeek,
   onNextWeek,
@@ -116,14 +159,16 @@ export function WeekStrip({
         <div className="flex-1 overflow-x-auto lg:overflow-visible scrollbar-hide">
           <div className="flex items-center gap-1 min-w-max lg:min-w-0">
             {weekDays.map((day) => {
+            const dateStr = formatDateISO(day);
             const selected = isSelected(day);
             const todayDay = isToday(day);
             const weekend = isWeekend(day);
             const hasEntry = hasEntries(day);
+            const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, selected);
 
             return (
               <button
-                key={formatDateISO(day)}
+                key={dateStr}
                 onClick={() => onSelectDate(day)}
                 className={`
                   relative flex flex-col items-center gap-0.5 px-2 py-2 rounded
@@ -141,8 +186,10 @@ export function WeekStrip({
                 <span className={`text-base font-heading font-semibold ${selected ? "text-[var(--bg-deep)]" : weekend ? "text-[var(--text-primary)]/70" : "text-[var(--text-primary)]"}`}>
                   {day.getDate()}
                 </span>
-                {/* Entry indicator dot */}
-                {hasEntry && (
+                {/* Status icon (submitted/overdue) or entry indicator dot */}
+                {statusIcon ? (
+                  <span className="absolute -bottom-0.5">{statusIcon}</span>
+                ) : hasEntry && (
                   <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${selected ? "bg-[var(--bg-deep)]" : "bg-[var(--accent-pink)]"}`} />
                 )}
               </button>
@@ -226,14 +273,16 @@ export function WeekStrip({
                         return <div key={`empty-${index}`} className="w-8 h-8" />;
                       }
 
+                      const dateStr = formatDateISO(day);
                       const selected = isSelected(day);
                       const todayDay = isToday(day);
                       const weekend = isWeekend(day);
                       const hasEntry = hasEntries(day);
+                      const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, selected);
 
                       return (
                         <button
-                          key={formatDateISO(day)}
+                          key={dateStr}
                           onClick={() => handleSelectCalendarDay(day)}
                           className={`
                             relative w-8 h-8 rounded text-[12px] font-medium
@@ -247,8 +296,10 @@ export function WeekStrip({
                           `}
                         >
                           {day.getDate()}
-                          {/* Entry indicator dot */}
-                          {hasEntry && (
+                          {/* Status icon (submitted/overdue) or entry indicator dot */}
+                          {statusIcon ? (
+                            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 scale-75">{statusIcon}</span>
+                          ) : hasEntry && (
                             <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${selected ? "bg-[var(--bg-deep)]" : "bg-[var(--accent-pink)]"}`} />
                           )}
                         </button>

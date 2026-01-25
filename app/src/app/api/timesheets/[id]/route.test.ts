@@ -8,12 +8,31 @@ import {
 } from "@/test/mocks/factories";
 
 // Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireAuth, mockGetUserFromSession, mockDb, mockSelectResult } = vi.hoisted(() => {
+const { mockRequireAuth, mockGetUserFromSession, mockDb, mockSelectResult, mockHoursResult } = vi.hoisted(() => {
   const mockSelectResult = vi.fn();
+  const mockHoursResult = vi.fn().mockResolvedValue([{ totalHours: "10" }]); // Default: 10 hours (above threshold)
+
+  // Create chainable mock that supports both billing check (innerJoin) and hours aggregation (direct where)
+  const mockSelect = vi.fn().mockReturnValue({
+    from: vi.fn().mockReturnValue({
+      // Support billing check chain (innerJoin)
+      innerJoin: vi.fn().mockReturnValue({
+        innerJoin: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: mockSelectResult,
+          }),
+        }),
+      }),
+      // Support hours aggregation chain (direct where)
+      where: mockHoursResult,
+    }),
+  });
+
   return {
     mockRequireAuth: vi.fn(),
     mockGetUserFromSession: vi.fn(),
     mockSelectResult,
+    mockHoursResult,
     mockDb: {
       query: {
         timeEntries: {
@@ -25,19 +44,13 @@ const { mockRequireAuth, mockGetUserFromSession, mockDb, mockSelectResult } = vi
         clients: {
           findFirst: vi.fn(),
         },
+        timesheetSubmissions: {
+          findFirst: vi.fn(),
+        },
       },
       update: vi.fn(),
-      select: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
-            innerJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                limit: mockSelectResult,
-              }),
-            }),
-          }),
-        }),
-      }),
+      select: mockSelect,
+      delete: vi.fn(),
     },
   };
 });
@@ -81,6 +94,19 @@ describe("PATCH /api/timesheets/[id]", () => {
     vi.clearAllMocks();
     // Default: entry is not billed (empty array means no finalized service description)
     mockSelectResult.mockResolvedValue([]);
+    // Default: 10 hours total (above submission threshold)
+    mockHoursResult.mockResolvedValue([{ totalHours: "10" }]);
+    // Default: no existing submission
+    mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
+    // Default: delete returns successfully
+    mockDb.delete.mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    });
+    // Default: client lookup returns a client for response serialization
+    mockDb.query.clients.findFirst.mockResolvedValue({
+      id: "test-client",
+      name: "Test Client Ltd",
+    });
   });
 
   describe("Authentication", () => {

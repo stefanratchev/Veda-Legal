@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   timeEntries,
@@ -8,7 +8,9 @@ import {
   serviceDescriptionLineItems,
   serviceDescriptionTopics,
   serviceDescriptions,
+  timesheetSubmissions,
 } from "@/lib/schema";
+import { MIN_SUBMISSION_HOURS } from "@/lib/submission-utils";
 import {
   requireAuth,
   getUserFromSession,
@@ -220,18 +222,56 @@ export async function PATCH(
         updatedAt: timeEntries.updatedAt,
       });
 
+    // Check if we need to revoke submission (especially if hours changed)
+    let submissionRevoked = false;
+    let remainingHours: number | undefined;
+
+    const entryDate = existingEntry.date;
+    const [hoursResult] = await db
+      .select({
+        totalHours: sql<string>`COALESCE(SUM(CAST(${timeEntries.hours} AS DECIMAL)), 0)`,
+      })
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.userId, user.id),
+          eq(timeEntries.date, entryDate)
+        )
+      );
+
+    const totalHours = Number(hoursResult?.totalHours || 0);
+
+    if (totalHours < MIN_SUBMISSION_HOURS) {
+      const existingSubmission = await db.query.timesheetSubmissions.findFirst({
+        where: and(
+          eq(timesheetSubmissions.userId, user.id),
+          eq(timesheetSubmissions.date, entryDate)
+        ),
+      });
+
+      if (existingSubmission) {
+        await db.delete(timesheetSubmissions).where(
+          eq(timesheetSubmissions.id, existingSubmission.id)
+        );
+        submissionRevoked = true;
+        remainingHours = totalHours;
+      }
+    }
+
     // Fetch client for response
     const entryClient = await db.query.clients.findFirst({
       where: eq(clients.id, updatedEntry.clientId),
       columns: { id: true, name: true },
     });
 
-    return NextResponse.json(
-      serializeTimeEntry({
+    return NextResponse.json({
+      ...serializeTimeEntry({
         ...updatedEntry,
         client: entryClient ?? null,
-      })
-    );
+      }),
+      submissionRevoked,
+      ...(submissionRevoked && { remainingHours }),
+    });
   } catch (error) {
     console.error("Database error updating time entry:", error);
     return NextResponse.json(

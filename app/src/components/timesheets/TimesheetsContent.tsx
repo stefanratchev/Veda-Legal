@@ -90,6 +90,21 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     }
   }, []);
 
+  // Fetch submitted dates for the visible month
+  const fetchSubmittedDates = useCallback(async (centerDate: Date) => {
+    try {
+      const year = centerDate.getFullYear();
+      const month = centerDate.getMonth() + 1;
+      const response = await fetch(`/api/timesheets/submissions?year=${year}&month=${month}`);
+      if (response.ok) {
+        const dates: string[] = await response.json();
+        setSubmittedDates(new Set(dates));
+      }
+    } catch (err) {
+      console.error("Failed to fetch submitted dates:", err);
+    }
+  }, []);
+
   // Fetch M365 activity for selected date
   const fetchM365Activity = useCallback(async () => {
     setIsM365Loading(true);
@@ -177,6 +192,11 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   useEffect(() => {
     fetchDatesWithEntries(selectedDate);
   }, [selectedDate, fetchDatesWithEntries]);
+
+  // Fetch submitted dates when month changes
+  useEffect(() => {
+    fetchSubmittedDates(selectedDate);
+  }, [selectedDate, fetchSubmittedDates]);
 
   // Fetch overdue status on mount
   useEffect(() => {

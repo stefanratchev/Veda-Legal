@@ -170,7 +170,7 @@ describe("GET /api/timesheets", () => {
   });
 
   describe("Happy Path", () => {
-    it("returns entries for given date", async () => {
+    it("returns entries for given date with submission status", async () => {
       const user = createMockUser({ position: "ASSOCIATE" });
       const entries = [
         createMockTimeEntry({ userId: user.id, hours: "2.5" }),
@@ -179,6 +179,7 @@ describe("GET /api/timesheets", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       const request = createMockRequest({
         method: "GET",
@@ -189,8 +190,12 @@ describe("GET /api/timesheets", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(data)).toBe(true);
-      expect(data).toHaveLength(2);
+      expect(data).toHaveProperty("entries");
+      expect(Array.isArray(data.entries)).toBe(true);
+      expect(data.entries).toHaveLength(2);
+      expect(data.totalHours).toBe(3.5);
+      expect(data.isSubmitted).toBe(false);
+      expect(data.submittedAt).toBeNull();
     });
 
     it("serializes decimal hours to numbers", async () => {
@@ -199,6 +204,7 @@ describe("GET /api/timesheets", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       const request = createMockRequest({
         method: "GET",
@@ -208,8 +214,8 @@ describe("GET /api/timesheets", () => {
       const response = await GET(request);
       const data = await response.json();
 
-      expect(typeof data[0].hours).toBe("number");
-      expect(data[0].hours).toBe(2.5);
+      expect(typeof data.entries[0].hours).toBe("number");
+      expect(data.entries[0].hours).toBe(2.5);
     });
 
     it("returns entries with client details populated", async () => {
@@ -223,6 +229,7 @@ describe("GET /api/timesheets", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       const request = createMockRequest({
         method: "GET",
@@ -232,17 +239,63 @@ describe("GET /api/timesheets", () => {
       const response = await GET(request);
       const data = await response.json();
 
-      expect(data[0].client).toEqual({ id: "client-1", name: "Acme Corp" });
+      expect(data.entries[0].client).toEqual({ id: "client-1", name: "Acme Corp" });
+    });
+
+    it("returns isSubmitted: true when submission exists", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "8.0" })];
+      const submittedAt = "2024-12-20T17:00:00.000Z";
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue({ submittedAt });
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.isSubmitted).toBe(true);
+      expect(data.submittedAt).toBe(submittedAt);
+      expect(data.totalHours).toBe(8);
+    });
+
+    it("returns isSubmitted: false when no submission exists", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "4.0" })];
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.isSubmitted).toBe(false);
+      expect(data.submittedAt).toBeNull();
+      expect(data.totalHours).toBe(4);
     });
   });
 
   describe("Role-Based Behavior", () => {
-    it("returns entries array directly for regular users", async () => {
+    it("returns entries object with submission status for regular users", async () => {
       const user = createMockUser({ position: "ASSOCIATE" });
-      const entries = [createMockTimeEntry({ userId: user.id })];
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "3.0" })];
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       const request = createMockRequest({
         method: "GET",
@@ -252,19 +305,25 @@ describe("GET /api/timesheets", () => {
       const response = await GET(request);
       const data = await response.json();
 
-      expect(Array.isArray(data)).toBe(true);
+      expect(data).toHaveProperty("entries");
+      expect(Array.isArray(data.entries)).toBe(true);
       expect(data).not.toHaveProperty("teamSummaries");
+      expect(data.totalHours).toBe(3);
+      expect(data.isSubmitted).toBe(false);
+      expect(data.submittedAt).toBeNull();
     });
 
-    it("returns entries and teamSummaries for ADMIN", async () => {
+    it("returns entries, teamSummaries, and submission status for ADMIN", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      const entries = [createMockTimeEntry({ userId: user.id })];
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "5.0" })];
       const teamSummaries = [
         { userId: "other-user", userName: "Other User", position: "ASSOCIATE", totalHours: "4.0" },
       ];
+      const submittedAt = "2024-12-20T17:00:00.000Z";
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue({ submittedAt });
 
       // First call: billing check (innerJoin chain)
       const billingChain = {
@@ -302,14 +361,18 @@ describe("GET /api/timesheets", () => {
       expect(data).toHaveProperty("teamSummaries");
       expect(Array.isArray(data.entries)).toBe(true);
       expect(Array.isArray(data.teamSummaries)).toBe(true);
+      expect(data.totalHours).toBe(5);
+      expect(data.isSubmitted).toBe(true);
+      expect(data.submittedAt).toBe(submittedAt);
     });
 
-    it("returns entries and teamSummaries for PARTNER", async () => {
+    it("returns entries, teamSummaries, and submission status for PARTNER", async () => {
       const user = createMockUser({ position: "PARTNER" });
-      const entries = [createMockTimeEntry({ userId: user.id })];
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "2.0" })];
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       // First call: billing check (innerJoin chain)
       const billingChain = {
@@ -345,6 +408,9 @@ describe("GET /api/timesheets", () => {
 
       expect(data).toHaveProperty("entries");
       expect(data).toHaveProperty("teamSummaries");
+      expect(data.totalHours).toBe(2);
+      expect(data.isSubmitted).toBe(false);
+      expect(data.submittedAt).toBeNull();
     });
   });
 });

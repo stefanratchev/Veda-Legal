@@ -177,10 +177,27 @@ export const timeEntries = pgTable("time_entries", {
 		}).onUpdate("cascade").onDelete("set null"),
 ]);
 
+export const timesheetSubmissions = pgTable("timesheet_submissions", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull(),
+	date: date().notNull(),
+	submittedAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	index("timesheet_submissions_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
+	index("timesheet_submissions_date_idx").using("btree", table.date.asc().nullsLast().op("date_ops")),
+	uniqueIndex("timesheet_submissions_userId_date_key").using("btree", table.userId.asc().nullsLast().op("text_ops"), table.date.asc().nullsLast().op("date_ops")),
+	foreignKey({
+		columns: [table.userId],
+		foreignColumns: [users.id],
+		name: "timesheet_submissions_userId_fkey"
+	}).onUpdate("cascade").onDelete("cascade"),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   timeEntries: many(timeEntries),
   finalizedServiceDescriptions: many(serviceDescriptions),
+  timesheetSubmissions: many(timesheetSubmissions),
 }));
 
 export const clientsRelations = relations(clients, ({ many }) => ({
@@ -214,6 +231,13 @@ export const timeEntriesRelations = relations(timeEntries, ({ one, many }) => ({
     references: [subtopics.id],
   }),
   billingLineItems: many(serviceDescriptionLineItems),
+}));
+
+export const timesheetSubmissionsRelations = relations(timesheetSubmissions, ({ one }) => ({
+  user: one(users, {
+    fields: [timesheetSubmissions.userId],
+    references: [users.id],
+  }),
 }));
 
 export const serviceDescriptionsRelations = relations(serviceDescriptions, ({ one, many }) => ({

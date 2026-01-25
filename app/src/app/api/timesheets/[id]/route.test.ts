@@ -481,4 +481,144 @@ describe("PATCH /api/timesheets/[id]", () => {
       expect(data.clientId).toBe("new-client");
     });
   });
+
+  describe("Submission Revocation", () => {
+    it("revokes submission when updating hours causes total to drop below 8", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+        date: "2024-01-15",
+        hours: "5",
+      });
+
+      const updatedEntry = {
+        ...entry,
+        hours: "2",
+        updatedAt: new Date().toISOString(),
+      };
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      // Mock hours query to return 5 (below 8 threshold after update)
+      mockHoursResult.mockResolvedValue([{ totalHours: "5" }]);
+      // Mock existing submission for the date
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue({
+        id: "submission-1",
+        userId: user.id,
+        date: "2024-01-15",
+      });
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedEntry]),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { hours: 2 },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.submissionRevoked).toBe(true);
+      expect(data.remainingHours).toBe(5);
+      expect(mockDb.delete).toHaveBeenCalled();
+    });
+
+    it("does not revoke submission when hours remain above threshold after update", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+        date: "2024-01-15",
+        hours: "5",
+      });
+
+      const updatedEntry = {
+        ...entry,
+        hours: "4",
+        updatedAt: new Date().toISOString(),
+      };
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      // Mock hours query to return 10 (above 8 threshold)
+      mockHoursResult.mockResolvedValue([{ totalHours: "10" }]);
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedEntry]),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { hours: 4 },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.submissionRevoked).toBe(false);
+      // remainingHours should not be present when no revocation
+      expect(data.remainingHours).toBeUndefined();
+      // delete should not have been called for submission (only in beforeEach setup)
+      expect(mockDb.delete).not.toHaveBeenCalled();
+    });
+
+    it("does not revoke submission when no submission exists for the date", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+        date: "2024-01-15",
+        hours: "5",
+      });
+
+      const updatedEntry = {
+        ...entry,
+        hours: "2",
+        updatedAt: new Date().toISOString(),
+      };
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      // Mock hours query to return 5 (below 8 threshold)
+      mockHoursResult.mockResolvedValue([{ totalHours: "5" }]);
+      // Mock no existing submission for the date
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedEntry]),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { hours: 2 },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.submissionRevoked).toBe(false);
+      // remainingHours should not be present when no revocation
+      expect(data.remainingHours).toBeUndefined();
+      // delete should not have been called
+      expect(mockDb.delete).not.toHaveBeenCalled();
+    });
+  });
 });

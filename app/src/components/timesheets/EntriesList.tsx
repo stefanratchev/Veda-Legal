@@ -11,7 +11,7 @@ interface EntriesListProps {
   entries: TimeEntry[];
   isLoadingEntries: boolean;
   onDeleteEntry?: (entryId: string) => void;
-  onUpdateEntry?: (updatedEntry: TimeEntry) => void;
+  onUpdateEntry?: (updatedEntry: TimeEntry, revocationData?: { submissionRevoked: boolean; remainingHours: number }) => void;
   readOnly?: boolean;
   clients?: ClientWithType[];
   topics?: Topic[];

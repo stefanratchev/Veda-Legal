@@ -34,6 +34,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   const [overdueDates, setOverdueDates] = useState<Set<string>>(new Set());
   const [totalHours, setTotalHours] = useState(0);
   const [showSubmitPrompt, setShowSubmitPrompt] = useState(false);
+  const [revocationWarning, setRevocationWarning] = useState<string | null>(null);
 
   // M365 Activity state
   const [isM365PanelOpen, setIsM365PanelOpen] = useState(false);
@@ -266,8 +267,29 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setEntries((prev) => prev.filter((e) => e.id !== entryId));
         fetchDatesWithEntries(selectedDate);
+
+        // Check if submission was revoked due to hours dropping below 8
+        if (data.submissionRevoked) {
+          setIsSubmitted(false);
+          setSubmittedDates((prev) => {
+            const next = new Set(prev);
+            next.delete(formatDateISO(selectedDate));
+            return next;
+          });
+          setRevocationWarning(
+            `Your timesheet submission has been revoked. You now have ${data.remainingHours.toFixed(1)} hours logged (8 required).`
+          );
+          // Auto-dismiss after 5 seconds
+          setTimeout(() => setRevocationWarning(null), 5000);
+        }
+
+        // Update total hours if provided
+        if (typeof data.remainingHours === "number") {
+          setTotalHours(data.remainingHours);
+        }
       }
     } catch {
       setError("Failed to delete entry");
@@ -276,11 +298,31 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     }
   }, [selectedDate, fetchDatesWithEntries]);
 
-  const updateEntry = useCallback((updatedEntry: TimeEntry) => {
+  const updateEntry = useCallback((updatedEntry: TimeEntry, revocationData?: { submissionRevoked: boolean; remainingHours: number }) => {
     setEntries((prev) =>
       prev.map((e) => (e.id === updatedEntry.id ? updatedEntry : e))
     );
-  }, []);
+
+    // Check if submission was revoked due to hours dropping below 8
+    if (revocationData?.submissionRevoked) {
+      setIsSubmitted(false);
+      setSubmittedDates((prev) => {
+        const next = new Set(prev);
+        next.delete(formatDateISO(selectedDate));
+        return next;
+      });
+      setRevocationWarning(
+        `Your timesheet submission has been revoked. You now have ${revocationData.remainingHours.toFixed(1)} hours logged (8 required).`
+      );
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => setRevocationWarning(null), 5000);
+    }
+
+    // Update total hours if provided
+    if (typeof revocationData?.remainingHours === "number") {
+      setTotalHours(revocationData.remainingHours);
+    }
+  }, [selectedDate]);
 
   return (
     <div className="space-y-4">
@@ -362,6 +404,13 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
           onSubmit={handleTimesheetSubmit}
           onDismiss={() => setShowSubmitPrompt(false)}
         />
+      )}
+
+      {/* Revocation Warning Toast */}
+      {revocationWarning && (
+        <div className="fixed bottom-4 right-4 bg-[var(--warning-bg)] border border-[var(--warning)] text-[var(--warning)] px-4 py-3 rounded-lg shadow-lg animate-fade-up max-w-md z-50">
+          <p className="text-sm font-medium">{revocationWarning}</p>
+        </div>
       )}
     </div>
   );

@@ -2,8 +2,10 @@ import { getCurrentUser } from "@/lib/user";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MainContent } from "@/components/layout/MainContent";
 import { MobileHeader } from "@/components/layout/MobileHeader";
+import { OverdueBanner } from "@/components/layout/OverdueBanner";
 import { MobileNavProvider } from "@/contexts/MobileNavContext";
 import { SidebarProvider } from "@/contexts/SidebarContext";
+import { hasAdminAccess } from "@/lib/api-utils";
 
 export default async function AuthenticatedLayout({
   children,
@@ -11,6 +13,7 @@ export default async function AuthenticatedLayout({
   children: React.ReactNode;
 }) {
   const user = await getCurrentUser();
+  const isAdmin = hasAdminAccess(user.position);
 
   return (
     <MobileNavProvider>
@@ -26,6 +29,7 @@ export default async function AuthenticatedLayout({
             className="animate-slide-in"
           />
           <MainContent>
+            <OverdueBanner isAdmin={isAdmin} />
             <MobileHeader />
             <div className="px-3 py-4 md:px-4 lg:px-6 lg:py-5">{children}</div>
           </MainContent>

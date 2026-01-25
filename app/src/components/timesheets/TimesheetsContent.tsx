@@ -26,6 +26,13 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Submission flow state
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedDates, setSubmittedDates] = useState<Set<string>>(new Set());
+  const [overdueDates, setOverdueDates] = useState<Set<string>>(new Set());
+  const [totalHours, setTotalHours] = useState(0);
+  const [showSubmitPrompt, setShowSubmitPrompt] = useState(false);
+
   // M365 Activity state
   const [isM365PanelOpen, setIsM365PanelOpen] = useState(false);
   const [isM365Loading, setIsM365Loading] = useState(false);
@@ -45,9 +52,17 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         if (Array.isArray(data)) {
           setEntries(data);
           setTeamSummaries([]);
+          setTotalHours(0);
+          setIsSubmitted(false);
         } else {
           setEntries(data.entries || []);
           setTeamSummaries(data.teamSummaries || []);
+          setTotalHours(data.totalHours ?? 0);
+          setIsSubmitted(data.isSubmitted ?? false);
+          // Track submitted dates
+          if (data.isSubmitted) {
+            setSubmittedDates((prev) => new Set([...prev, formatDateISO(date)]));
+          }
         }
       }
     } catch (err) {
@@ -104,6 +119,48 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     setM365Error(null);
   }, []);
 
+  // Fetch overdue status for the user
+  const fetchOverdueStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/timesheets/overdue");
+      if (response.ok) {
+        const data = await response.json();
+        // For regular users, data.overdue is string[]
+        if (Array.isArray(data.overdue)) {
+          if (data.overdue.length === 0 || typeof data.overdue[0] === "string") {
+            setOverdueDates(new Set(data.overdue as string[]));
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch overdue status:", err);
+    }
+  }, []);
+
+  // Handle timesheet submission for the selected date
+  const handleTimesheetSubmit = useCallback(async () => {
+    try {
+      const response = await fetch("/api/timesheets/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: formatDateISO(selectedDate) }),
+      });
+
+      if (response.ok) {
+        setIsSubmitted(true);
+        setSubmittedDates((prev) => new Set([...prev, formatDateISO(selectedDate)]));
+        setOverdueDates((prev) => {
+          const next = new Set(prev);
+          next.delete(formatDateISO(selectedDate));
+          return next;
+        });
+        setShowSubmitPrompt(false);
+      }
+    } catch (err) {
+      console.error("Failed to submit timesheet:", err);
+    }
+  }, [selectedDate]);
+
   // Fetch on date change
   useEffect(() => {
     fetchEntries(selectedDate);
@@ -117,6 +174,11 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   useEffect(() => {
     fetchDatesWithEntries(selectedDate);
   }, [selectedDate, fetchDatesWithEntries]);
+
+  // Fetch overdue status on mount
+  useEffect(() => {
+    fetchOverdueStatus();
+  }, [fetchOverdueStatus]);
 
   // Navigation handlers
   const goToPrevWeek = useCallback(() => {
@@ -226,6 +288,8 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         selectedDate={selectedDate}
         today={today}
         datesWithEntries={datesWithEntries}
+        submittedDates={submittedDates}
+        overdueDates={overdueDates}
         onSelectDate={setSelectedDate}
         onPrevWeek={goToPrevWeek}
         onNextWeek={goToNextWeek}

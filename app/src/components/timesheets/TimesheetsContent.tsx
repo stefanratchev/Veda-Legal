@@ -299,8 +299,13 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
             next.delete(formatDateISO(selectedDate));
             return next;
           });
+          const formattedDate = selectedDate.toLocaleDateString("en-GB", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          });
           setRevocationWarning(
-            `Your timesheet submission has been revoked. You now have ${data.remainingHours.toFixed(1)} hours logged (8 required).`
+            `Your timesheet submission for ${formattedDate} has been revoked. You now have ${data.remainingHours.toFixed(1)} hours logged (8 required).`
           );
           // Auto-dismiss after 5 seconds
           setTimeout(() => setRevocationWarning(null), 5000);
@@ -331,8 +336,13 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         next.delete(formatDateISO(selectedDate));
         return next;
       });
+      const formattedDate = selectedDate.toLocaleDateString("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      });
       setRevocationWarning(
-        `Your timesheet submission has been revoked. You now have ${revocationData.remainingHours.toFixed(1)} hours logged (8 required).`
+        `Your timesheet submission for ${formattedDate} has been revoked. You now have ${revocationData.remainingHours.toFixed(1)} hours logged (8 required).`
       );
       // Auto-dismiss after 5 seconds
       setTimeout(() => setRevocationWarning(null), 5000);

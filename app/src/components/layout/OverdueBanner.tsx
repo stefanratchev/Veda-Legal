@@ -11,9 +11,10 @@ interface UserOverdue {
 
 interface OverdueBannerProps {
   isAdmin: boolean;
+  userName?: string;
 }
 
-export function OverdueBanner({ isAdmin }: OverdueBannerProps) {
+export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
   const [overdueData, setOverdueData] = useState<string[] | UserOverdue[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,19 +69,39 @@ export function OverdueBanner({ isAdmin }: OverdueBannerProps) {
     });
   };
 
-  // Admin view: show team overdue summary
+  // Admin view: show team overdue summary AND personal banner if admin has overdue
   if (isAdmin && typeof overdueData[0] === "object" && "userId" in overdueData[0]) {
     const teamOverdue = overdueData as UserOverdue[];
+
+    // Find admin's own overdue dates by matching name
+    const adminOverdue = userName
+      ? teamOverdue.find((u) => u.name === userName)
+      : null;
+
     const summaryText = teamOverdue
       .map((u) => `${u.name} (${u.dates.length} day${u.dates.length > 1 ? "s" : ""})`)
       .join(", ");
 
     return (
-      <div className="bg-[var(--danger-bg)] border-b border-[var(--danger)] px-4 py-2">
-        <p className="text-[var(--danger)] text-sm font-medium">
-          Overdue timesheets: {summaryText}
-        </p>
-      </div>
+      <>
+        {/* Personal banner for admin (if they have overdue) */}
+        {adminOverdue && adminOverdue.dates.length > 0 && (
+          <Link
+            href="/timesheets"
+            className="block bg-[var(--danger-bg)] border-b border-[var(--danger)] px-4 py-2 hover:bg-[var(--danger)]/20 transition-colors"
+          >
+            <p className="text-[var(--danger)] text-sm font-medium">
+              You have overdue timesheets for: {adminOverdue.dates.map(formatDate).join(", ")}
+            </p>
+          </Link>
+        )}
+        {/* Team banner */}
+        <div className="bg-[var(--danger-bg)] border-b border-[var(--danger)] px-4 py-2">
+          <p className="text-[var(--danger)] text-sm font-medium">
+            Overdue timesheets: {summaryText}
+          </p>
+        </div>
+      </>
     );
   }
 

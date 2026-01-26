@@ -183,7 +183,7 @@ describe("OverdueBanner", () => {
       });
     });
 
-    it("does not render as a link for admin view", async () => {
+    it("team summary banner does not render as a link", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () =>
@@ -197,7 +197,78 @@ describe("OverdueBanner", () => {
         expect(screen.getByText(/Overdue timesheets:/)).toBeInTheDocument();
       });
 
+      // Team summary is not a link (no userName matching, so no personal link either)
       expect(screen.queryByTestId("overdue-link")).not.toBeInTheDocument();
+    });
+
+    it("shows both personal and team banners when admin has personal overdue", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            overdue: [
+              { userId: "1", name: "Admin User", dates: ["2026-01-20", "2026-01-21"] },
+              { userId: "2", name: "Jane Smith", dates: ["2026-01-22"] },
+            ],
+          }),
+      });
+      render(<OverdueBanner isAdmin={true} userName="Admin User" />);
+
+      await waitFor(() => {
+        // Should show personal banner with link
+        expect(screen.getByText(/You have overdue timesheets for:/)).toBeInTheDocument();
+        // Should show team summary
+        expect(screen.getByText(/Overdue timesheets:/)).toBeInTheDocument();
+      });
+
+      // Personal banner is a link
+      const link = screen.getByTestId("overdue-link");
+      expect(link).toHaveAttribute("href", "/timesheets");
+    });
+
+    it("shows only team banner when admin has no personal overdue", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            overdue: [
+              { userId: "1", name: "John Doe", dates: ["2026-01-20"] },
+              { userId: "2", name: "Jane Smith", dates: ["2026-01-22"] },
+            ],
+          }),
+      });
+      render(<OverdueBanner isAdmin={true} userName="Admin User" />);
+
+      await waitFor(() => {
+        // Should only show team summary
+        expect(screen.getByText(/Overdue timesheets:/)).toBeInTheDocument();
+      });
+
+      // Should NOT show personal banner
+      expect(screen.queryByText(/You have overdue timesheets for:/)).not.toBeInTheDocument();
+      // No link (team banner is not a link)
+      expect(screen.queryByTestId("overdue-link")).not.toBeInTheDocument();
+    });
+
+    it("formats admin personal overdue dates correctly", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            overdue: [
+              { userId: "1", name: "Admin User", dates: ["2026-01-20"] },
+            ],
+          }),
+      });
+      render(<OverdueBanner isAdmin={true} userName="Admin User" />);
+
+      await waitFor(() => {
+        const personalBanner = screen.getByText(/You have overdue timesheets for:/);
+        // Should format as "Tue 20 Jan" (Jan 20, 2026 is a Tuesday)
+        expect(personalBanner.textContent).toContain("Tue");
+        expect(personalBanner.textContent).toContain("20");
+        expect(personalBanner.textContent).toContain("Jan");
+      });
     });
   });
 

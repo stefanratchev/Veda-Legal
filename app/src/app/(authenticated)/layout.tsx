@@ -29,7 +29,7 @@ export default async function AuthenticatedLayout({
             className="animate-slide-in"
           />
           <MainContent>
-            <OverdueBanner isAdmin={isAdmin} />
+            <OverdueBanner isAdmin={isAdmin} userName={user.name} />
             <MobileHeader />
             <div className="px-3 py-4 md:px-4 lg:px-6 lg:py-5">{children}</div>
           </MainContent>

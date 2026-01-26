@@ -105,6 +105,32 @@ describe("POST /api/admin/impersonate", () => {
       expect(response.status).toBe(403);
       expect(data.error).toBe("Only ADMIN can impersonate users");
     });
+
+    it("returns 403 when ADMIN caller is not ACTIVE", async () => {
+      const adminUser = createMockUser({ position: "ADMIN", status: "INACTIVE" });
+      mockRequireAuth.mockResolvedValue({
+        session: { user: { name: adminUser.name, email: adminUser.email } },
+      });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: adminUser.id,
+        email: adminUser.email,
+        name: adminUser.name,
+        position: adminUser.position,
+        status: "INACTIVE",
+      });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/admin/impersonate",
+        body: { userId: "target-user-123" },
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.error).toBe("Admin account is not active");
+    });
   });
 
   describe("Validation", () => {
@@ -520,7 +546,7 @@ describe("GET /api/admin/impersonate", () => {
       });
     });
 
-    it("returns impersonating: false when cookie user not found", async () => {
+    it("returns impersonating: false and clears cookie when cookie user not found", async () => {
       const user = createMockUser();
       mockRequireAuth.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
@@ -541,6 +567,12 @@ describe("GET /api/admin/impersonate", () => {
       expect(response.status).toBe(200);
       expect(data.impersonating).toBe(false);
       expect(data.user).toBeUndefined();
+
+      // Verify stale cookie is cleared
+      const setCookie = response.headers.get("Set-Cookie");
+      expect(setCookie).toBeTruthy();
+      expect(setCookie).toContain("impersonate_user_id=");
+      expect(setCookie).toContain("Max-Age=0");
     });
 
     it("handles null image field gracefully", async () => {

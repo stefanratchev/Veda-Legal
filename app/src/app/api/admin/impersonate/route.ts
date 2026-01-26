@@ -38,6 +38,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return errorResponse("Only ADMIN can impersonate users", 403);
     }
 
+    // Caller must be ACTIVE
+    if (caller.status !== "ACTIVE") {
+      return errorResponse("Admin account is not active", 403);
+    }
+
     // Parse request body
     let body: { userId?: unknown };
     try {
@@ -104,25 +109,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
  * Stop impersonating and clear the cookie.
  */
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
-  // Check authentication
-  const auth = await requireAuth(request);
-  if ("error" in auth) {
-    return errorResponse(auth.error, auth.status);
+  try {
+    // Check authentication
+    const auth = await requireAuth(request);
+    if ("error" in auth) {
+      return errorResponse(auth.error, auth.status);
+    }
+
+    // Create response with cookie cleared
+    const response = successResponse({ success: true });
+
+    // Clear the cookie by setting maxAge to 0
+    response.cookies.set(COOKIE_NAME, "", {
+      httpOnly: true,
+      sameSite: "strict",
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 0,
+    });
+
+    return response;
+  } catch (error) {
+    console.error("Failed to stop impersonation:", error);
+    return errorResponse("Failed to stop impersonation", 500);
   }
-
-  // Create response with cookie cleared
-  const response = successResponse({ success: true });
-
-  // Clear the cookie by setting maxAge to 0
-  response.cookies.set(COOKIE_NAME, "", {
-    httpOnly: true,
-    sameSite: "strict",
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 0,
-  });
-
-  return response;
 }
 
 /**
@@ -151,7 +161,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     if (!impersonatedUser) {
-      return successResponse({ impersonating: false });
+      // User was deleted - clear stale cookie
+      const response = successResponse({ impersonating: false });
+      response.cookies.set(COOKIE_NAME, "", {
+        httpOnly: true,
+        sameSite: "strict",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 0,
+      });
+      return response;
     }
 
     return successResponse({

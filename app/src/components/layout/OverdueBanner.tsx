@@ -97,6 +97,17 @@ export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
     return () => clearInterval(interval);
   }, [fetchOverdue]);
 
+  // Listen for submission changes from TimesheetsContent
+  useEffect(() => {
+    const handleSubmissionChange = () => {
+      fetchOverdue();
+    };
+    window.addEventListener("timesheet-submission-changed", handleSubmissionChange);
+    return () => {
+      window.removeEventListener("timesheet-submission-changed", handleSubmissionChange);
+    };
+  }, [fetchOverdue]);
+
   // Show error state
   if (error) {
     return (

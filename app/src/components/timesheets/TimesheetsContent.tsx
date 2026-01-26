@@ -180,6 +180,8 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
           return next;
         });
         setShowSubmitPrompt(false);
+        // Notify OverdueBanner to refresh
+        window.dispatchEvent(new CustomEvent("timesheet-submission-changed"));
       }
     } catch (err) {
       console.error("Failed to submit timesheet:", err);
@@ -318,6 +320,8 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
           setTimeout(() => setRevocationWarning(null), 5000);
           // Re-fetch overdue status to update WeekStrip icons
           fetchOverdueStatus();
+          // Notify OverdueBanner to refresh
+          window.dispatchEvent(new CustomEvent("timesheet-submission-changed"));
         }
 
         // Update total hours if provided
@@ -357,6 +361,8 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
       setTimeout(() => setRevocationWarning(null), 5000);
       // Re-fetch overdue status to update WeekStrip icons
       fetchOverdueStatus();
+      // Notify OverdueBanner to refresh
+      window.dispatchEvent(new CustomEvent("timesheet-submission-changed"));
     }
 
     // Update total hours if provided

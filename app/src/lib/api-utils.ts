@@ -53,21 +53,54 @@ type AuthResult = { session: AuthSession } | { error: string; status: number };
 /**
  * Require authentication for API routes.
  * Supports both server session and JWT token authentication.
+ * Supports user impersonation for ADMIN users via cookie.
  */
 export async function requireAuth(request: NextRequest): Promise<AuthResult> {
   // Try getServerSession first
+  let realUser: { name?: string | null; email?: string | null } | null = null;
+
   const session = await getServerSession(authOptions);
   if (session?.user) {
-    return { session: { user: { name: session.user.name, email: session.user.email } } };
+    realUser = { name: session.user.name, email: session.user.email };
+  } else {
+    // Fallback: check JWT token directly (works better with chunked cookies)
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    if (token) {
+      realUser = { name: token.name, email: token.email };
+    }
   }
 
-  // Fallback: check JWT token directly (works better with chunked cookies)
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-  if (token) {
-    return { session: { user: { name: token.name, email: token.email } } };
+  // Not authenticated
+  if (!realUser) {
+    return { error: "Unauthorized", status: 401 };
   }
 
-  return { error: "Unauthorized", status: 401 };
+  // Check for impersonation cookie
+  const impersonateUserId = request.cookies.get("impersonate_user_id")?.value;
+
+  if (impersonateUserId && realUser.email) {
+    // Verify the real user is an ADMIN
+    const realUserRecord = await db.query.users.findFirst({
+      where: eq(users.email, realUser.email),
+      columns: { id: true, email: true, name: true, position: true, status: true },
+    });
+
+    if (realUserRecord?.position === "ADMIN") {
+      // Lookup the impersonated user
+      const impersonatedUser = await db.query.users.findFirst({
+        where: eq(users.id, impersonateUserId),
+        columns: { id: true, email: true, name: true, position: true, status: true },
+      });
+
+      // Return impersonated user if found and not INACTIVE
+      if (impersonatedUser && impersonatedUser.status !== "INACTIVE") {
+        return { session: { user: { name: impersonatedUser.name, email: impersonatedUser.email } } };
+      }
+    }
+  }
+
+  // Return real user (no impersonation or impersonation not allowed)
+  return { session: { user: realUser } };
 }
 
 /**

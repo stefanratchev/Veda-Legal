@@ -33,6 +33,7 @@ npm run db:generate    # Generate Drizzle migrations
 npm run db:migrate     # Run database migrations
 npm run db:push        # Push schema changes (dev)
 npm run db:studio      # Open Drizzle Studio
+npm run db:seed-internal-topics  # Seed internal/management topics
 ```
 
 ## Project Structure
@@ -48,10 +49,12 @@ app/src/
 │   │   ├── timesheets/    # Time entry page
 │   │   └── page.tsx       # Dashboard
 │   ├── api/               # API routes
+│   │   ├── billing/       # Service descriptions CRUD + line items
 │   │   ├── clients/       # Client CRUD
 │   │   ├── employees/     # Employee CRUD
+│   │   ├── m365/          # Microsoft 365 activity integration
 │   │   ├── reports/       # Aggregated report data
-│   │   ├── timesheets/    # Time entry CRUD + /dates endpoint
+│   │   ├── timesheets/    # Time entry CRUD + submissions + overdue tracking
 │   │   ├── topics/        # Topics CRUD + subtopics creation
 │   │   └── subtopics/     # Subtopics CRUD
 │   └── login/             # Public login page
@@ -109,6 +112,15 @@ The schema uses a `Position` enum with five levels. Access is controlled via pos
 Time entries can be edited by their owner via `PATCH /api/timesheets/[id]`. Editable fields: client, topic/subtopic, hours, description. Date cannot be changed.
 
 **Billing Lock:** Entries linked to a finalized service description cannot be edited. The `isLocked` field in the GET response indicates this state.
+
+### Timesheet Submissions
+Users submit timesheets daily via `POST /api/timesheets/submit`. Key behaviors:
+- Requires minimum 6 hours logged (see `MIN_SUBMISSION_HOURS` in `lib/submission-utils.ts`)
+- Cannot submit future dates
+- Uses Eastern European Time (EET/EEST) for deadline calculations
+- Submissions can be revoked (DELETE) to allow modifications
+- Admin/Partner can view all overdue submissions via `/api/timesheets/overdue`
+- `OverdueBanner` component shows overdue status in the header
 
 ## Database
 
@@ -190,6 +202,9 @@ AZURE_AD_TENANT_ID=<from Azure Portal>
 - **ServiceDescription**: Invoice-like document grouping time entries for a client and period
 - **ServiceDescriptionTopic**: A topic section within a service description with pricing mode (hourly/fixed)
 - **LineItem**: Individual line within a service description topic (linked to a time entry or manual)
+- **TimesheetSubmission**: Daily confirmation that a user's timesheet is complete
+- **ClientType**: REGULAR (billable), INTERNAL (non-billable firm work), MANAGEMENT (admin tasks)
+- **TopicType**: Mirrors ClientType - controls which topics appear for which client types
 
 ## Topic/Subtopic Hierarchy
 
@@ -207,7 +222,7 @@ DATABASE_URL="<prod-url>" npm run db:seed-topics          # Production
 
 **Pre-deployment requirement:** Always run tests before deploying to production. Deployment must fail if tests don't pass—never skip this step, even if not explicitly requested.
 
-**Deployment method:** Push to `prod` branch triggers GitHub Actions workflow (`.github/workflows/deploy-prod.yml`)
+**Deployment method:** Push to `master` branch triggers GitHub Actions workflow (`.github/workflows/deploy-prod.yml`)
 
 **Running migrations on production:**
 ```bash

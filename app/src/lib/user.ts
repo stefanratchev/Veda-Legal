@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
@@ -59,7 +60,7 @@ export async function getAuthenticatedUser(
 /**
  * Get the current authenticated user (cached per request).
  * Redirects to login if not authenticated.
- * Use this in server components to avoid duplicate auth/user queries.
+ * Respects impersonation: returns impersonated user if ADMIN has set cookie.
  */
 export const getCurrentUser = cache(async (): Promise<AuthenticatedUser> => {
   const session = await getServerSession(authOptions);
@@ -68,11 +69,41 @@ export const getCurrentUser = cache(async (): Promise<AuthenticatedUser> => {
     redirect("/login");
   }
 
-  const user = await getAuthenticatedUser(session.user.email);
+  const realUser = await db.query.users.findFirst({
+    where: eq(users.email, session.user.email),
+    columns: { id: true, name: true, position: true, image: true, status: true },
+  });
 
-  if (!user) {
+  if (!realUser) {
     redirect("/login");
   }
 
-  return user;
+  // Check for impersonation cookie (only ADMIN can impersonate)
+  const cookieStore = await cookies();
+  const impersonateUserId = cookieStore.get("impersonate_user_id")?.value;
+
+  if (impersonateUserId && realUser.position === "ADMIN") {
+    const impersonatedUser = await db.query.users.findFirst({
+      where: eq(users.id, impersonateUserId),
+      columns: { id: true, name: true, position: true, image: true, status: true },
+    });
+
+    if (impersonatedUser && impersonatedUser.status !== "INACTIVE") {
+      return {
+        id: impersonatedUser.id,
+        name: impersonatedUser.name || "User",
+        position: impersonatedUser.position,
+        initials: getInitials(impersonatedUser.name),
+        image: impersonatedUser.image,
+      };
+    }
+  }
+
+  return {
+    id: realUser.id,
+    name: realUser.name || "User",
+    position: realUser.position,
+    initials: getInitials(realUser.name),
+    image: realUser.image,
+  };
 });

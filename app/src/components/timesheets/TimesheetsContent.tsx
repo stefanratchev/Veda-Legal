@@ -15,9 +15,10 @@ import { initialFormData } from "@/types";
 interface TimesheetsContentProps {
   clients: ClientWithType[];
   topics: Topic[];
+  userName?: string;
 }
 
-export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
+export function TimesheetsContent({ clients, topics, userName }: TimesheetsContentProps) {
   const today = useMemo(() => new Date(), []);
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -143,17 +144,23 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
       const response = await fetch("/api/timesheets/overdue");
       if (response.ok) {
         const data = await response.json();
-        // For regular users, data.overdue is string[]
         if (Array.isArray(data.overdue)) {
-          if (data.overdue.length === 0 || typeof data.overdue[0] === "string") {
+          if (data.overdue.length === 0) {
+            setOverdueDates(new Set());
+          } else if (typeof data.overdue[0] === "string") {
+            // Regular user format: string[]
             setOverdueDates(new Set(data.overdue as string[]));
+          } else if (userName && typeof data.overdue[0] === "object" && "dates" in data.overdue[0]) {
+            // Admin format: { userId, name, dates }[] - extract current user's dates
+            const userOverdue = data.overdue.find((u: { name: string }) => u.name === userName);
+            setOverdueDates(new Set(userOverdue?.dates || []));
           }
         }
       }
     } catch (err) {
       console.error("Failed to fetch overdue status:", err);
     }
-  }, []);
+  }, [userName]);
 
   // Handle timesheet submission for the selected date
   const handleTimesheetSubmit = useCallback(async () => {

@@ -120,9 +120,9 @@ describe("OverdueBanner", () => {
         expect(screen.getByText(/3 overdue/)).toBeInTheDocument();
       });
 
-      // Click expand button
-      const expandButton = screen.getByTitle("Show all dates");
-      fireEvent.click(expandButton);
+      // Click banner to expand (entire banner row is clickable)
+      const bannerText = screen.getByText(/You have/);
+      fireEvent.click(bannerText);
 
       // Should show individual date pills
       await waitFor(() => {
@@ -212,9 +212,9 @@ describe("OverdueBanner", () => {
         expect(screen.getByText(/Team:/)).toBeInTheDocument();
       });
 
-      // Click expand button
-      const expandButton = screen.getByTitle("Show details");
-      fireEvent.click(expandButton);
+      // Click team banner to expand (entire banner is clickable)
+      const teamText = screen.getByText(/Team:/);
+      fireEvent.click(teamText);
 
       // Should show team member names with counts
       await waitFor(() => {
@@ -273,6 +273,33 @@ describe("OverdueBanner", () => {
       expect(screen.queryByText(/You have/)).not.toBeInTheDocument();
       // No Fix now link
       expect(screen.queryByTestId("overdue-link")).not.toBeInTheDocument();
+    });
+
+    it("has a refresh button that refetches data", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            overdue: [{ userId: "1", name: "John Doe", dates: ["2026-01-20"] }],
+          }),
+      });
+      render(<OverdueBanner isAdmin={true} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Team:/)).toBeInTheDocument();
+      });
+
+      // Initial fetch
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      // Click refresh button
+      const refreshButton = screen.getByTitle("Refresh");
+      fireEvent.click(refreshButton);
+
+      // Should trigger another fetch
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
     });
   });
 

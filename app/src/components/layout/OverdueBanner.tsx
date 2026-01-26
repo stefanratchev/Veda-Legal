@@ -65,16 +65,41 @@ function ChevronIcon({ expanded, className }: { expanded: boolean; className?: s
   );
 }
 
+/**
+ * Refresh icon for manual refresh
+ */
+function RefreshIcon({ className, isSpinning }: { className?: string; isSpinning?: boolean }) {
+  return (
+    <svg
+      className={`${className} ${isSpinning ? "animate-spin" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      strokeWidth="2"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+      />
+    </svg>
+  );
+}
+
 export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
   const [overdueData, setOverdueData] = useState<string[] | UserOverdue[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTeamExpanded, setIsTeamExpanded] = useState(false);
 
-  const fetchOverdue = useCallback(async () => {
+  const fetchOverdue = useCallback(async (isManualRefresh = false) => {
     try {
       setError(null);
+      if (isManualRefresh) {
+        setIsRefreshing(true);
+      }
       const response = await fetch("/api/timesheets/overdue");
       if (!response.ok) {
         setError("Failed to load overdue status");
@@ -87,6 +112,7 @@ export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
       setError("Failed to load overdue status");
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, []);
 
@@ -164,7 +190,11 @@ export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
         {adminOverdue && adminOverdue.dates.length > 0 && (
           <div className="bg-gradient-to-r from-[var(--danger)]/15 via-[var(--danger)]/8 to-transparent">
             <div className="px-4 py-2.5">
-              <div className="flex items-center gap-3">
+              {/* Clickable row to expand/collapse */}
+              <div
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="flex items-center gap-3 cursor-pointer"
+              >
                 {/* Icon with glow */}
                 <div className="relative flex-shrink-0">
                   <div className="absolute inset-0 bg-[var(--danger)] blur-md opacity-40 animate-pulse" />
@@ -173,35 +203,28 @@ export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] font-medium text-[var(--text-primary)]">
-                      You have{" "}
-                      <span className="text-[var(--danger)] font-semibold">
-                        {adminOverdue.dates.length} overdue
-                      </span>{" "}
-                      {adminOverdue.dates.length === 1 ? "timesheet" : "timesheets"}
-                    </span>
-                    <span className="text-[var(--text-muted)] text-[12px]">
-                      {formatDateRange(adminOverdue.dates)}
-                    </span>
-                  </div>
+                  <span className="text-[13px] font-medium text-[var(--text-primary)]">
+                    You have{" "}
+                    <span className="text-[var(--danger)] font-semibold">
+                      {adminOverdue.dates.length} overdue
+                    </span>{" "}
+                    {adminOverdue.dates.length === 1 ? "timesheet" : "timesheets"}
+                  </span>
+                  <span className="text-[var(--text-muted)] text-[12px] ml-2">
+                    {formatDateRange(adminOverdue.dates)}
+                  </span>
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors p-1"
-                    title={isExpanded ? "Collapse" : "Show all dates"}
-                  >
-                    <ChevronIcon expanded={isExpanded} className="w-4 h-4" />
-                  </button>
                   <Link
                     href="/timesheets"
+                    onClick={(e) => e.stopPropagation()}
                     className="text-[12px] font-medium px-3 py-1 rounded bg-[var(--danger)] text-white hover:bg-[var(--danger)]/80 transition-colors"
                   >
                     Fix now
                   </Link>
+                  <ChevronIcon expanded={isExpanded} className="w-4 h-4 text-[var(--text-muted)]" />
                 </div>
               </div>
 
@@ -225,7 +248,10 @@ export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
         )}
 
         {/* Team overdue banner */}
-        <div className="bg-gradient-to-r from-[var(--warning)]/10 via-[var(--warning)]/5 to-transparent">
+        <div
+          onClick={() => setIsTeamExpanded(!isTeamExpanded)}
+          className="bg-gradient-to-r from-[var(--warning)]/10 via-[var(--warning)]/5 to-transparent cursor-pointer"
+        >
           <div className="px-4 py-2.5">
             <div className="flex items-center gap-3">
               {/* Icon */}
@@ -235,25 +261,30 @@ export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
 
               {/* Content */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[13px] font-medium text-[var(--text-primary)]">
-                    Team:{" "}
-                    <span className="text-[var(--warning)] font-semibold">
-                      {totalTeamOverdue} overdue
-                    </span>{" "}
-                    across {teamOverdue.length} {teamOverdue.length === 1 ? "person" : "people"}
-                  </span>
-                </div>
+                <span className="text-[13px] font-medium text-[var(--text-primary)]">
+                  Team:{" "}
+                  <span className="text-[var(--warning)] font-semibold">
+                    {totalTeamOverdue} overdue
+                  </span>{" "}
+                  {totalTeamOverdue === 1 ? "timesheet" : "timesheets"} across {teamOverdue.length} {teamOverdue.length === 1 ? "person" : "people"}
+                </span>
               </div>
 
-              {/* Expand button */}
-              <button
-                onClick={() => setIsTeamExpanded(!isTeamExpanded)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors p-1"
-                title={isTeamExpanded ? "Collapse" : "Show details"}
-              >
-                <ChevronIcon expanded={isTeamExpanded} className="w-4 h-4" />
-              </button>
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    fetchOverdue(true);
+                  }}
+                  disabled={isRefreshing}
+                  className="p-1 rounded hover:bg-[var(--warning)]/20 text-[var(--text-muted)] hover:text-[var(--warning)] transition-colors disabled:opacity-50"
+                  title="Refresh"
+                >
+                  <RefreshIcon className="w-4 h-4" isSpinning={isRefreshing} />
+                </button>
+                <ChevronIcon expanded={isTeamExpanded} className="w-4 h-4 text-[var(--text-muted)]" />
+              </div>
             </div>
 
             {/* Expanded team details */}
@@ -284,7 +315,11 @@ export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
   return (
     <div className="bg-gradient-to-r from-[var(--danger)]/15 via-[var(--danger)]/8 to-transparent border-b border-[var(--danger)]/20">
       <div className="px-4 py-2.5">
-        <div className="flex items-center gap-3">
+        {/* Clickable row to expand/collapse */}
+        <div
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-3 cursor-pointer"
+        >
           {/* Icon with glow */}
           <div className="relative flex-shrink-0">
             <div className="absolute inset-0 bg-[var(--danger)] blur-md opacity-40 animate-pulse" />
@@ -293,35 +328,28 @@ export function OverdueBanner({ isAdmin, userName }: OverdueBannerProps) {
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[13px] font-medium text-[var(--text-primary)]">
-                You have{" "}
-                <span className="text-[var(--danger)] font-semibold">
-                  {userOverdue.length} overdue
-                </span>{" "}
-                {userOverdue.length === 1 ? "timesheet" : "timesheets"}
-              </span>
-              <span className="text-[var(--text-muted)] text-[12px]">
-                {formatDateRange(userOverdue)}
-              </span>
-            </div>
+            <span className="text-[13px] font-medium text-[var(--text-primary)]">
+              You have{" "}
+              <span className="text-[var(--danger)] font-semibold">
+                {userOverdue.length} overdue
+              </span>{" "}
+              {userOverdue.length === 1 ? "timesheet" : "timesheets"}
+            </span>
+            <span className="text-[var(--text-muted)] text-[12px] ml-2">
+              {formatDateRange(userOverdue)}
+            </span>
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors p-1"
-              title={isExpanded ? "Collapse" : "Show all dates"}
-            >
-              <ChevronIcon expanded={isExpanded} className="w-4 h-4" />
-            </button>
             <Link
               href="/timesheets"
+              onClick={(e) => e.stopPropagation()}
               className="text-[12px] font-medium px-3 py-1 rounded bg-[var(--danger)] text-white hover:bg-[var(--danger)]/80 transition-colors"
             >
               Fix now
             </Link>
+            <ChevronIcon expanded={isExpanded} className="w-4 h-4 text-[var(--text-muted)]" />
           </div>
         </div>
 

@@ -8,6 +8,7 @@ import { signOut } from "next-auth/react";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import { useMobileNav } from "@/contexts/MobileNavContext";
 import { useSidebar } from "@/contexts/SidebarContext";
+import { useImpersonation } from "@/contexts/ImpersonationContext";
 
 interface NavItem {
   name: string;
@@ -107,11 +108,134 @@ interface SidebarProps {
   className?: string;
 }
 
+interface UserProfileFooterProps {
+  user: {
+    name: string;
+    position: string;
+    initials: string;
+    image?: string | null;
+  };
+  isCollapsed: boolean;
+  isAdmin: boolean;
+}
+
+function UserProfileFooter({ user, isCollapsed, isAdmin }: UserProfileFooterProps) {
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const { isImpersonating, impersonatedUser, stopImpersonation } = useImpersonation();
+
+  useClickOutside(userMenuRef, () => setShowUserMenu(false), showUserMenu);
+
+  const displayUser = isImpersonating && impersonatedUser
+    ? {
+        name: impersonatedUser.name || "User",
+        position: impersonatedUser.position,
+        initials: impersonatedUser.name
+          ? impersonatedUser.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+          : "U",
+        image: impersonatedUser.image,
+      }
+    : user;
+
+  const handleStopImpersonation = async () => {
+    setShowUserMenu(false);
+    await stopImpersonation();
+  };
+
+  return (
+    <div
+      className={`p-3 border-t border-[var(--border-subtle)] ${isCollapsed ? 'flex justify-center' : ''} ${isImpersonating ? 'bg-[rgba(234,179,8,0.1)]' : ''}`}
+      ref={userMenuRef}
+    >
+      <div className="relative">
+        <button
+          onClick={() => setShowUserMenu(!showUserMenu)}
+          className={`
+            flex items-center rounded hover:bg-[var(--bg-hover)] transition-colors cursor-pointer
+            ${isCollapsed ? 'p-1 justify-center' : 'w-full gap-2.5 px-2 py-2'}
+          `}
+        >
+          {displayUser.image ? (
+            /* eslint-disable-next-line @next/next/no-img-element -- base64 data URL doesn't benefit from next/image optimization */
+            <img
+              src={displayUser.image}
+              alt={displayUser.name}
+              className={`w-8 h-8 rounded-full object-cover ${isImpersonating ? 'ring-2 ring-yellow-500' : ''}`}
+            />
+          ) : (
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[var(--bg-deep)] font-heading font-semibold text-xs ${isImpersonating ? 'bg-yellow-500 ring-2 ring-yellow-500' : 'bg-gradient-to-br from-[var(--accent-pink)] to-[var(--accent-pink-dim)]'}`}>
+              {displayUser.initials}
+            </div>
+          )}
+          {!isCollapsed && (
+            <>
+              <div className="flex-1 min-w-0 text-left">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
+                    {displayUser.name}
+                  </p>
+                  {isImpersonating && (
+                    <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-yellow-500/20 text-yellow-500 rounded uppercase whitespace-nowrap">
+                      Viewing as
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-[var(--text-muted)] leading-tight">{formatPosition(displayUser.position)}</p>
+              </div>
+              <svg
+                className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 9l-7 7-7-7" />
+              </svg>
+            </>
+          )}
+        </button>
+
+        {/* Dropdown Menu */}
+        {showUserMenu && (
+          <div className={`
+            absolute mb-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg shadow-lg overflow-hidden animate-fade-up
+            ${isCollapsed ? 'bottom-full left-full ml-1' : 'bottom-full left-0 right-0'}
+          `}>
+            {isImpersonating && (
+              <button
+                onClick={handleStopImpersonation}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-yellow-500 hover:bg-yellow-500/10 transition-colors whitespace-nowrap"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Exit Impersonation
+              </button>
+            )}
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors whitespace-nowrap"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
+      {/* Version indicator - admin only, hidden when collapsed */}
+      {isAdmin && !isCollapsed && (
+        <p className="text-[9px] text-[var(--text-muted)] text-center mt-2 opacity-50">
+          {process.env.NEXT_PUBLIC_BUILD_ID}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar({ user, className }: SidebarProps) {
   const pathname = usePathname();
   const isAdmin = user?.position ? hasAdminAccess(user.position) : false;
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const { isOpen, close } = useMobileNav();
   const { isCollapsed, setIsCollapsed } = useSidebar();
@@ -120,7 +244,6 @@ export function Sidebar({ user, className }: SidebarProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragWidth, setDragWidth] = useState<number | null>(null);
 
-  useClickOutside(userMenuRef, () => setShowUserMenu(false), showUserMenu);
   useClickOutside(sidebarRef, () => {
     if (isOpen) close();
   }, isOpen);
@@ -310,72 +433,11 @@ export function Sidebar({ user, className }: SidebarProps) {
 
       {/* User Profile Footer */}
       {user && (
-        <div className={`p-3 border-t border-[var(--border-subtle)] ${isCollapsed ? 'flex justify-center' : ''}`} ref={userMenuRef}>
-          <div className="relative">
-            <button
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              className={`
-                flex items-center rounded hover:bg-[var(--bg-hover)] transition-colors cursor-pointer
-                ${isCollapsed ? 'p-1 justify-center' : 'w-full gap-2.5 px-2 py-2'}
-              `}
-            >
-              {user.image ? (
-                /* eslint-disable-next-line @next/next/no-img-element -- base64 data URL doesn't benefit from next/image optimization */
-                <img
-                  src={user.image}
-                  alt={user.name}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--accent-pink)] to-[var(--accent-pink-dim)] flex items-center justify-center text-[var(--bg-deep)] font-heading font-semibold text-xs">
-                  {user.initials}
-                </div>
-              )}
-              {!isCollapsed && (
-                <>
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">
-                      {user.name}
-                    </p>
-                    <p className="text-[11px] text-[var(--text-muted)] leading-tight">{formatPosition(user.position)}</p>
-                  </div>
-                  <svg
-                    className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${showUserMenu ? "rotate-180" : ""}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </>
-              )}
-            </button>
-
-            {/* Dropdown Menu */}
-            {showUserMenu && (
-              <div className={`
-                absolute mb-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-lg shadow-lg overflow-hidden animate-fade-up
-                ${isCollapsed ? 'bottom-full left-full ml-1' : 'bottom-full left-0 right-0'}
-              `}>
-                <button
-                  onClick={() => signOut({ callbackUrl: "/login" })}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors whitespace-nowrap"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Sign out
-                </button>
-              </div>
-            )}
-          </div>
-          {/* Version indicator - admin only, hidden when collapsed */}
-          {isAdmin && !isCollapsed && (
-            <p className="text-[9px] text-[var(--text-muted)] text-center mt-2 opacity-50">
-              {process.env.NEXT_PUBLIC_BUILD_ID}
-            </p>
-          )}
-        </div>
+        <UserProfileFooter
+          user={user}
+          isCollapsed={isCollapsed}
+          isAdmin={isAdmin}
+        />
       )}
 
       {/* Resize handle - desktop only */}

@@ -8,23 +8,36 @@ import {
 } from "@/test/mocks/factories";
 
 // Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireAuth, mockGetUserFromSession, mockCanViewTeamTimesheets, mockDb } = vi.hoisted(() => {
-  // Create a chainable mock for billing table queries (used by getLockedEntryIds)
-  // This chain uses innerJoin and is called first
-  const mockBillingChain = {
-    from: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue([]), // Default: no entries are locked
+const { mockRequireAuth, mockGetUserFromSession, mockCanViewTeamTimesheets, mockDb, mockHoursResult, mockBillingResult } = vi.hoisted(() => {
+  // Result mock for hours aggregation
+  const mockHoursResult = vi.fn().mockResolvedValue([{ totalHours: "10" }]); // Default: 10 hours remaining (above threshold)
+  // Result mock for billing check
+  const mockBillingResult = vi.fn().mockResolvedValue([]); // Default: no entries are locked
+
+  // Create innerJoin chain object that can be reused
+  const innerJoinChain = {
+    innerJoin: vi.fn().mockReturnValue({
+      where: mockBillingResult,
+    }),
+    where: mockBillingResult,
   };
 
-  // Main select mock - returns billing chain by default
-  // Tests that need team summaries will override this
-  const mockSelect = vi.fn().mockReturnValue(mockBillingChain);
+  // Create a chainable mock that supports both billing queries and hours aggregation
+  const mockSelect = vi.fn().mockReturnValue({
+    from: vi.fn().mockReturnValue({
+      // Support billing check chain (innerJoin().innerJoin().where())
+      innerJoin: vi.fn().mockReturnValue(innerJoinChain),
+      // Support hours aggregation chain (direct where)
+      where: mockHoursResult,
+    }),
+  });
 
   return {
     mockRequireAuth: vi.fn(),
     mockGetUserFromSession: vi.fn(),
     mockCanViewTeamTimesheets: vi.fn(),
+    mockHoursResult,
+    mockBillingResult,
     mockDb: {
       query: {
         timeEntries: {
@@ -35,6 +48,9 @@ const { mockRequireAuth, mockGetUserFromSession, mockCanViewTeamTimesheets, mock
           findFirst: vi.fn(),
         },
         subtopics: {
+          findFirst: vi.fn(),
+        },
+        timesheetSubmissions: {
           findFirst: vi.fn(),
         },
       },
@@ -154,7 +170,7 @@ describe("GET /api/timesheets", () => {
   });
 
   describe("Happy Path", () => {
-    it("returns entries for given date", async () => {
+    it("returns entries for given date with submission status", async () => {
       const user = createMockUser({ position: "ASSOCIATE" });
       const entries = [
         createMockTimeEntry({ userId: user.id, hours: "2.5" }),
@@ -163,6 +179,7 @@ describe("GET /api/timesheets", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       const request = createMockRequest({
         method: "GET",
@@ -173,8 +190,12 @@ describe("GET /api/timesheets", () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(data)).toBe(true);
-      expect(data).toHaveLength(2);
+      expect(data).toHaveProperty("entries");
+      expect(Array.isArray(data.entries)).toBe(true);
+      expect(data.entries).toHaveLength(2);
+      expect(data.totalHours).toBe(3.5);
+      expect(data.isSubmitted).toBe(false);
+      expect(data.submittedAt).toBeNull();
     });
 
     it("serializes decimal hours to numbers", async () => {
@@ -183,6 +204,7 @@ describe("GET /api/timesheets", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       const request = createMockRequest({
         method: "GET",
@@ -192,8 +214,8 @@ describe("GET /api/timesheets", () => {
       const response = await GET(request);
       const data = await response.json();
 
-      expect(typeof data[0].hours).toBe("number");
-      expect(data[0].hours).toBe(2.5);
+      expect(typeof data.entries[0].hours).toBe("number");
+      expect(data.entries[0].hours).toBe(2.5);
     });
 
     it("returns entries with client details populated", async () => {
@@ -207,6 +229,7 @@ describe("GET /api/timesheets", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       const request = createMockRequest({
         method: "GET",
@@ -216,17 +239,63 @@ describe("GET /api/timesheets", () => {
       const response = await GET(request);
       const data = await response.json();
 
-      expect(data[0].client).toEqual({ id: "client-1", name: "Acme Corp" });
+      expect(data.entries[0].client).toEqual({ id: "client-1", name: "Acme Corp" });
+    });
+
+    it("returns isSubmitted: true when submission exists", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "8.0" })];
+      const submittedAt = "2024-12-20T17:00:00.000Z";
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue({ submittedAt });
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.isSubmitted).toBe(true);
+      expect(data.submittedAt).toBe(submittedAt);
+      expect(data.totalHours).toBe(8);
+    });
+
+    it("returns isSubmitted: false when no submission exists", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "4.0" })];
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.isSubmitted).toBe(false);
+      expect(data.submittedAt).toBeNull();
+      expect(data.totalHours).toBe(4);
     });
   });
 
   describe("Role-Based Behavior", () => {
-    it("returns entries array directly for regular users", async () => {
+    it("returns entries object with submission status for regular users", async () => {
       const user = createMockUser({ position: "ASSOCIATE" });
-      const entries = [createMockTimeEntry({ userId: user.id })];
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "3.0" })];
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       const request = createMockRequest({
         method: "GET",
@@ -236,19 +305,25 @@ describe("GET /api/timesheets", () => {
       const response = await GET(request);
       const data = await response.json();
 
-      expect(Array.isArray(data)).toBe(true);
+      expect(data).toHaveProperty("entries");
+      expect(Array.isArray(data.entries)).toBe(true);
       expect(data).not.toHaveProperty("teamSummaries");
+      expect(data.totalHours).toBe(3);
+      expect(data.isSubmitted).toBe(false);
+      expect(data.submittedAt).toBeNull();
     });
 
-    it("returns entries and teamSummaries for ADMIN", async () => {
+    it("returns entries, teamSummaries, and submission status for ADMIN", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      const entries = [createMockTimeEntry({ userId: user.id })];
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "5.0" })];
       const teamSummaries = [
         { userId: "other-user", userName: "Other User", position: "ASSOCIATE", totalHours: "4.0" },
       ];
+      const submittedAt = "2024-12-20T17:00:00.000Z";
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue({ submittedAt });
 
       // First call: billing check (innerJoin chain)
       const billingChain = {
@@ -286,14 +361,18 @@ describe("GET /api/timesheets", () => {
       expect(data).toHaveProperty("teamSummaries");
       expect(Array.isArray(data.entries)).toBe(true);
       expect(Array.isArray(data.teamSummaries)).toBe(true);
+      expect(data.totalHours).toBe(5);
+      expect(data.isSubmitted).toBe(true);
+      expect(data.submittedAt).toBe(submittedAt);
     });
 
-    it("returns entries and teamSummaries for PARTNER", async () => {
+    it("returns entries, teamSummaries, and submission status for PARTNER", async () => {
       const user = createMockUser({ position: "PARTNER" });
-      const entries = [createMockTimeEntry({ userId: user.id })];
+      const entries = [createMockTimeEntry({ userId: user.id, hours: "2.0" })];
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
 
       // First call: billing check (innerJoin chain)
       const billingChain = {
@@ -329,6 +408,9 @@ describe("GET /api/timesheets", () => {
 
       expect(data).toHaveProperty("entries");
       expect(data).toHaveProperty("teamSummaries");
+      expect(data.totalHours).toBe(2);
+      expect(data.isSubmitted).toBe(false);
+      expect(data.submittedAt).toBeNull();
     });
   });
 });
@@ -861,12 +943,18 @@ describe("DELETE /api/timesheets", () => {
   });
 
   describe("Happy Path", () => {
-    it("deletes entry and returns success", async () => {
+    it("deletes entry and returns success without revocation when hours >= 8", async () => {
       const user = createMockUser({ id: "user-1" });
       setupAuthenticatedUser(user);
-      mockDb.query.timeEntries.findFirst.mockResolvedValue({ userId: "user-1" });
+      mockDb.query.timeEntries.findFirst.mockResolvedValue({ userId: "user-1", date: "2024-01-15" });
       mockDb.delete.mockReturnValue({
         where: vi.fn().mockResolvedValue(undefined),
+      });
+      // Mock select for hours query - returns 10 hours (above threshold)
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ totalHours: "10" }]),
+        }),
       });
 
       const request = createMockRequest({
@@ -879,6 +967,65 @@ describe("DELETE /api/timesheets", () => {
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
+      expect(data.submissionRevoked).toBe(false);
+    });
+
+    it("deletes entry and revokes submission when hours drop below 8", async () => {
+      const user = createMockUser({ id: "user-1" });
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue({ userId: "user-1", date: "2024-01-15" });
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue({ id: "submission-1" });
+      mockDb.delete.mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      });
+      // Mock select for hours query - returns 5 hours (below threshold)
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ totalHours: "5" }]),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "DELETE",
+        url: "/api/timesheets?id=entry-1",
+      });
+
+      const response = await DELETE(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.submissionRevoked).toBe(true);
+      expect(data.remainingHours).toBe(5);
+    });
+
+    it("does not revoke submission when no submission exists", async () => {
+      const user = createMockUser({ id: "user-1" });
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue({ userId: "user-1", date: "2024-01-15" });
+      mockDb.query.timesheetSubmissions.findFirst.mockResolvedValue(null);
+      mockDb.delete.mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      });
+      // Mock select for hours query - returns 5 hours (below threshold)
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([{ totalHours: "5" }]),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "DELETE",
+        url: "/api/timesheets?id=entry-1",
+      });
+
+      const response = await DELETE(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.submissionRevoked).toBe(false);
+      expect(data.remainingHours).toBeUndefined();
     });
   });
 });

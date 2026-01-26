@@ -50,5 +50,5 @@ export default async function TimesheetsPage() {
     orderBy: [asc(topics.displayOrder)],
   });
 
-  return <TimesheetsContent clients={filteredClients} topics={topicsList} />;
+  return <TimesheetsContent clients={filteredClients} topics={topicsList} userName={user.name} />;
 }

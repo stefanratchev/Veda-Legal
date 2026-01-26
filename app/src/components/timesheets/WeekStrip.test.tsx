@@ -253,8 +253,8 @@ describe("WeekStrip", () => {
         <WeekStrip {...defaultProps} datesWithEntries={datesWithEntries} />
       );
 
-      // Entry indicators are small dots (w-1 h-1 rounded-full)
-      const indicators = container.querySelectorAll(".w-1.h-1.rounded-full");
+      // Entry indicators are small dots (w-1.5 h-1.5 rounded-full)
+      const indicators = container.querySelectorAll(".w-1\\.5.h-1\\.5.rounded-full");
       expect(indicators.length).toBe(2);
     });
 
@@ -266,7 +266,7 @@ describe("WeekStrip", () => {
       );
 
       // Only one indicator should exist
-      const indicators = container.querySelectorAll(".w-1.h-1.rounded-full");
+      const indicators = container.querySelectorAll(".w-1\\.5.h-1\\.5.rounded-full");
       expect(indicators.length).toBe(1);
     });
   });

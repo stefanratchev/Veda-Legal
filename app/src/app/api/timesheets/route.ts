@@ -11,7 +11,9 @@ import {
   serviceDescriptionLineItems,
   serviceDescriptionTopics,
   serviceDescriptions,
+  timesheetSubmissions,
 } from "@/lib/schema";
+import { MIN_SUBMISSION_HOURS } from "@/lib/submission-utils";
 import {
   requireAuth,
   getUserFromSession,
@@ -138,6 +140,18 @@ export async function GET(request: NextRequest) {
       isLocked: lockedIds.has(entry.id),
     }));
 
+    // Calculate total hours for the day
+    const totalHours = entries.reduce((sum, e) => sum + Number(e.hours), 0);
+
+    // Check submission status for this date
+    const submission = await db.query.timesheetSubmissions.findFirst({
+      where: and(
+        eq(timesheetSubmissions.userId, user.id),
+        eq(timesheetSubmissions.date, dateStr)
+      ),
+      columns: { submittedAt: true },
+    });
+
     // For ADMIN/PARTNER: also fetch team summaries
     if (user.position && canViewTeamTimesheets(user.position)) {
       const teamSummaries = await db
@@ -172,11 +186,19 @@ export async function GET(request: NextRequest) {
           userName: s.userName || "Unknown",
           totalHours: Number(s.totalHours),
         })),
+        totalHours,
+        isSubmitted: !!submission,
+        submittedAt: submission?.submittedAt || null,
       });
     }
 
-    // For regular users: return entries array directly (backward compatible)
-    return NextResponse.json(serializedEntries);
+    // For regular users: return object with entries and submission status
+    return NextResponse.json({
+      entries: serializedEntries,
+      totalHours,
+      isSubmitted: !!submission,
+      submittedAt: submission?.submittedAt || null,
+    });
   } catch (error) {
     console.error("Database error fetching time entries:", error);
     return NextResponse.json(
@@ -386,7 +408,7 @@ export async function DELETE(request: NextRequest) {
     // First check if entry exists and belongs to user
     const existingEntry = await db.query.timeEntries.findFirst({
       where: eq(timeEntries.id, id),
-      columns: { userId: true },
+      columns: { userId: true, date: true },
     });
 
     if (!existingEntry) {
@@ -397,9 +419,47 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "You can only delete your own entries" }, { status: 403 });
     }
 
+    const entryDate = existingEntry.date;
+
     await db.delete(timeEntries).where(eq(timeEntries.id, id));
 
-    return NextResponse.json({ success: true });
+    // Check if we need to revoke submission
+    let submissionRevoked = false;
+    const [hoursResult] = await db
+      .select({
+        totalHours: sql<string>`COALESCE(SUM(CAST(${timeEntries.hours} AS DECIMAL)), 0)`,
+      })
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.userId, user.id),
+          eq(timeEntries.date, entryDate)
+        )
+      );
+
+    const remainingHours = Number(hoursResult?.totalHours || 0);
+
+    if (remainingHours < MIN_SUBMISSION_HOURS) {
+      const existingSubmission = await db.query.timesheetSubmissions.findFirst({
+        where: and(
+          eq(timesheetSubmissions.userId, user.id),
+          eq(timesheetSubmissions.date, entryDate)
+        ),
+      });
+
+      if (existingSubmission) {
+        await db.delete(timesheetSubmissions).where(
+          eq(timesheetSubmissions.id, existingSubmission.id)
+        );
+        submissionRevoked = true;
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      submissionRevoked,
+      ...(submissionRevoked && { remainingHours }),
+    });
   } catch (error) {
     console.error("Database error deleting time entry:", error);
     return NextResponse.json(

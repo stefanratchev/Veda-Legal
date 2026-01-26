@@ -32,6 +32,7 @@ export default async function EmployeesPage() {
     <EmployeesContent
       initialEmployees={serializedEmployees}
       currentUserId={user.id}
+      currentUserPosition={user.position}
       readOnly={!["ADMIN", "PARTNER"].includes(user.position)}
     />
   );

@@ -1,8 +1,17 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
+import { createMockUser } from "@/test/mocks/factories";
+import { getServerSession } from "next-auth";
+import { getToken } from "next-auth/jwt";
+import { db } from "./db";
 
 // Mock the db module before importing api-utils
 vi.mock("./db", () => ({
-  db: {},
+  db: {
+    query: {
+      users: { findFirst: vi.fn() },
+    },
+  },
 }));
 
 // Mock next-auth
@@ -24,9 +33,15 @@ import {
   isValidDescription,
   parseDate,
   isNotFutureDate,
+  requireAuth,
   MIN_DESCRIPTION_LENGTH,
   MAX_HOURS_PER_ENTRY,
 } from "./api-utils";
+
+// Get typed references to the mocks
+const mockGetServerSession = vi.mocked(getServerSession);
+const mockGetToken = vi.mocked(getToken);
+const mockFindFirst = vi.mocked(db.query.users.findFirst);
 
 describe("api-utils", () => {
   describe("isValidEmail", () => {
@@ -112,6 +127,217 @@ describe("api-utils", () => {
       const future = new Date();
       future.setFullYear(future.getFullYear() + 1);
       expect(isNotFutureDate(future)).toBe(false);
+    });
+  });
+
+  describe("requireAuth", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    function createMockRequest(cookies: Record<string, string> = {}): NextRequest {
+      const url = "http://localhost:3000/api/test";
+      const request = new NextRequest(url);
+      // Add cookies to the request
+      for (const [name, value] of Object.entries(cookies)) {
+        request.cookies.set(name, value);
+      }
+      return request;
+    }
+
+    it("returns session for authenticated user", async () => {
+      const mockSession = {
+        user: { name: "Test User", email: "test@example.com" },
+      };
+      mockGetServerSession.mockResolvedValue(mockSession);
+
+      const request = createMockRequest();
+      const result = await requireAuth(request);
+
+      expect(result).toEqual({
+        session: { user: { name: "Test User", email: "test@example.com" } },
+      });
+    });
+
+    it("returns 401 for unauthenticated request", async () => {
+      mockGetServerSession.mockResolvedValue(null);
+      mockGetToken.mockResolvedValue(null);
+
+      const request = createMockRequest();
+      const result = await requireAuth(request);
+
+      expect(result).toEqual({ error: "Unauthorized", status: 401 });
+    });
+
+    it("returns impersonated user when admin has impersonation cookie", async () => {
+      const adminUser = createMockUser({
+        id: "admin-id",
+        email: "admin@example.com",
+        name: "Admin User",
+        position: "ADMIN",
+        status: "ACTIVE",
+      });
+      const targetUser = createMockUser({
+        id: "target-id",
+        email: "target@example.com",
+        name: "Target User",
+        position: "ASSOCIATE",
+        status: "ACTIVE",
+      });
+
+      // Admin is authenticated
+      mockGetServerSession.mockResolvedValue({
+        user: { name: adminUser.name, email: adminUser.email },
+      });
+
+      // First call: lookup admin user by email to check position
+      // Second call: lookup target user by id
+      mockFindFirst
+        .mockResolvedValueOnce({
+          id: adminUser.id,
+          email: adminUser.email,
+          name: adminUser.name,
+          position: adminUser.position,
+          status: adminUser.status,
+        })
+        .mockResolvedValueOnce({
+          id: targetUser.id,
+          email: targetUser.email,
+          name: targetUser.name,
+          position: targetUser.position,
+          status: targetUser.status,
+        });
+
+      const request = createMockRequest({ impersonate_user_id: targetUser.id });
+      const result = await requireAuth(request);
+
+      expect(result).toEqual({
+        session: { user: { name: targetUser.name, email: targetUser.email } },
+      });
+    });
+
+    it("ignores impersonation cookie for non-ADMIN users", async () => {
+      const partnerUser = createMockUser({
+        id: "partner-id",
+        email: "partner@example.com",
+        name: "Partner User",
+        position: "PARTNER",
+        status: "ACTIVE",
+      });
+      const targetUser = createMockUser({
+        id: "target-id",
+        email: "target@example.com",
+        name: "Target User",
+        position: "ASSOCIATE",
+        status: "ACTIVE",
+      });
+
+      // Partner is authenticated
+      mockGetServerSession.mockResolvedValue({
+        user: { name: partnerUser.name, email: partnerUser.email },
+      });
+
+      // Lookup partner user by email - should find PARTNER position
+      mockFindFirst.mockResolvedValueOnce({
+        id: partnerUser.id,
+        email: partnerUser.email,
+        name: partnerUser.name,
+        position: partnerUser.position,
+        status: partnerUser.status,
+      });
+
+      const request = createMockRequest({ impersonate_user_id: targetUser.id });
+      const result = await requireAuth(request);
+
+      // Should return the real user (partner), not the target
+      expect(result).toEqual({
+        session: { user: { name: partnerUser.name, email: partnerUser.email } },
+      });
+      // Should NOT have made a second query for target user
+      expect(mockFindFirst).toHaveBeenCalledTimes(1);
+    });
+
+    it("ignores impersonation cookie if impersonated user is INACTIVE", async () => {
+      const adminUser = createMockUser({
+        id: "admin-id",
+        email: "admin@example.com",
+        name: "Admin User",
+        position: "ADMIN",
+        status: "ACTIVE",
+      });
+      const inactiveUser = createMockUser({
+        id: "inactive-id",
+        email: "inactive@example.com",
+        name: "Inactive User",
+        position: "ASSOCIATE",
+        status: "INACTIVE",
+      });
+
+      // Admin is authenticated
+      mockGetServerSession.mockResolvedValue({
+        user: { name: adminUser.name, email: adminUser.email },
+      });
+
+      // First call: lookup admin user by email
+      // Second call: lookup inactive user by id
+      mockFindFirst
+        .mockResolvedValueOnce({
+          id: adminUser.id,
+          email: adminUser.email,
+          name: adminUser.name,
+          position: adminUser.position,
+          status: adminUser.status,
+        })
+        .mockResolvedValueOnce({
+          id: inactiveUser.id,
+          email: inactiveUser.email,
+          name: inactiveUser.name,
+          position: inactiveUser.position,
+          status: inactiveUser.status,
+        });
+
+      const request = createMockRequest({ impersonate_user_id: inactiveUser.id });
+      const result = await requireAuth(request);
+
+      // Should return the admin user, not the inactive user
+      expect(result).toEqual({
+        session: { user: { name: adminUser.name, email: adminUser.email } },
+      });
+    });
+
+    it("ignores impersonation cookie if impersonated user not found", async () => {
+      const adminUser = createMockUser({
+        id: "admin-id",
+        email: "admin@example.com",
+        name: "Admin User",
+        position: "ADMIN",
+        status: "ACTIVE",
+      });
+
+      // Admin is authenticated
+      mockGetServerSession.mockResolvedValue({
+        user: { name: adminUser.name, email: adminUser.email },
+      });
+
+      // First call: lookup admin user by email
+      // Second call: lookup non-existent user by id - returns undefined
+      mockFindFirst
+        .mockResolvedValueOnce({
+          id: adminUser.id,
+          email: adminUser.email,
+          name: adminUser.name,
+          position: adminUser.position,
+          status: adminUser.status,
+        })
+        .mockResolvedValueOnce(undefined);
+
+      const request = createMockRequest({ impersonate_user_id: "non-existent-id" });
+      const result = await requireAuth(request);
+
+      // Should return the admin user
+      expect(result).toEqual({
+        session: { user: { name: adminUser.name, email: adminUser.email } },
+      });
     });
   });
 });

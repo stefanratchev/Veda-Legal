@@ -8,7 +8,7 @@ import type { TimeEntry, ClientWithType, Topic, FormData } from "@/types";
 interface EntryRowProps {
   entry: TimeEntry;
   onDeleteClick?: () => void;
-  onUpdate?: (updatedEntry: TimeEntry) => void;
+  onUpdate?: (updatedEntry: TimeEntry, revocationData?: { submissionRevoked: boolean; remainingHours: number }) => void;
   readOnly?: boolean;
   clients?: ClientWithType[];
   topics?: Topic[];
@@ -80,7 +80,13 @@ export function EntryRow({
         return;
       }
 
-      onUpdate?.(data);
+      // Extract revocation data if present
+      const revocationData = data.submissionRevoked !== undefined
+        ? { submissionRevoked: data.submissionRevoked, remainingHours: data.remainingHours }
+        : undefined;
+
+      // Pass the entry data (without revocation fields) and revocation data separately
+      onUpdate?.(data.entry || data, revocationData);
       setIsEditing(false);
     } catch {
       setError("Failed to update entry");

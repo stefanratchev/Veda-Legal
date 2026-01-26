@@ -7,15 +7,18 @@ import { EntryForm } from "./EntryForm";
 import { EntriesList } from "./EntriesList";
 import { TeamTimesheets } from "./TeamTimesheets";
 import { M365ActivityPanel } from "./M365ActivityPanel";
+import { SubmitButton } from "./SubmitButton";
+import { SubmitPromptModal } from "./SubmitPromptModal";
 import type { ClientWithType, Topic, TimeEntry, FormData, TeamSummary, M365ActivityResponse } from "@/types";
 import { initialFormData } from "@/types";
 
 interface TimesheetsContentProps {
   clients: ClientWithType[];
   topics: Topic[];
+  userName?: string;
 }
 
-export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
+export function TimesheetsContent({ clients, topics, userName }: TimesheetsContentProps) {
   const today = useMemo(() => new Date(), []);
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -25,6 +28,14 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Submission flow state
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedDates, setSubmittedDates] = useState<Set<string>>(new Set());
+  const [overdueDates, setOverdueDates] = useState<Set<string>>(new Set());
+  const [totalHours, setTotalHours] = useState(0);
+  const [showSubmitPrompt, setShowSubmitPrompt] = useState(false);
+  const [revocationWarning, setRevocationWarning] = useState<string | null>(null);
 
   // M365 Activity state
   const [isM365PanelOpen, setIsM365PanelOpen] = useState(false);
@@ -45,9 +56,17 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         if (Array.isArray(data)) {
           setEntries(data);
           setTeamSummaries([]);
+          setTotalHours(0);
+          setIsSubmitted(false);
         } else {
           setEntries(data.entries || []);
           setTeamSummaries(data.teamSummaries || []);
+          setTotalHours(data.totalHours ?? 0);
+          setIsSubmitted(data.isSubmitted ?? false);
+          // Track submitted dates
+          if (data.isSubmitted) {
+            setSubmittedDates((prev) => new Set([...prev, formatDateISO(date)]));
+          }
         }
       }
     } catch (err) {
@@ -69,6 +88,21 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
       }
     } catch (err) {
       console.error("Failed to fetch dates:", err);
+    }
+  }, []);
+
+  // Fetch submitted dates for the visible month
+  const fetchSubmittedDates = useCallback(async (centerDate: Date) => {
+    try {
+      const year = centerDate.getFullYear();
+      const month = centerDate.getMonth() + 1;
+      const response = await fetch(`/api/timesheets/submissions?year=${year}&month=${month}`);
+      if (response.ok) {
+        const dates: string[] = await response.json();
+        setSubmittedDates(new Set(dates));
+      }
+    } catch (err) {
+      console.error("Failed to fetch submitted dates:", err);
     }
   }, []);
 
@@ -104,6 +138,56 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     setM365Error(null);
   }, []);
 
+  // Fetch overdue status for the user
+  const fetchOverdueStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/timesheets/overdue");
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data.overdue)) {
+          if (data.overdue.length === 0) {
+            setOverdueDates(new Set());
+          } else if (typeof data.overdue[0] === "string") {
+            // Regular user format: string[]
+            setOverdueDates(new Set(data.overdue as string[]));
+          } else if (userName && typeof data.overdue[0] === "object" && "dates" in data.overdue[0]) {
+            // Admin format: { userId, name, dates }[] - extract current user's dates
+            const userOverdue = data.overdue.find((u: { name: string }) => u.name === userName);
+            setOverdueDates(new Set(userOverdue?.dates || []));
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch overdue status:", err);
+    }
+  }, [userName]);
+
+  // Handle timesheet submission for the selected date
+  const handleTimesheetSubmit = useCallback(async () => {
+    try {
+      const response = await fetch("/api/timesheets/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: formatDateISO(selectedDate) }),
+      });
+
+      if (response.ok) {
+        setIsSubmitted(true);
+        setSubmittedDates((prev) => new Set([...prev, formatDateISO(selectedDate)]));
+        setOverdueDates((prev) => {
+          const next = new Set(prev);
+          next.delete(formatDateISO(selectedDate));
+          return next;
+        });
+        setShowSubmitPrompt(false);
+        // Notify OverdueBanner to refresh
+        window.dispatchEvent(new CustomEvent("timesheet-submission-changed"));
+      }
+    } catch (err) {
+      console.error("Failed to submit timesheet:", err);
+    }
+  }, [selectedDate]);
+
   // Fetch on date change
   useEffect(() => {
     fetchEntries(selectedDate);
@@ -117,6 +201,16 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
   useEffect(() => {
     fetchDatesWithEntries(selectedDate);
   }, [selectedDate, fetchDatesWithEntries]);
+
+  // Fetch submitted dates when month changes
+  useEffect(() => {
+    fetchSubmittedDates(selectedDate);
+  }, [selectedDate, fetchSubmittedDates]);
+
+  // Fetch overdue status on mount
+  useEffect(() => {
+    fetchOverdueStatus();
+  }, [fetchOverdueStatus]);
 
   // Navigation handlers
   const goToPrevWeek = useCallback(() => {
@@ -147,7 +241,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
     setIsLoading(true);
     setError(null);
 
-    const totalHours = toDecimalHours(formData.hours, formData.minutes);
+    const totalHoursForEntry = toDecimalHours(formData.hours, formData.minutes);
 
     try {
       const response = await fetch("/api/timesheets", {
@@ -158,7 +252,7 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
           clientId: formData.clientId,
           subtopicId: formData.subtopicId || null,
           topicId: formData.topicId || null,
-          hours: totalHours,
+          hours: totalHoursForEntry,
           description: formData.description.trim(),
         }),
       });
@@ -179,6 +273,13 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         topicId: prev.topicId,
         subtopicId: prev.subtopicId,
       }));
+
+      // Update total hours and check if we should prompt for submission
+      const newTotalHours = totalHours + totalHoursForEntry;
+      setTotalHours(newTotalHours);
+      if (newTotalHours >= 8 && !isSubmitted) {
+        setShowSubmitPrompt(true);
+      }
     } catch {
       setError("Failed to create entry");
     } finally {
@@ -195,21 +296,80 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setEntries((prev) => prev.filter((e) => e.id !== entryId));
         fetchDatesWithEntries(selectedDate);
+
+        // Check if submission was revoked due to hours dropping below 8
+        if (data.submissionRevoked) {
+          setIsSubmitted(false);
+          setSubmittedDates((prev) => {
+            const next = new Set(prev);
+            next.delete(formatDateISO(selectedDate));
+            return next;
+          });
+          const formattedDate = selectedDate.toLocaleDateString("en-GB", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          });
+          setRevocationWarning(
+            `Your timesheet submission for ${formattedDate} has been revoked. You now have ${data.remainingHours.toFixed(1)} hours logged (8 required).`
+          );
+          // Auto-dismiss after 5 seconds
+          setTimeout(() => setRevocationWarning(null), 5000);
+          // Re-fetch overdue status to update WeekStrip icons
+          fetchOverdueStatus();
+          // Notify OverdueBanner to refresh
+          window.dispatchEvent(new CustomEvent("timesheet-submission-changed"));
+        }
+
+        // Update total hours if provided
+        if (typeof data.remainingHours === "number") {
+          setTotalHours(data.remainingHours);
+        }
       }
     } catch {
       setError("Failed to delete entry");
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate, fetchDatesWithEntries]);
+  }, [selectedDate, fetchDatesWithEntries, fetchOverdueStatus]);
 
-  const updateEntry = useCallback((updatedEntry: TimeEntry) => {
+  const updateEntry = useCallback((updatedEntry: TimeEntry, revocationData?: { submissionRevoked: boolean; remainingHours: number }) => {
     setEntries((prev) =>
       prev.map((e) => (e.id === updatedEntry.id ? updatedEntry : e))
     );
-  }, []);
+
+    // Check if submission was revoked due to hours dropping below 8
+    if (revocationData?.submissionRevoked) {
+      setIsSubmitted(false);
+      setSubmittedDates((prev) => {
+        const next = new Set(prev);
+        next.delete(formatDateISO(selectedDate));
+        return next;
+      });
+      const formattedDate = selectedDate.toLocaleDateString("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      });
+      setRevocationWarning(
+        `Your timesheet submission for ${formattedDate} has been revoked. You now have ${revocationData.remainingHours.toFixed(1)} hours logged (8 required).`
+      );
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => setRevocationWarning(null), 5000);
+      // Re-fetch overdue status to update WeekStrip icons
+      fetchOverdueStatus();
+      // Notify OverdueBanner to refresh
+      window.dispatchEvent(new CustomEvent("timesheet-submission-changed"));
+    }
+
+    // Update total hours if provided
+    if (typeof revocationData?.remainingHours === "number") {
+      setTotalHours(revocationData.remainingHours);
+    }
+  }, [selectedDate, fetchOverdueStatus]);
 
   return (
     <div className="space-y-4">
@@ -226,6 +386,8 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         selectedDate={selectedDate}
         today={today}
         datesWithEntries={datesWithEntries}
+        submittedDates={submittedDates}
+        overdueDates={overdueDates}
         onSelectDate={setSelectedDate}
         onPrevWeek={goToPrevWeek}
         onNextWeek={goToNextWeek}
@@ -267,11 +429,36 @@ export function TimesheetsContent({ clients, topics }: TimesheetsContentProps) {
         topics={topics}
       />
 
+      {/* Submit Button */}
+      <SubmitButton
+        totalHours={totalHours}
+        isSubmitted={isSubmitted}
+        isLoading={isLoading}
+        onSubmit={handleTimesheetSubmit}
+      />
+
       {/* Team Timesheets (only shown for ADMIN/PARTNER) */}
       <TeamTimesheets
         summaries={teamSummaries}
         selectedDate={selectedDate}
       />
+
+      {/* Submit Prompt Modal */}
+      {showSubmitPrompt && (
+        <SubmitPromptModal
+          date={formatDateISO(selectedDate)}
+          totalHours={totalHours}
+          onSubmit={handleTimesheetSubmit}
+          onDismiss={() => setShowSubmitPrompt(false)}
+        />
+      )}
+
+      {/* Revocation Warning Toast */}
+      {revocationWarning && (
+        <div className="fixed bottom-4 right-4 bg-[var(--warning-bg)] border border-[var(--warning)] text-[var(--warning)] px-4 py-3 rounded-lg shadow-lg animate-fade-up max-w-md z-50">
+          <p className="text-sm font-medium">{revocationWarning}</p>
+        </div>
+      )}
     </div>
   );
 }

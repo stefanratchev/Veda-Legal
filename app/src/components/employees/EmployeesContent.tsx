@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { ColumnDef } from "@/components/ui/table-types";
 import { EmployeeModal } from "./EmployeeModal";
+import { useImpersonation } from "@/contexts/ImpersonationContext";
 
 type Position = "ADMIN" | "PARTNER" | "SENIOR_ASSOCIATE" | "ASSOCIATE" | "CONSULTANT";
 type UserStatus = "PENDING" | "ACTIVE" | "INACTIVE";
@@ -21,6 +22,7 @@ interface Employee {
 interface EmployeesContentProps {
   initialEmployees: Employee[];
   currentUserId: string;
+  currentUserPosition: string;
   readOnly?: boolean;
 }
 
@@ -138,8 +140,11 @@ function formatAbsoluteTime(dateStr: string | null): string {
 export function EmployeesContent({
   initialEmployees,
   currentUserId,
+  currentUserPosition,
   readOnly = false,
 }: EmployeesContentProps) {
+  const { startImpersonation, isImpersonating } = useImpersonation();
+  const canImpersonate = currentUserPosition === "ADMIN" && !isImpersonating;
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
@@ -340,6 +345,15 @@ export function EmployeesContent({
     }
   }, []);
 
+  // Impersonate handler
+  const handleImpersonate = useCallback(async (employee: Employee) => {
+    try {
+      await startImpersonation(employee.id);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to impersonate");
+    }
+  }, [startImpersonation]);
+
   // Column definitions
   const columns: ColumnDef<Employee>[] = useMemo(() => {
     const baseColumns: ColumnDef<Employee>[] = [
@@ -454,6 +468,34 @@ export function EmployeesContent({
 
           return (
             <div className="flex items-center justify-end gap-1">
+              {/* Impersonate button - ADMIN only, not self, not inactive */}
+              {canImpersonate && !isSelf && !isInactive && (
+                <button
+                  onClick={() => handleImpersonate(employee)}
+                  className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-yellow-400 hover:bg-[var(--bg-surface)] transition-colors"
+                  title={`View as ${employee.name || employee.email}`}
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                    />
+                  </svg>
+                </button>
+              )}
               <button
                 onClick={() => openEditModal(employee)}
                 className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
@@ -526,7 +568,7 @@ export function EmployeesContent({
     }
 
     return baseColumns;
-  }, [readOnly, openEditModal, currentUserId, handleDeactivate, handleReactivate]);
+  }, [readOnly, openEditModal, currentUserId, handleDeactivate, handleReactivate, canImpersonate, handleImpersonate]);
 
   // Empty state icon
   const emptyIcon = (

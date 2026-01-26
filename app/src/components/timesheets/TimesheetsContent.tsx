@@ -316,6 +316,8 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
           );
           // Auto-dismiss after 5 seconds
           setTimeout(() => setRevocationWarning(null), 5000);
+          // Re-fetch overdue status to update WeekStrip icons
+          fetchOverdueStatus();
         }
 
         // Update total hours if provided
@@ -328,7 +330,7 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate, fetchDatesWithEntries]);
+  }, [selectedDate, fetchDatesWithEntries, fetchOverdueStatus]);
 
   const updateEntry = useCallback((updatedEntry: TimeEntry, revocationData?: { submissionRevoked: boolean; remainingHours: number }) => {
     setEntries((prev) =>
@@ -353,13 +355,15 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
       );
       // Auto-dismiss after 5 seconds
       setTimeout(() => setRevocationWarning(null), 5000);
+      // Re-fetch overdue status to update WeekStrip icons
+      fetchOverdueStatus();
     }
 
     // Update total hours if provided
     if (typeof revocationData?.remainingHours === "number") {
       setTotalHours(revocationData.remainingHours);
     }
-  }, [selectedDate]);
+  }, [selectedDate, fetchOverdueStatus]);
 
   return (
     <div className="space-y-4">

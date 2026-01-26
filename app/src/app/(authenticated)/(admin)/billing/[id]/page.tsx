@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { eq, asc } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/user";
 import { db, serviceDescriptions, serviceDescriptionTopics, serviceDescriptionLineItems } from "@/lib/db";
 import { ServiceDescriptionDetail } from "@/components/billing/ServiceDescriptionDetail";
 import { serializeDecimal } from "@/lib/api-utils";
@@ -11,12 +10,6 @@ interface PageProps {
 }
 
 export default async function ServiceDescriptionPage({ params }: PageProps) {
-  const user = await getCurrentUser();
-
-  if (!["ADMIN", "PARTNER"].includes(user.position)) {
-    redirect("/billing");
-  }
-
   const { id } = await params;
 
   const sd = await db.query.serviceDescriptions.findFirst({

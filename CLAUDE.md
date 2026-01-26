@@ -42,10 +42,12 @@ npm run db:seed-internal-topics  # Seed internal/management topics
 app/src/
 ├── app/                    # Next.js App Router
 │   ├── (authenticated)/   # Protected route group (requires login)
-│   │   ├── billing/       # Billing/invoicing
-│   │   ├── clients/       # Client management
-│   │   ├── employees/     # Employee management
-│   │   ├── reports/       # Reports & analytics
+│   │   ├── (admin)/       # Admin-only route group (ADMIN/PARTNER)
+│   │   │   ├── billing/   # Billing/invoicing
+│   │   │   ├── clients/   # Client management
+│   │   │   ├── reports/   # Reports & analytics
+│   │   │   └── topics/    # Topic/subtopic management
+│   │   ├── team/          # Team view (all authenticated users)
 │   │   ├── timesheets/    # Time entry page
 │   │   └── page.tsx       # Dashboard
 │   ├── api/               # API routes
@@ -104,9 +106,16 @@ The schema uses a `Position` enum with five levels. Access is controlled via pos
 | ASSOCIATE | | ✓ | |
 | CONSULTANT | | ✓ | |
 
-- **Admin Access:** Can manage clients, reports, billing
+- **Admin Access:** Can manage clients, reports, billing (enforced by `(admin)` route group layout)
 - **Write Access:** Can log time entries
 - **Team View:** Can view other users' timesheets
+
+### User Impersonation
+ADMIN users can impersonate other users via the Team page to see the app from their perspective:
+- `getCurrentUser()` in `lib/user.ts` respects the `impersonate_user_id` cookie
+- `requireAuth()` in `lib/api-utils.ts` also respects impersonation for API routes
+- When impersonating a non-admin, admin pages redirect to `/timesheets`
+- Only ADMIN (not PARTNER) can impersonate; INACTIVE users cannot be impersonated
 
 ### Time Entry Editing
 Time entries can be edited by their owner via `PATCH /api/timesheets/[id]`. Editable fields: client, topic/subtopic, hours, description. Date cannot be changed.

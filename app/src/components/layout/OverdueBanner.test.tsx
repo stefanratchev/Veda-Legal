@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import { OverdueBanner } from "./OverdueBanner";
 
 // Mock next/link
@@ -68,7 +68,7 @@ describe("OverdueBanner", () => {
   });
 
   describe("User View", () => {
-    it("displays user overdue dates with formatted text", async () => {
+    it("displays overdue count", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ overdue: ["2026-01-20", "2026-01-21"] }),
@@ -76,28 +76,25 @@ describe("OverdueBanner", () => {
       render(<OverdueBanner isAdmin={false} />);
 
       await waitFor(() => {
-        expect(
-          screen.getByText(/You have overdue timesheets for:/)
-        ).toBeInTheDocument();
+        expect(screen.getByText(/2 overdue/)).toBeInTheDocument();
       });
     });
 
-    it("formats dates as 'Weekday Day Month' format", async () => {
+    it("displays date range summary", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ overdue: ["2026-01-20"] }),
+        json: () => Promise.resolve({ overdue: ["2026-01-20", "2026-01-22"] }),
       });
       render(<OverdueBanner isAdmin={false} />);
 
       await waitFor(() => {
-        // Should format as "Tue, 20 Jan" (Jan 20, 2026 is a Tuesday)
-        expect(screen.getByText(/Tue/)).toBeInTheDocument();
-        expect(screen.getByText(/20/)).toBeInTheDocument();
-        expect(screen.getByText(/Jan/)).toBeInTheDocument();
+        // Should show date range: "Tue 20 Jan — Thu 22 Jan"
+        expect(screen.getByText(/Tue 20 Jan/)).toBeInTheDocument();
+        expect(screen.getByText(/Thu 22 Jan/)).toBeInTheDocument();
       });
     });
 
-    it("renders as a clickable link to timesheets", async () => {
+    it("renders Fix now link to timesheets", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ overdue: ["2026-01-20"] }),
@@ -107,10 +104,11 @@ describe("OverdueBanner", () => {
       await waitFor(() => {
         const link = screen.getByTestId("overdue-link");
         expect(link).toHaveAttribute("href", "/timesheets");
+        expect(link).toHaveTextContent("Fix now");
       });
     });
 
-    it("displays multiple dates separated by commas", async () => {
+    it("shows individual dates when expanded", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () =>
@@ -119,15 +117,50 @@ describe("OverdueBanner", () => {
       render(<OverdueBanner isAdmin={false} />);
 
       await waitFor(() => {
-        // Should contain commas separating dates
-        const text = screen.getByText(/You have overdue timesheets for:/);
-        expect(text.textContent).toContain(",");
+        expect(screen.getByText(/3 overdue/)).toBeInTheDocument();
+      });
+
+      // Click expand button
+      const expandButton = screen.getByTitle("Show all dates");
+      fireEvent.click(expandButton);
+
+      // Should show individual date pills
+      await waitFor(() => {
+        expect(screen.getByText("Tue 20")).toBeInTheDocument();
+        expect(screen.getByText("Wed 21")).toBeInTheDocument();
+        expect(screen.getByText("Thu 22")).toBeInTheDocument();
+      });
+    });
+
+    it("uses singular 'timesheet' for single overdue", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ overdue: ["2026-01-20"] }),
+      });
+      render(<OverdueBanner isAdmin={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/1 overdue/)).toBeInTheDocument();
+        expect(screen.getByText(/timesheet$/)).toBeInTheDocument();
+      });
+    });
+
+    it("uses plural 'timesheets' for multiple overdue", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ overdue: ["2026-01-20", "2026-01-21"] }),
+      });
+      render(<OverdueBanner isAdmin={false} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/2 overdue/)).toBeInTheDocument();
+        expect(screen.getByText(/timesheets$/)).toBeInTheDocument();
       });
     });
   });
 
   describe("Admin View", () => {
-    it("displays team summary with user names and day counts", async () => {
+    it("displays team overdue summary with total count", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () =>
@@ -141,13 +174,13 @@ describe("OverdueBanner", () => {
       render(<OverdueBanner isAdmin={true} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Overdue timesheets:/)).toBeInTheDocument();
-        expect(screen.getByText(/John Doe \(2 days\)/)).toBeInTheDocument();
-        expect(screen.getByText(/Jane Smith \(1 day\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Team:/)).toBeInTheDocument();
+        expect(screen.getByText(/3 overdue/)).toBeInTheDocument();
+        expect(screen.getByText(/2 people/)).toBeInTheDocument();
       });
     });
 
-    it("uses singular 'day' for single overdue day", async () => {
+    it("uses singular 'person' for single team member", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () =>
@@ -158,47 +191,38 @@ describe("OverdueBanner", () => {
       render(<OverdueBanner isAdmin={true} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/John Doe \(1 day\)/)).toBeInTheDocument();
+        expect(screen.getByText(/1 person/)).toBeInTheDocument();
       });
     });
 
-    it("uses plural 'days' for multiple overdue days", async () => {
+    it("shows team member names when expanded", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () =>
           Promise.resolve({
             overdue: [
-              {
-                userId: "1",
-                name: "John Doe",
-                dates: ["2026-01-20", "2026-01-21", "2026-01-22"],
-              },
+              { userId: "1", name: "John Doe", dates: ["2026-01-20", "2026-01-21"] },
+              { userId: "2", name: "Jane Smith", dates: ["2026-01-20"] },
             ],
           }),
       });
       render(<OverdueBanner isAdmin={true} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/John Doe \(3 days\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Team:/)).toBeInTheDocument();
       });
-    });
 
-    it("team summary banner does not render as a link", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            overdue: [{ userId: "1", name: "John Doe", dates: ["2026-01-20"] }],
-          }),
-      });
-      render(<OverdueBanner isAdmin={true} />);
+      // Click expand button
+      const expandButton = screen.getByTitle("Show details");
+      fireEvent.click(expandButton);
 
+      // Should show team member names with counts
       await waitFor(() => {
-        expect(screen.getByText(/Overdue timesheets:/)).toBeInTheDocument();
+        expect(screen.getByText(/John/)).toBeInTheDocument();
+        expect(screen.getByText(/\(2\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Jane/)).toBeInTheDocument();
+        expect(screen.getByText(/\(1\)/)).toBeInTheDocument();
       });
-
-      // Team summary is not a link (no userName matching, so no personal link either)
-      expect(screen.queryByTestId("overdue-link")).not.toBeInTheDocument();
     });
 
     it("shows both personal and team banners when admin has personal overdue", async () => {
@@ -215,13 +239,14 @@ describe("OverdueBanner", () => {
       render(<OverdueBanner isAdmin={true} userName="Admin User" />);
 
       await waitFor(() => {
-        // Should show personal banner with link
-        expect(screen.getByText(/You have overdue timesheets for:/)).toBeInTheDocument();
+        // Should show personal banner
+        expect(screen.getByText(/You have/)).toBeInTheDocument();
+        expect(screen.getByText(/2 overdue/)).toBeInTheDocument();
         // Should show team summary
-        expect(screen.getByText(/Overdue timesheets:/)).toBeInTheDocument();
+        expect(screen.getByText(/Team:/)).toBeInTheDocument();
       });
 
-      // Personal banner is a link
+      // Personal banner has Fix now link
       const link = screen.getByTestId("overdue-link");
       expect(link).toHaveAttribute("href", "/timesheets");
     });
@@ -241,34 +266,13 @@ describe("OverdueBanner", () => {
 
       await waitFor(() => {
         // Should only show team summary
-        expect(screen.getByText(/Overdue timesheets:/)).toBeInTheDocument();
+        expect(screen.getByText(/Team:/)).toBeInTheDocument();
       });
 
       // Should NOT show personal banner
-      expect(screen.queryByText(/You have overdue timesheets for:/)).not.toBeInTheDocument();
-      // No link (team banner is not a link)
+      expect(screen.queryByText(/You have/)).not.toBeInTheDocument();
+      // No Fix now link
       expect(screen.queryByTestId("overdue-link")).not.toBeInTheDocument();
-    });
-
-    it("formats admin personal overdue dates correctly", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            overdue: [
-              { userId: "1", name: "Admin User", dates: ["2026-01-20"] },
-            ],
-          }),
-      });
-      render(<OverdueBanner isAdmin={true} userName="Admin User" />);
-
-      await waitFor(() => {
-        const personalBanner = screen.getByText(/You have overdue timesheets for:/);
-        // Should format as "Tue 20 Jan" (Jan 20, 2026 is a Tuesday)
-        expect(personalBanner.textContent).toContain("Tue");
-        expect(personalBanner.textContent).toContain("20");
-        expect(personalBanner.textContent).toContain("Jan");
-      });
     });
   });
 
@@ -356,21 +360,23 @@ describe("OverdueBanner", () => {
   });
 
   describe("Styling", () => {
-    it("uses danger background and border styling for user view", async () => {
+    it("uses gradient background styling for user view", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ overdue: ["2026-01-20"] }),
       });
-      render(<OverdueBanner isAdmin={false} />);
+      const { container } = render(<OverdueBanner isAdmin={false} />);
 
       await waitFor(() => {
-        const link = screen.getByTestId("overdue-link");
-        expect(link.className).toContain("bg-[var(--danger-bg)]");
-        expect(link.className).toContain("border-[var(--danger)]");
+        expect(screen.getByText(/1 overdue/)).toBeInTheDocument();
       });
+
+      const banner = container.firstChild as HTMLElement;
+      expect(banner.className).toContain("bg-gradient-to-r");
+      expect(banner.className).toContain("border-b");
     });
 
-    it("uses danger background and border styling for admin view", async () => {
+    it("uses warning color for team banner", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: () =>
@@ -378,15 +384,14 @@ describe("OverdueBanner", () => {
             overdue: [{ userId: "1", name: "John Doe", dates: ["2026-01-20"] }],
           }),
       });
-      const { container } = render(<OverdueBanner isAdmin={true} />);
+      render(<OverdueBanner isAdmin={true} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Overdue timesheets:/)).toBeInTheDocument();
+        expect(screen.getByText(/Team:/)).toBeInTheDocument();
       });
 
-      const banner = container.firstChild as HTMLElement;
-      expect(banner.className).toContain("bg-[var(--danger-bg)]");
-      expect(banner.className).toContain("border-[var(--danger)]");
+      // Team banner uses warning color
+      expect(screen.getByText(/1 overdue/).className).toContain("text-[var(--warning)]");
     });
   });
 });

@@ -23,33 +23,57 @@ interface WeekStripProps {
 /**
  * Returns the appropriate status icon for a date based on submission status.
  * Priority: submitted > overdue > null (fall back to entry dot)
+ *
+ * Design: Pill badges with filled icons for clear visual hierarchy
  */
-function getStatusIcon(dateStr: string, submittedDates: Set<string>, overdueDates: Set<string>, isSelected: boolean) {
+function getStatusIcon(dateStr: string, submittedDates: Set<string>, overdueDates: Set<string>, isSelected: boolean, compact = false) {
   if (submittedDates.has(dateStr)) {
-    // Green checkmark for submitted days
+    // Green pill badge with checkmark
     return (
-      <svg
-        className={`w-4 h-4 ${isSelected ? "text-[var(--bg-deep)]" : "text-[var(--success)]"}`}
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
+      <span
+        className={`
+          inline-flex items-center justify-center rounded-full
+          ${compact ? "w-4 h-4" : "w-5 h-5"}
+          ${isSelected
+            ? "bg-[var(--bg-deep)]/30 text-[var(--bg-deep)]"
+            : "bg-[var(--success)] text-white shadow-sm shadow-[var(--success)]/30"
+          }
+        `}
       >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-      </svg>
+        <svg
+          className={compact ? "w-2.5 h-2.5" : "w-3 h-3"}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth="3"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      </span>
     );
   }
 
   if (overdueDates.has(dateStr)) {
-    // Red clock for overdue days
+    // Red pill badge with clock - subtle pulse animation for urgency
     return (
-      <svg
-        className={`w-4 h-4 ${isSelected ? "text-[var(--bg-deep)]" : "text-[var(--danger)]"}`}
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
+      <span
+        className={`
+          inline-flex items-center justify-center rounded-full animate-pulse
+          ${compact ? "w-4 h-4" : "w-5 h-5"}
+          ${isSelected
+            ? "bg-[var(--bg-deep)]/30 text-[var(--bg-deep)]"
+            : "bg-[var(--danger)] text-white shadow-sm shadow-[var(--danger)]/40"
+          }
+        `}
       >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
+        <svg
+          className={compact ? "w-2.5 h-2.5" : "w-3 h-3"}
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+        </svg>
+      </span>
     );
   }
 
@@ -164,7 +188,7 @@ export function WeekStrip({
             const todayDay = isToday(day);
             const weekend = isWeekend(day);
             const hasEntry = hasEntries(day);
-            const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, selected);
+            const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, selected, false);
 
             return (
               <button
@@ -186,12 +210,14 @@ export function WeekStrip({
                 <span className={`text-base font-heading font-semibold ${selected ? "text-[var(--bg-deep)]" : weekend ? "text-[var(--text-primary)]/70" : "text-[var(--text-primary)]"}`}>
                   {day.getDate()}
                 </span>
-                {/* Status icon (submitted/overdue) or entry indicator dot */}
-                {statusIcon ? (
-                  <span className="absolute -bottom-0.5">{statusIcon}</span>
-                ) : hasEntry && (
-                  <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${selected ? "bg-[var(--bg-deep)]" : "bg-[var(--accent-pink)]"}`} />
-                )}
+                {/* Status badge (submitted/overdue) or entry indicator dot */}
+                <span className="h-5 flex items-center justify-center">
+                  {statusIcon ? (
+                    statusIcon
+                  ) : hasEntry ? (
+                    <span className={`w-1.5 h-1.5 rounded-full ${selected ? "bg-[var(--bg-deep)]" : "bg-[var(--accent-pink)]"}`} />
+                  ) : null}
+                </span>
               </button>
             );
             })}
@@ -278,7 +304,7 @@ export function WeekStrip({
                       const todayDay = isToday(day);
                       const weekend = isWeekend(day);
                       const hasEntry = hasEntries(day);
-                      const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, selected);
+                      const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, selected, true);
 
                       return (
                         <button
@@ -286,7 +312,7 @@ export function WeekStrip({
                           onClick={() => handleSelectCalendarDay(day)}
                           className={`
                             relative w-8 h-8 rounded text-[12px] font-medium
-                            transition-all duration-200 cursor-pointer
+                            transition-all duration-200 cursor-pointer flex flex-col items-center justify-center
                             ${selected
                               ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
                               : "hover:bg-[var(--bg-surface)]"
@@ -295,12 +321,12 @@ export function WeekStrip({
                             ${!selected && weekend ? "text-[var(--text-muted)]" : !selected ? "text-[var(--text-primary)]" : ""}
                           `}
                         >
-                          {day.getDate()}
-                          {/* Status icon (submitted/overdue) or entry indicator dot */}
+                          <span className={statusIcon ? "-mt-0.5" : ""}>{day.getDate()}</span>
+                          {/* Status badge (submitted/overdue) or entry indicator dot */}
                           {statusIcon ? (
-                            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 scale-75">{statusIcon}</span>
+                            <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2">{statusIcon}</span>
                           ) : hasEntry && (
-                            <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${selected ? "bg-[var(--bg-deep)]" : "bg-[var(--accent-pink)]"}`} />
+                            <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${selected ? "bg-[var(--bg-deep)]" : "bg-[var(--accent-pink)]"}`} />
                           )}
                         </button>
                       );

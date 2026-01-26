@@ -1,16 +1,8 @@
-import { redirect } from "next/navigation";
 import { eq, asc, desc, and } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/user";
 import { db, clients, serviceDescriptions } from "@/lib/db";
 import { BillingContent } from "@/components/billing/BillingContent";
 
 export default async function BillingPage() {
-  const user = await getCurrentUser();
-
-  if (!["ADMIN", "PARTNER"].includes(user.position)) {
-    redirect("/timesheets");
-  }
-
   // Fetch service descriptions with calculated totals
   const serviceDescriptionsList = await db.query.serviceDescriptions.findMany({
     columns: {

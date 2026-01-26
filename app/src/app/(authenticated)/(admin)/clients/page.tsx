@@ -1,17 +1,8 @@
-import { redirect } from "next/navigation";
 import { desc } from "drizzle-orm";
 import { db, clients } from "@/lib/db";
-import { getCurrentUser } from "@/lib/user";
 import { ClientsContent } from "@/components/clients/ClientsContent";
 
 export default async function ClientsPage() {
-  const user = await getCurrentUser();
-
-  // Only ADMIN or PARTNER can access clients page
-  if (!["ADMIN", "PARTNER"].includes(user.position)) {
-    redirect("/timesheets");
-  }
-
   const clientsList = await db.query.clients.findMany({
     columns: {
       id: true,

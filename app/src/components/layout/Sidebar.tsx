@@ -235,7 +235,13 @@ function UserProfileFooter({ user, isCollapsed, isAdmin }: UserProfileFooterProp
 
 export function Sidebar({ user, className }: SidebarProps) {
   const pathname = usePathname();
-  const isAdmin = user?.position ? hasAdminAccess(user.position) : false;
+  const { isImpersonating, impersonatedUser } = useImpersonation();
+
+  // When impersonating, use impersonated user's position for menu visibility
+  const effectivePosition = isImpersonating && impersonatedUser
+    ? impersonatedUser.position
+    : user?.position;
+  const isAdmin = effectivePosition ? hasAdminAccess(effectivePosition) : false;
   const sidebarRef = useRef<HTMLElement>(null);
   const { isOpen, close } = useMobileNav();
   const { isCollapsed, setIsCollapsed } = useSidebar();

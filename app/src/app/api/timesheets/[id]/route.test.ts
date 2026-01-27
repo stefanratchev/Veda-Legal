@@ -498,6 +498,7 @@ describe("PATCH /api/timesheets/[id]", () => {
         id: "new-topic",
         name: "Internal Topic",
         status: "ACTIVE",
+        topicType: "INTERNAL",
       };
 
       const updatedEntry = {
@@ -512,6 +513,10 @@ describe("PATCH /api/timesheets/[id]", () => {
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
       mockDb.query.topics = { findFirst: vi.fn().mockResolvedValue(mockTopic) };
+      // Mock client lookup for topic type validation (INTERNAL topic matches INTERNAL client)
+      mockDb.query.clients.findFirst.mockResolvedValue({
+        clientType: "INTERNAL",
+      });
       mockDb.update.mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
@@ -611,6 +616,43 @@ describe("PATCH /api/timesheets/[id]", () => {
 
       expect(response.status).toBe(400);
       expect(data.error).toBe("Cannot use inactive topic");
+    });
+
+    it("returns 400 when topic type does not match client type", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+        clientId: "regular-client",
+      });
+
+      // INTERNAL topic should not be allowed on REGULAR client
+      const mockTopic = {
+        id: "internal-topic",
+        name: "Internal Topic",
+        status: "ACTIVE",
+        topicType: "INTERNAL",
+      };
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      mockDb.query.topics = { findFirst: vi.fn().mockResolvedValue(mockTopic) };
+      // Client lookup for type validation returns REGULAR client
+      mockDb.query.clients.findFirst.mockResolvedValue({
+        clientType: "REGULAR",
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { subtopicId: null, topicId: "internal-topic" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe("Topic type must match client type");
     });
   });
 

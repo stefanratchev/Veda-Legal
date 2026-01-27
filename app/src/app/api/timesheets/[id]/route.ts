@@ -170,7 +170,7 @@ export async function PATCH(
         // Look up the topic
         const topic = await db.query.topics.findFirst({
           where: eq(topics.id, topicId),
-          columns: { id: true, name: true, status: true },
+          columns: { id: true, name: true, status: true, topicType: true },
         });
 
         if (!topic) {
@@ -178,6 +178,18 @@ export async function PATCH(
         }
         if (topic.status !== "ACTIVE") {
           return errorResponse("Cannot use inactive topic", 400);
+        }
+
+        // Validate topic type matches client type
+        const entryClient = await db.query.clients.findFirst({
+          where: eq(clients.id, existingEntry.clientId),
+          columns: { clientType: true },
+        });
+        if (!entryClient) {
+          return errorResponse("Client not found", 404);
+        }
+        if (topic.topicType !== entryClient.clientType) {
+          return errorResponse("Topic type must match client type", 400);
         }
 
         updateData.topicId = topicId;
@@ -220,7 +232,7 @@ export async function PATCH(
       // Only topicId provided (no subtopicId change) - just update topicId/topicName
       const topic = await db.query.topics.findFirst({
         where: eq(topics.id, topicId),
-        columns: { id: true, name: true, status: true },
+        columns: { id: true, name: true, status: true, topicType: true },
       });
 
       if (!topic) {
@@ -228,6 +240,18 @@ export async function PATCH(
       }
       if (topic.status !== "ACTIVE") {
         return errorResponse("Cannot use inactive topic", 400);
+      }
+
+      // Validate topic type matches client type
+      const entryClient = await db.query.clients.findFirst({
+        where: eq(clients.id, existingEntry.clientId),
+        columns: { clientType: true },
+      });
+      if (!entryClient) {
+        return errorResponse("Client not found", 404);
+      }
+      if (topic.topicType !== entryClient.clientType) {
+        return errorResponse("Topic type must match client type", 400);
       }
 
       updateData.topicId = topicId;

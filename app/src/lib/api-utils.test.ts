@@ -34,6 +34,7 @@ import {
   parseDate,
   isNotFutureDate,
   requireAuth,
+  requiresTimesheetSubmission,
   MIN_DESCRIPTION_LENGTH,
   MAX_HOURS_PER_ENTRY,
 } from "./api-utils";
@@ -338,6 +339,32 @@ describe("api-utils", () => {
       expect(result).toEqual({
         session: { user: { name: adminUser.name, email: adminUser.email } },
       });
+    });
+  });
+
+  describe("requiresTimesheetSubmission", () => {
+    it("returns true for PARTNER", () => {
+      expect(requiresTimesheetSubmission("PARTNER")).toBe(true);
+    });
+
+    it("returns true for SENIOR_ASSOCIATE", () => {
+      expect(requiresTimesheetSubmission("SENIOR_ASSOCIATE")).toBe(true);
+    });
+
+    it("returns true for ASSOCIATE", () => {
+      expect(requiresTimesheetSubmission("ASSOCIATE")).toBe(true);
+    });
+
+    it("returns false for ADMIN", () => {
+      expect(requiresTimesheetSubmission("ADMIN")).toBe(false);
+    });
+
+    it("returns false for CONSULTANT", () => {
+      expect(requiresTimesheetSubmission("CONSULTANT")).toBe(false);
+    });
+
+    it("returns false for unknown position", () => {
+      expect(requiresTimesheetSubmission("UNKNOWN")).toBe(false);
     });
   });
 });

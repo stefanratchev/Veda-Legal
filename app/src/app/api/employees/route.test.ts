@@ -328,7 +328,7 @@ describe("POST /api/employees", () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toBe("Valid position is required (PARTNER, SENIOR_ASSOCIATE, or ASSOCIATE)");
+      expect(data.error).toBe("Valid position is required (PARTNER, SENIOR_ASSOCIATE, ASSOCIATE, or CONSULTANT)");
     });
 
     it("returns 400 for invalid position value", async () => {
@@ -348,7 +348,7 @@ describe("POST /api/employees", () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toBe("Valid position is required (PARTNER, SENIOR_ASSOCIATE, or ASSOCIATE)");
+      expect(data.error).toBe("Valid position is required (PARTNER, SENIOR_ASSOCIATE, ASSOCIATE, or CONSULTANT)");
     });
 
     it("returns 400 when name is not a string", async () => {

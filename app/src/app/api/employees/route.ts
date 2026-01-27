@@ -12,7 +12,7 @@ import {
 import { isValidEmail } from "@/lib/api-utils";
 
 // Valid positions that can be set via the UI (Admin is not selectable)
-const VALID_POSITIONS = ["PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE"] as const;
+const VALID_POSITIONS = ["PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE", "CONSULTANT"] as const;
 
 // Valid statuses for admin updates (PENDING is only for newly created users)
 const VALID_STATUSES = ["ACTIVE", "INACTIVE"] as const;
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
 
   // Validate position
   if (!position || !VALID_POSITIONS.includes(position)) {
-    return errorResponse("Valid position is required (PARTNER, SENIOR_ASSOCIATE, or ASSOCIATE)", 400);
+    return errorResponse("Valid position is required (PARTNER, SENIOR_ASSOCIATE, ASSOCIATE, or CONSULTANT)", 400);
   }
 
   // Validate name if provided

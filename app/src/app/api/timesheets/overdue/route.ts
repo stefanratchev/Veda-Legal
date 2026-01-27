@@ -39,6 +39,11 @@ export async function GET(request: NextRequest) {
         columns: { id: true, name: true, email: true, position: true },
       });
 
+      // Filter to only positions required to submit timesheets
+      const usersRequiringSubmission = activeUsers.filter(u =>
+        requiresTimesheetSubmission(u.position)
+      );
+
       // Get all submissions in the lookback period for all users
       const allSubmissions = await db.query.timesheetSubmissions.findMany({
         where: gte(timesheetSubmissions.date, lookbackStartISO),
@@ -56,7 +61,7 @@ export async function GET(request: NextRequest) {
 
       // Calculate overdue for each user
       const overdueByUser: UserOverdue[] = [];
-      for (const u of activeUsers) {
+      for (const u of usersRequiringSubmission) {
         const userSubmissions = submissionsByUser.get(u.id) || new Set<string>();
         const overdueDates = getOverdueDates(now, userSubmissions, DEFAULT_LOOKBACK_DAYS);
 

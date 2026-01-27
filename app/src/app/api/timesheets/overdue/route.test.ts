@@ -255,6 +255,11 @@ describe("GET /api/timesheets/overdue", () => {
       setupAuthenticatedUser(adminUser);
       mockHasAdminAccess.mockReturnValue(true);
 
+      // Mock requiresTimesheetSubmission to filter by position
+      mockRequiresTimesheetSubmission.mockImplementation((position: string) =>
+        SUBMISSION_REQUIRED_POSITIONS.includes(position)
+      );
+
       // Mock active users
       const user1 = createMockUser({ id: "user-1", name: "John Doe", position: "ASSOCIATE" });
       const user2 = createMockUser({ id: "user-2", name: "Jane Smith", position: "SENIOR_ASSOCIATE" });
@@ -299,10 +304,65 @@ describe("GET /api/timesheets/overdue", () => {
       expect(user2Entry.dates).toContain("2026-01-27");
     });
 
+    it("excludes ADMIN and CONSULTANT from team overdue list", async () => {
+      const adminUser = createMockUser({ position: "ADMIN", name: "Admin User" });
+      setupAuthenticatedUser(adminUser);
+      mockHasAdminAccess.mockReturnValue(true);
+
+      // Mock requiresTimesheetSubmission to return true only for ASSOCIATE
+      mockRequiresTimesheetSubmission.mockImplementation((position: string) =>
+        SUBMISSION_REQUIRED_POSITIONS.includes(position)
+      );
+
+      // Mock active users including ADMIN and CONSULTANT
+      const associate = createMockUser({ id: "user-1", name: "John Associate", position: "ASSOCIATE" });
+      const consultant = createMockUser({ id: "user-2", name: "Jane Consultant", position: "CONSULTANT" });
+      const otherAdmin = createMockUser({ id: "user-3", name: "Other Admin", position: "ADMIN" });
+
+      mockDb.query.users.findMany.mockResolvedValue([
+        { id: associate.id, name: associate.name, email: associate.email, position: associate.position, status: "ACTIVE" },
+        { id: consultant.id, name: consultant.name, email: consultant.email, position: consultant.position, status: "ACTIVE" },
+        { id: otherAdmin.id, name: otherAdmin.name, email: otherAdmin.email, position: otherAdmin.position, status: "ACTIVE" },
+        { id: adminUser.id, name: adminUser.name, email: adminUser.email, position: adminUser.position, status: "ACTIVE" },
+      ]);
+
+      // No submissions - everyone would have overdue if they're tracked
+      mockDb.query.timesheetSubmissions.findMany.mockResolvedValue([]);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets/overdue",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+
+      // Only ASSOCIATE should appear in overdue list
+      expect(data.overdue).toHaveLength(1);
+      expect(data.overdue[0].userId).toBe(associate.id);
+      expect(data.overdue[0].name).toBe("John Associate");
+
+      // CONSULTANT and ADMINs should NOT appear
+      const consultantEntry = data.overdue.find((e: { userId: string }) => e.userId === consultant.id);
+      const adminEntry = data.overdue.find((e: { userId: string }) => e.userId === adminUser.id);
+      const otherAdminEntry = data.overdue.find((e: { userId: string }) => e.userId === otherAdmin.id);
+
+      expect(consultantEntry).toBeUndefined();
+      expect(adminEntry).toBeUndefined();
+      expect(otherAdminEntry).toBeUndefined();
+    });
+
     it("excludes users with no overdue dates from response", async () => {
       const adminUser = createMockUser({ position: "PARTNER", name: "Partner User" });
       setupAuthenticatedUser(adminUser);
       mockHasAdminAccess.mockReturnValue(true);
+
+      // Mock requiresTimesheetSubmission to filter by position
+      mockRequiresTimesheetSubmission.mockImplementation((position: string) =>
+        SUBMISSION_REQUIRED_POSITIONS.includes(position)
+      );
 
       const user1 = createMockUser({ id: "user-1", name: "John Doe" });
 

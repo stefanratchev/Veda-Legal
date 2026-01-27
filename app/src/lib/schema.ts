@@ -150,6 +150,7 @@ export const timeEntries = pgTable("time_entries", {
 	description: text().notNull(),
 	userId: text().notNull(),
 	clientId: text().notNull(),
+	topicId: text(),
 	subtopicId: text(),
 	topicName: text().default('').notNull(),
 	subtopicName: text().default('').notNull(),
@@ -158,6 +159,7 @@ export const timeEntries = pgTable("time_entries", {
 }, (table) => [
 	index("time_entries_clientId_idx").using("btree", table.clientId.asc().nullsLast().op("text_ops")),
 	index("time_entries_date_idx").using("btree", table.date.asc().nullsLast().op("date_ops")),
+	index("time_entries_topicId_idx").using("btree", table.topicId.asc().nullsLast().op("text_ops")),
 	index("time_entries_subtopicId_idx").using("btree", table.subtopicId.asc().nullsLast().op("text_ops")),
 	index("time_entries_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
 	foreignKey({
@@ -170,6 +172,11 @@ export const timeEntries = pgTable("time_entries", {
 			foreignColumns: [clients.id],
 			name: "time_entries_clientId_fkey"
 		}).onUpdate("cascade").onDelete("cascade"),
+	foreignKey({
+			columns: [table.topicId],
+			foreignColumns: [topics.id],
+			name: "time_entries_topicId_fkey"
+		}).onUpdate("cascade").onDelete("set null"),
 	foreignKey({
 			columns: [table.subtopicId],
 			foreignColumns: [subtopics.id],
@@ -207,6 +214,7 @@ export const clientsRelations = relations(clients, ({ many }) => ({
 
 export const topicsRelations = relations(topics, ({ many }) => ({
   subtopics: many(subtopics),
+  timeEntries: many(timeEntries),
 }));
 
 export const subtopicsRelations = relations(subtopics, ({ one, many }) => ({
@@ -225,6 +233,10 @@ export const timeEntriesRelations = relations(timeEntries, ({ one, many }) => ({
   client: one(clients, {
     fields: [timeEntries.clientId],
     references: [clients.id],
+  }),
+  topic: one(topics, {
+    fields: [timeEntries.topicId],
+    references: [topics.id],
   }),
   subtopic: one(subtopics, {
     fields: [timeEntries.subtopicId],

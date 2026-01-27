@@ -3,11 +3,12 @@ import { createMockRequest } from "@/test/helpers/api";
 import { createMockUser, MockUser } from "@/test/mocks/factories";
 
 // Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireAuth, mockGetUserFromSession, mockHasAdminAccess, mockDb } = vi.hoisted(() => {
+const { mockRequireAuth, mockGetUserFromSession, mockHasAdminAccess, mockRequiresTimesheetSubmission, mockDb } = vi.hoisted(() => {
   return {
     mockRequireAuth: vi.fn(),
     mockGetUserFromSession: vi.fn(),
     mockHasAdminAccess: vi.fn(),
+    mockRequiresTimesheetSubmission: vi.fn(),
     mockDb: {
       query: {
         users: {
@@ -32,11 +33,15 @@ vi.mock("@/lib/api-utils", async (importOriginal) => {
     requireAuth: mockRequireAuth,
     getUserFromSession: mockGetUserFromSession,
     hasAdminAccess: mockHasAdminAccess,
+    requiresTimesheetSubmission: mockRequiresTimesheetSubmission,
   };
 });
 
 // Import route after mocks are set up
 import { GET } from "./route";
+
+// Positions that require timesheet submission
+const SUBMISSION_REQUIRED_POSITIONS = ["PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE"];
 
 // Helper to set up authenticated user
 function setupAuthenticatedUser(user: MockUser) {
@@ -49,6 +54,10 @@ function setupAuthenticatedUser(user: MockUser) {
     name: user.name,
     position: user.position,
   });
+  // Mock requiresTimesheetSubmission based on position
+  mockRequiresTimesheetSubmission.mockReturnValue(
+    SUBMISSION_REQUIRED_POSITIONS.includes(user.position)
+  );
 }
 
 describe("GET /api/timesheets/overdue", () => {
@@ -197,6 +206,46 @@ describe("GET /api/timesheets/overdue", () => {
       expect(data.overdue).not.toContain("2026-01-26");
       // Tuesday is not submitted, should be overdue
       expect(data.overdue).toContain("2026-01-27");
+    });
+
+    it("returns empty array for CONSULTANT (not required to submit)", async () => {
+      const user = createMockUser({ position: "CONSULTANT" });
+      setupAuthenticatedUser(user);
+      mockHasAdminAccess.mockReturnValue(false);
+
+      // No submissions
+      mockDb.query.timesheetSubmissions.findMany.mockResolvedValue([]);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets/overdue",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.overdue).toEqual([]);
+    });
+
+    it("returns empty array for ADMIN when not viewing team (not required to submit)", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+      // Simulate non-admin path by returning false
+      mockHasAdminAccess.mockReturnValue(false);
+
+      mockDb.query.timesheetSubmissions.findMany.mockResolvedValue([]);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/timesheets/overdue",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.overdue).toEqual([]);
     });
   });
 

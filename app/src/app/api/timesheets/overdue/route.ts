@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { timesheetSubmissions, users } from "@/lib/schema";
-import { requireAuth, getUserFromSession, hasAdminAccess } from "@/lib/api-utils";
+import { requireAuth, getUserFromSession, hasAdminAccess, requiresTimesheetSubmission } from "@/lib/api-utils";
 import { getOverdueDates, DEFAULT_LOOKBACK_DAYS } from "@/lib/submission-utils";
 import { formatDateISO } from "@/lib/date-utils";
 
@@ -72,7 +72,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ overdue: overdueByUser });
     }
 
-    // 4. Regular user: get own submissions and calculate overdue
+    // 4. Regular user: check if required to submit
+    if (!requiresTimesheetSubmission(user.position)) {
+      return NextResponse.json({ overdue: [] });
+    }
+
+    // 5. Get own submissions and calculate overdue
     const userSubmissions = await db.query.timesheetSubmissions.findMany({
       where: and(
         eq(timesheetSubmissions.userId, user.id),

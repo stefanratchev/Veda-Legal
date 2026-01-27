@@ -5,6 +5,7 @@ import {
   timeEntries,
   clients,
   subtopics,
+  topics,
   serviceDescriptionLineItems,
   serviceDescriptionTopics,
   serviceDescriptions,
@@ -27,6 +28,7 @@ function serializeTimeEntry(entry: {
   description: string;
   clientId: string;
   client: { id: string; name: string } | null;
+  topicId: string | null;
   subtopicId: string | null;
   topicName: string;
   subtopicName: string;
@@ -64,7 +66,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { hours, description, subtopicId, clientId } = body;
+  const { hours, description, subtopicId, topicId, clientId } = body;
 
   try {
     // Find the existing entry
@@ -130,7 +132,8 @@ export async function PATCH(
     const updateData: {
       hours?: string;
       description?: string;
-      subtopicId?: string;
+      topicId?: string | null;
+      subtopicId?: string | null;
       topicName?: string;
       subtopicName?: string;
       clientId?: string;
@@ -156,35 +159,79 @@ export async function PATCH(
       updateData.description = description.trim();
     }
 
-    // Validate and include subtopicId if provided
+    // Handle subtopicId changes
     if (subtopicId !== undefined) {
-      const subtopic = await db.query.subtopics.findFirst({
-        where: eq(subtopics.id, subtopicId),
-        columns: {
-          id: true,
-          name: true,
-          status: true,
-        },
-        with: {
-          topic: {
-            columns: { name: true, status: true },
+      if (subtopicId === null) {
+        // Clearing subtopic - require topicId to be provided
+        if (topicId === undefined || topicId === null) {
+          return errorResponse("topicId is required when clearing subtopicId", 400);
+        }
+
+        // Look up the topic
+        const topic = await db.query.topics.findFirst({
+          where: eq(topics.id, topicId),
+          columns: { id: true, name: true, status: true },
+        });
+
+        if (!topic) {
+          return errorResponse("Topic not found", 404);
+        }
+        if (topic.status !== "ACTIVE") {
+          return errorResponse("Cannot use inactive topic", 400);
+        }
+
+        updateData.topicId = topicId;
+        updateData.topicName = topic.name;
+        updateData.subtopicId = null;
+        updateData.subtopicName = "";
+      } else {
+        // Setting a subtopic - look it up and derive topic from it
+        const subtopic = await db.query.subtopics.findFirst({
+          where: eq(subtopics.id, subtopicId),
+          columns: {
+            id: true,
+            name: true,
+            status: true,
+            topicId: true,
           },
-        },
+          with: {
+            topic: {
+              columns: { name: true, status: true },
+            },
+          },
+        });
+
+        if (!subtopic) {
+          return errorResponse("Subtopic not found", 404);
+        }
+        if (subtopic.status !== "ACTIVE") {
+          return errorResponse("Cannot use inactive subtopic", 400);
+        }
+        if (subtopic.topic.status !== "ACTIVE") {
+          return errorResponse("Cannot use subtopic with inactive topic", 400);
+        }
+
+        updateData.topicId = subtopic.topicId;
+        updateData.subtopicId = subtopicId;
+        updateData.topicName = subtopic.topic.name;
+        updateData.subtopicName = subtopic.name;
+      }
+    } else if (topicId !== undefined) {
+      // Only topicId provided (no subtopicId change) - just update topicId/topicName
+      const topic = await db.query.topics.findFirst({
+        where: eq(topics.id, topicId),
+        columns: { id: true, name: true, status: true },
       });
 
-      if (!subtopic) {
-        return errorResponse("Subtopic not found", 404);
+      if (!topic) {
+        return errorResponse("Topic not found", 404);
       }
-      if (subtopic.status !== "ACTIVE") {
-        return errorResponse("Cannot use inactive subtopic", 400);
-      }
-      if (subtopic.topic.status !== "ACTIVE") {
-        return errorResponse("Cannot use subtopic with inactive topic", 400);
+      if (topic.status !== "ACTIVE") {
+        return errorResponse("Cannot use inactive topic", 400);
       }
 
-      updateData.subtopicId = subtopicId;
-      updateData.topicName = subtopic.topic.name;
-      updateData.subtopicName = subtopic.name;
+      updateData.topicId = topicId;
+      updateData.topicName = topic.name;
     }
 
     // Validate and include clientId if provided
@@ -215,6 +262,7 @@ export async function PATCH(
         hours: timeEntries.hours,
         description: timeEntries.description,
         clientId: timeEntries.clientId,
+        topicId: timeEntries.topicId,
         subtopicId: timeEntries.subtopicId,
         topicName: timeEntries.topicName,
         subtopicName: timeEntries.subtopicName,

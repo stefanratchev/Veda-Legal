@@ -482,6 +482,138 @@ describe("PATCH /api/timesheets/[id]", () => {
     });
   });
 
+  describe("Topic-Only Entries", () => {
+    it("allows updating to topic-only (subtopicId: null) when topicId is provided", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+        subtopicId: "old-subtopic",
+        topicId: "old-topic",
+        topicName: "Old Topic",
+        subtopicName: "Old Subtopic",
+      });
+
+      const mockTopic = {
+        id: "new-topic",
+        name: "Internal Topic",
+        status: "ACTIVE",
+      };
+
+      const updatedEntry = {
+        ...entry,
+        topicId: "new-topic",
+        subtopicId: null,
+        topicName: "Internal Topic",
+        subtopicName: "",
+        updatedAt: new Date().toISOString(),
+      };
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      mockDb.query.topics = { findFirst: vi.fn().mockResolvedValue(mockTopic) };
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedEntry]),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { subtopicId: null, topicId: "new-topic" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.topicId).toBe("new-topic");
+      expect(data.subtopicId).toBeNull();
+      expect(data.topicName).toBe("Internal Topic");
+      expect(data.subtopicName).toBe("");
+    });
+
+    it("returns 400 when subtopicId is null but topicId is not provided", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+      });
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { subtopicId: null },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe("topicId is required when clearing subtopicId");
+    });
+
+    it("returns 404 when topicId does not exist", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+      });
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      mockDb.query.topics = { findFirst: vi.fn().mockResolvedValue(null) };
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { subtopicId: null, topicId: "nonexistent" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(404);
+      expect(data.error).toBe("Topic not found");
+    });
+
+    it("returns 400 when topic is inactive", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+      });
+
+      const mockTopic = {
+        id: "inactive-topic",
+        name: "Inactive Topic",
+        status: "INACTIVE",
+      };
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+      mockDb.query.topics = { findFirst: vi.fn().mockResolvedValue(mockTopic) };
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { subtopicId: null, topicId: "inactive-topic" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe("Cannot use inactive topic");
+    });
+  });
+
   describe("Submission Revocation", () => {
     it("revokes submission when updating hours causes total to drop below 8", async () => {
       const user = createMockUser({ id: "user-1" });

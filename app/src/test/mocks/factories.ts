@@ -21,6 +21,7 @@ export interface MockTimeEntry {
   date: string;
   hours: string;
   description: string;
+  topicId: string | null;
   subtopicId: string | null;
   topicName: string;
   subtopicName: string;
@@ -68,6 +69,7 @@ export function createMockTimeEntry(overrides: Partial<MockTimeEntry> = {}): Moc
     date: "2024-12-20",
     hours: "2.5",
     description: "Test time entry description",
+    topicId: createId(),
     subtopicId: createId(),
     topicName: "General Advisory",
     subtopicName: "Client correspondence:",

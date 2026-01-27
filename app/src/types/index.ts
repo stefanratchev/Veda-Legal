@@ -64,6 +64,7 @@ export interface TimeEntry {
     id: string;
     name: string;
   };
+  topicId?: string | null;
   subtopicId?: string | null;
   topicName: string;
   subtopicName: string;

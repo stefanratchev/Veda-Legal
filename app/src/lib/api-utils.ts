@@ -19,6 +19,9 @@ const WRITE_POSITIONS = ["ADMIN", "PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE", "C
 // Positions that can view team timesheets
 const TEAM_VIEW_POSITIONS = ["ADMIN", "PARTNER"] as const;
 
+// Positions required to submit timesheets daily
+const TIMESHEET_REQUIRED_POSITIONS = ["PARTNER", "SENIOR_ASSOCIATE", "ASSOCIATE"] as const;
+
 /**
  * Check if a position has admin-level access.
  */
@@ -31,6 +34,13 @@ export function hasAdminAccess(position: string): boolean {
  */
 export function canViewTeamTimesheets(position: string): boolean {
   return TEAM_VIEW_POSITIONS.includes(position as (typeof TEAM_VIEW_POSITIONS)[number]);
+}
+
+/**
+ * Check if a position is required to submit timesheets.
+ */
+export function requiresTimesheetSubmission(position: string): boolean {
+  return TIMESHEET_REQUIRED_POSITIONS.includes(position as (typeof TIMESHEET_REQUIRED_POSITIONS)[number]);
 }
 
 // Common validation patterns

@@ -182,8 +182,10 @@ export async function PATCH(
         }
 
         // Validate topic type matches client type
+        // Use new clientId if provided, otherwise existing entry's clientId
+        const effectiveClientId = clientId !== undefined ? clientId : existingEntry.clientId;
         const entryClient = await db.query.clients.findFirst({
-          where: eq(clients.id, existingEntry.clientId),
+          where: eq(clients.id, effectiveClientId),
           columns: { clientType: true },
         });
         if (!entryClient) {

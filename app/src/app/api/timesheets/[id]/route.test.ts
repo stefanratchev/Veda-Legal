@@ -41,6 +41,9 @@ const { mockRequireAuth, mockGetUserFromSession, mockDb, mockSelectResult, mockH
         subtopics: {
           findFirst: vi.fn(),
         },
+        topics: {
+          findFirst: vi.fn(),
+        },
         clients: {
           findFirst: vi.fn(),
         },
@@ -92,6 +95,12 @@ function setupAuthenticatedUser(user: MockUser) {
 describe("PATCH /api/timesheets/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset mock implementations that might persist from previous tests
+    mockDb.query.timeEntries.findFirst.mockReset();
+    mockDb.query.topics.findFirst.mockReset();
+    mockDb.query.subtopics.findFirst.mockReset();
+    mockDb.query.clients.findFirst.mockReset();
+    mockDb.query.timesheetSubmissions.findFirst.mockReset();
     // Default: entry is not billed (empty array means no finalized service description)
     mockSelectResult.mockResolvedValue([]);
     // Default: 10 hours total (above submission threshold)
@@ -446,6 +455,7 @@ describe("PATCH /api/timesheets/[id]", () => {
         id: "entry-1",
         userId: user.id,
         clientId: "old-client",
+        topicId: "regular-topic",
       });
 
       const updatedEntry = {
@@ -459,6 +469,11 @@ describe("PATCH /api/timesheets/[id]", () => {
       mockDb.query.clients.findFirst.mockResolvedValue({
         id: "new-client",
         status: "ACTIVE",
+        clientType: "REGULAR",
+      });
+      // Mock topic lookup for type validation
+      mockDb.query.topics.findFirst.mockResolvedValue({
+        topicType: "REGULAR",
       });
       mockDb.update.mockReturnValue({
         set: vi.fn().mockReturnValue({
@@ -512,7 +527,7 @@ describe("PATCH /api/timesheets/[id]", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
-      mockDb.query.topics = { findFirst: vi.fn().mockResolvedValue(mockTopic) };
+      mockDb.query.topics.findFirst.mockResolvedValue(mockTopic);
       // Mock client lookup for topic type validation (INTERNAL topic matches INTERNAL client)
       mockDb.query.clients.findFirst.mockResolvedValue({
         clientType: "INTERNAL",
@@ -573,7 +588,7 @@ describe("PATCH /api/timesheets/[id]", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
-      mockDb.query.topics = { findFirst: vi.fn().mockResolvedValue(null) };
+      mockDb.query.topics.findFirst.mockResolvedValue(null);
 
       const request = createMockRequest({
         method: "PATCH",
@@ -603,7 +618,7 @@ describe("PATCH /api/timesheets/[id]", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
-      mockDb.query.topics = { findFirst: vi.fn().mockResolvedValue(mockTopic) };
+      mockDb.query.topics.findFirst.mockResolvedValue(mockTopic);
 
       const request = createMockRequest({
         method: "PATCH",
@@ -636,7 +651,7 @@ describe("PATCH /api/timesheets/[id]", () => {
 
       setupAuthenticatedUser(user);
       mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
-      mockDb.query.topics = { findFirst: vi.fn().mockResolvedValue(mockTopic) };
+      mockDb.query.topics.findFirst.mockResolvedValue(mockTopic);
       // Client lookup for type validation returns REGULAR client
       mockDb.query.clients.findFirst.mockResolvedValue({
         clientType: "REGULAR",
@@ -653,6 +668,152 @@ describe("PATCH /api/timesheets/[id]", () => {
 
       expect(response.status).toBe(400);
       expect(data.error).toBe("Topic type must match client type");
+    });
+  });
+
+  describe("Client Change Validation", () => {
+    it("returns 400 when changing clientId to incompatible type with existing topic", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+        topicId: "internal-topic",
+        topicName: "Internal Topic",
+        subtopicId: null,
+        subtopicName: "",
+        clientId: "internal-client",
+      });
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst.mockResolvedValue(entry);
+
+      // New client is REGULAR type
+      mockDb.query.clients.findFirst.mockResolvedValue({
+        id: "regular-client",
+        status: "ACTIVE",
+        clientType: "REGULAR",
+      });
+
+      // Existing topic is INTERNAL type
+      mockDb.query.topics.findFirst.mockResolvedValue({
+        topicType: "INTERNAL",
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { clientId: "regular-client" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe("Topic type must match client type");
+    });
+
+    it("allows changing clientId when topic type matches new client type", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+        topicId: "internal-topic",
+        topicName: "Internal Topic",
+        subtopicId: null,
+        subtopicName: "",
+        clientId: "old-internal-client",
+      });
+
+      const updatedEntry = {
+        ...entry,
+        clientId: "new-internal-client",
+        updatedAt: new Date().toISOString(),
+      };
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst
+        .mockResolvedValueOnce(entry) // Initial lookup
+        .mockResolvedValueOnce({ id: "new-internal-client", name: "New Internal Client" }); // Client for response
+
+      // New client is INTERNAL type (matches topic)
+      mockDb.query.clients.findFirst.mockResolvedValue({
+        id: "new-internal-client",
+        status: "ACTIVE",
+        clientType: "INTERNAL",
+      });
+
+      // Existing topic is INTERNAL type
+      mockDb.query.topics.findFirst.mockResolvedValue({
+        topicType: "INTERNAL",
+      });
+
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedEntry]),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { clientId: "new-internal-client" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.clientId).toBe("new-internal-client");
+    });
+
+    it("allows changing clientId when entry has no topicId", async () => {
+      const user = createMockUser({ id: "user-1" });
+      const entry = createMockTimeEntry({
+        id: "entry-1",
+        userId: user.id,
+        topicId: null,
+        subtopicId: "subtopic-1",
+        clientId: "old-client",
+      });
+
+      const updatedEntry = {
+        ...entry,
+        clientId: "new-client",
+        updatedAt: new Date().toISOString(),
+      };
+
+      setupAuthenticatedUser(user);
+      mockDb.query.timeEntries.findFirst
+        .mockResolvedValueOnce(entry)
+        .mockResolvedValueOnce({ id: "new-client", name: "New Client" });
+
+      mockDb.query.clients.findFirst.mockResolvedValue({
+        id: "new-client",
+        status: "ACTIVE",
+        clientType: "REGULAR",
+      });
+
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([updatedEntry]),
+          }),
+        }),
+      });
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/timesheets/entry-1",
+        body: { clientId: "new-client" },
+      });
+
+      const response = await PATCH(request, { params: createParams("entry-1") });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.clientId).toBe("new-client");
     });
   });
 

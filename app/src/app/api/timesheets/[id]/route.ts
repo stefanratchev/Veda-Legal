@@ -79,6 +79,7 @@ export async function PATCH(
         date: true,
         hours: true,
         description: true,
+        topicId: true,
         subtopicId: true,
         topicName: true,
         subtopicName: true,
@@ -262,7 +263,7 @@ export async function PATCH(
     if (clientId !== undefined) {
       const client = await db.query.clients.findFirst({
         where: eq(clients.id, clientId),
-        columns: { id: true, status: true },
+        columns: { id: true, status: true, clientType: true },
       });
 
       if (!client) {
@@ -270,6 +271,22 @@ export async function PATCH(
       }
       if (client.status !== "ACTIVE") {
         return errorResponse("Cannot assign entry to inactive client", 400);
+      }
+
+      // Validate topic type matches new client type
+      // Use updated topicId if being changed, otherwise existing entry's topicId
+      const effectiveTopicId = updateData.topicId !== undefined
+        ? updateData.topicId
+        : existingEntry.topicId;
+
+      if (effectiveTopicId) {
+        const entryTopic = await db.query.topics.findFirst({
+          where: eq(topics.id, effectiveTopicId),
+          columns: { topicType: true },
+        });
+        if (entryTopic && entryTopic.topicType !== client.clientType) {
+          return errorResponse("Topic type must match client type", 400);
+        }
       }
 
       updateData.clientId = clientId;

@@ -844,6 +844,52 @@ describe("POST /api/timesheets", () => {
       expect(data.topicName).toBe("M&A Advisory");
       expect(data.subtopicName).toBe("Drafting documents");
     });
+
+    it("returns topicId in response for regular entries", async () => {
+      const user = createMockUser();
+      setupAuthenticatedUser(user);
+      mockDb.query.clients.findFirst.mockResolvedValue(mockActiveClient);
+      mockDb.query.subtopics.findFirst.mockResolvedValue({
+        ...mockActiveSubtopic,
+        topicId: "topic-123",
+      });
+
+      const createdEntry = {
+        id: "entry-123",
+        date: "2024-12-20",
+        hours: "2.5",
+        description: "Test work",
+        clientId: "client-123",
+        topicId: "topic-123",
+        subtopicId: "subtopic-123",
+        topicName: "M&A Advisory",
+        subtopicName: "Drafting documents",
+        createdAt: "2024-12-20T10:00:00.000Z",
+        updatedAt: "2024-12-20T10:00:00.000Z",
+      };
+
+      mockDb.insert.mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdEntry]),
+        }),
+      });
+
+      mockDb.query.clients.findFirst
+        .mockResolvedValueOnce(mockActiveClient)
+        .mockResolvedValueOnce({ id: "client-123", name: "Test Client" });
+
+      const request = createMockRequest({
+        method: "POST",
+        url: "/api/timesheets",
+        body: validBody,
+      });
+
+      const response = await POST(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.topicId).toBe("topic-123");
+    });
   });
 });
 

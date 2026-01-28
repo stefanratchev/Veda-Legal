@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { timesheetSubmissions, users } from "@/lib/schema";
+import { timesheetSubmissions, users, leavePeriods } from "@/lib/schema";
 import { requireAuth, getUserFromSession, hasAdminAccess, requiresTimesheetSubmission } from "@/lib/api-utils";
 import { getOverdueDates, DEFAULT_LOOKBACK_DAYS } from "@/lib/submission-utils";
 import { formatDateISO } from "@/lib/date-utils";
@@ -59,11 +59,27 @@ export async function GET(request: NextRequest) {
         submissionsByUser.get(sub.userId)!.add(sub.date);
       }
 
+      // Get all approved leave periods for relevant users
+      const allLeave = await db.query.leavePeriods.findMany({
+        where: eq(leavePeriods.status, "APPROVED"),
+        columns: { userId: true, startDate: true, endDate: true },
+      });
+
+      // Group leave by user
+      const leaveByUser = new Map<string, { startDate: string; endDate: string }[]>();
+      for (const leave of allLeave) {
+        if (!leaveByUser.has(leave.userId)) {
+          leaveByUser.set(leave.userId, []);
+        }
+        leaveByUser.get(leave.userId)!.push({ startDate: leave.startDate, endDate: leave.endDate });
+      }
+
       // Calculate overdue for each user
       const overdueByUser: UserOverdue[] = [];
       for (const u of usersRequiringSubmission) {
         const userSubmissions = submissionsByUser.get(u.id) || new Set<string>();
-        const overdueDates = getOverdueDates(now, userSubmissions, DEFAULT_LOOKBACK_DAYS);
+        const userLeave = leaveByUser.get(u.id) || [];
+        const overdueDates = getOverdueDates(now, userSubmissions, DEFAULT_LOOKBACK_DAYS, userLeave);
 
         if (overdueDates.length > 0) {
           overdueByUser.push({
@@ -91,8 +107,17 @@ export async function GET(request: NextRequest) {
       columns: { date: true },
     });
 
+    // Get user's approved leave periods
+    const userLeave = await db.query.leavePeriods.findMany({
+      where: and(
+        eq(leavePeriods.userId, user.id),
+        eq(leavePeriods.status, "APPROVED")
+      ),
+      columns: { startDate: true, endDate: true },
+    });
+
     const submittedDates = new Set(userSubmissions.map((s) => s.date));
-    const overdueDates = getOverdueDates(now, submittedDates, DEFAULT_LOOKBACK_DAYS);
+    const overdueDates = getOverdueDates(now, submittedDates, DEFAULT_LOOKBACK_DAYS, userLeave);
 
     return NextResponse.json({ overdue: overdueDates });
   } catch (error) {

@@ -17,6 +17,9 @@ const { mockRequireAuth, mockGetUserFromSession, mockHasAdminAccess, mockRequire
         timesheetSubmissions: {
           findMany: vi.fn(),
         },
+        leavePeriods: {
+          findMany: vi.fn(),
+        },
       },
     },
   };
@@ -120,6 +123,8 @@ describe("GET /api/timesheets/overdue", () => {
 
       // No submissions - user hasn't submitted anything
       mockDb.query.timesheetSubmissions.findMany.mockResolvedValue([]);
+      // No leave periods
+      mockDb.query.leavePeriods.findMany.mockResolvedValue([]);
 
       const request = createMockRequest({
         method: "GET",
@@ -165,6 +170,8 @@ describe("GET /api/timesheets/overdue", () => {
       }
 
       mockDb.query.timesheetSubmissions.findMany.mockResolvedValue(submissions);
+      // No leave periods
+      mockDb.query.leavePeriods.findMany.mockResolvedValue([]);
 
       const request = createMockRequest({
         method: "GET",
@@ -192,6 +199,8 @@ describe("GET /api/timesheets/overdue", () => {
           submittedAt: "2026-01-27T09:00:00.000Z",
         },
       ]);
+      // No leave periods
+      mockDb.query.leavePeriods.findMany.mockResolvedValue([]);
 
       const request = createMockRequest({
         method: "GET",
@@ -275,6 +284,8 @@ describe("GET /api/timesheets/overdue", () => {
       mockDb.query.timesheetSubmissions.findMany.mockResolvedValue([
         { id: "sub-1", userId: user1.id, date: "2026-01-26", submittedAt: "2026-01-27T09:00:00.000Z" },
       ]);
+      // No leave periods
+      mockDb.query.leavePeriods.findMany.mockResolvedValue([]);
 
       const request = createMockRequest({
         method: "GET",
@@ -328,6 +339,8 @@ describe("GET /api/timesheets/overdue", () => {
 
       // No submissions - everyone would have overdue if they're tracked
       mockDb.query.timesheetSubmissions.findMany.mockResolvedValue([]);
+      // No leave periods
+      mockDb.query.leavePeriods.findMany.mockResolvedValue([]);
 
       const request = createMockRequest({
         method: "GET",
@@ -388,6 +401,8 @@ describe("GET /api/timesheets/overdue", () => {
       }
 
       mockDb.query.timesheetSubmissions.findMany.mockResolvedValue(submissions);
+      // No leave periods
+      mockDb.query.leavePeriods.findMany.mockResolvedValue([]);
 
       const request = createMockRequest({
         method: "GET",

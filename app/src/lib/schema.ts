@@ -11,6 +11,8 @@ export const topicStatus = pgEnum("TopicStatus", ['ACTIVE', 'INACTIVE'])
 export const userStatus = pgEnum("UserStatus", ['PENDING', 'ACTIVE', 'INACTIVE'])
 export const clientType = pgEnum("ClientType", ['REGULAR', 'INTERNAL', 'MANAGEMENT'])
 export const topicType = pgEnum("TopicType", ['REGULAR', 'INTERNAL', 'MANAGEMENT'])
+export const leaveType = pgEnum("LeaveType", ['VACATION', 'SICK_LEAVE', 'MATERNITY_PATERNITY'])
+export const leaveStatus = pgEnum("LeaveStatus", ['PENDING', 'APPROVED', 'REJECTED'])
 
 
 export const serviceDescriptionTopics = pgTable("service_description_topics", {
@@ -200,11 +202,42 @@ export const timesheetSubmissions = pgTable("timesheet_submissions", {
 	}).onUpdate("cascade").onDelete("cascade"),
 ]);
 
+export const leavePeriods = pgTable("leave_periods", {
+	id: text().primaryKey().notNull(),
+	userId: text().notNull(),
+	startDate: date().notNull(),
+	endDate: date().notNull(),
+	leaveType: leaveType().notNull(),
+	status: leaveStatus().default('PENDING').notNull(),
+	reason: text(),
+	reviewedById: text(),
+	reviewedAt: timestamp({ precision: 3, mode: 'string' }),
+	rejectionReason: text(),
+	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	updatedAt: timestamp({ precision: 3, mode: 'string' }).notNull(),
+}, (table) => [
+	index("leave_periods_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
+	index("leave_periods_status_idx").using("btree", table.status.asc().nullsLast().op("enum_ops")),
+	index("leave_periods_startDate_idx").using("btree", table.startDate.asc().nullsLast().op("date_ops")),
+	foreignKey({
+		columns: [table.userId],
+		foreignColumns: [users.id],
+		name: "leave_periods_userId_fkey"
+	}).onUpdate("cascade").onDelete("cascade"),
+	foreignKey({
+		columns: [table.reviewedById],
+		foreignColumns: [users.id],
+		name: "leave_periods_reviewedById_fkey"
+	}).onUpdate("cascade").onDelete("set null"),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   timeEntries: many(timeEntries),
   finalizedServiceDescriptions: many(serviceDescriptions),
   timesheetSubmissions: many(timesheetSubmissions),
+  leavePeriods: many(leavePeriods, { relationName: "leavePeriodUser" }),
+  reviewedLeavePeriods: many(leavePeriods, { relationName: "reviewedLeave" }),
 }));
 
 export const clientsRelations = relations(clients, ({ many }) => ({
@@ -249,6 +282,19 @@ export const timesheetSubmissionsRelations = relations(timesheetSubmissions, ({ 
   user: one(users, {
     fields: [timesheetSubmissions.userId],
     references: [users.id],
+  }),
+}));
+
+export const leavePeriodsRelations = relations(leavePeriods, ({ one }) => ({
+  user: one(users, {
+    fields: [leavePeriods.userId],
+    references: [users.id],
+    relationName: "leavePeriodUser",
+  }),
+  reviewedBy: one(users, {
+    fields: [leavePeriods.reviewedById],
+    references: [users.id],
+    relationName: "reviewedLeave",
   }),
 }));
 

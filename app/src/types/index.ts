@@ -196,14 +196,14 @@ export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
 export interface LeavePeriod {
   id: string;
   userId: string;
-  userName?: string;
+  userName: string | null;
   startDate: string;
   endDate: string;
   leaveType: LeaveType;
   status: LeaveStatus;
   reason: string | null;
   reviewedById: string | null;
-  reviewedByName?: string | null;
+  reviewedByName: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
   createdAt: string;

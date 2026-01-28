@@ -180,6 +180,45 @@ export interface ServiceDescriptionListItem {
   updatedAt: string;
 }
 
+/**
+ * Leave type for absence categorization.
+ */
+export type LeaveType = "VACATION" | "SICK_LEAVE" | "MATERNITY_PATERNITY";
+
+/**
+ * Leave request status.
+ */
+export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+/**
+ * Leave period for absence tracking.
+ */
+export interface LeavePeriod {
+  id: string;
+  userId: string;
+  userName?: string;
+  startDate: string;
+  endDate: string;
+  leaveType: LeaveType;
+  status: LeaveStatus;
+  reason: string | null;
+  reviewedById: string | null;
+  reviewedByName?: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+}
+
+/**
+ * Form data for creating/editing leave requests.
+ */
+export interface LeaveFormData {
+  startDate: string;
+  endDate: string;
+  leaveType: LeaveType;
+  reason: string;
+}
+
 // M365 Activity types
 export type {
   M365CalendarEvent,

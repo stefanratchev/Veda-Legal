@@ -11,6 +11,7 @@ const { mockRequireAuth, mockGetUserFromSession, mockDb } = vi.hoisted(() => ({
         findMany: vi.fn(),
       },
     },
+    insert: vi.fn(),
   },
 }));
 
@@ -27,7 +28,7 @@ vi.mock("@/lib/api-utils", async (importOriginal) => {
   };
 });
 
-import { GET } from "./route";
+import { GET, POST } from "./route";
 
 function setupAuthenticatedUser(user: MockUser) {
   mockRequireAuth.mockResolvedValue({
@@ -215,5 +216,149 @@ describe("GET /api/leave", () => {
       expect(data.leavePeriods[0].userName).toBe("Employee Name");
       expect(data.leavePeriods[0].reviewedByName).toBe("Admin Name");
     });
+  });
+});
+
+describe("POST /api/leave", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    mockRequireAuth.mockResolvedValue({ error: "Unauthorized", status: 401 });
+
+    const request = createMockRequest({
+      method: "POST",
+      url: "/api/leave",
+      body: { startDate: "2024-12-23", endDate: "2024-12-27", leaveType: "VACATION" },
+    });
+    const response = await POST(request);
+
+    expect(response.status).toBe(401);
+  });
+
+  it("returns 400 when dates are missing", async () => {
+    const user = createMockUser();
+    setupAuthenticatedUser(user);
+
+    const request = createMockRequest({
+      method: "POST",
+      url: "/api/leave",
+      body: { leaveType: "VACATION" },
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain("required");
+  });
+
+  it("returns 400 when startDate > endDate", async () => {
+    const user = createMockUser();
+    setupAuthenticatedUser(user);
+
+    const request = createMockRequest({
+      method: "POST",
+      url: "/api/leave",
+      body: { startDate: "2024-12-27", endDate: "2024-12-23", leaveType: "VACATION" },
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain("before");
+  });
+
+  it("creates pending leave request for regular user", async () => {
+    const user = createMockUser({ position: "ASSOCIATE" });
+    setupAuthenticatedUser(user);
+
+    mockDb.query.leavePeriods.findMany.mockResolvedValue([]);
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{
+          id: "leave-new",
+          userId: user.id,
+          startDate: "2024-12-23",
+          endDate: "2024-12-27",
+          leaveType: "VACATION",
+          status: "PENDING",
+          reason: null,
+          createdAt: "2024-12-01T10:00:00.000Z",
+        }]),
+      }),
+    });
+
+    const request = createMockRequest({
+      method: "POST",
+      url: "/api/leave",
+      body: { startDate: "2024-12-23", endDate: "2024-12-27", leaveType: "VACATION" },
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.status).toBe("PENDING");
+  });
+
+  it("creates auto-approved leave when admin creates for another user", async () => {
+    const admin = createMockUser({ position: "ADMIN" });
+    setupAuthenticatedUser(admin);
+
+    mockDb.query.leavePeriods.findMany.mockResolvedValue([]);
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{
+          id: "leave-new",
+          userId: "other-user-id",
+          startDate: "2024-12-23",
+          endDate: "2024-12-27",
+          leaveType: "VACATION",
+          status: "APPROVED",
+          reviewedById: admin.id,
+          createdAt: "2024-12-01T10:00:00.000Z",
+        }]),
+      }),
+    });
+
+    const request = createMockRequest({
+      method: "POST",
+      url: "/api/leave",
+      body: {
+        startDate: "2024-12-23",
+        endDate: "2024-12-27",
+        leaveType: "VACATION",
+        userId: "other-user-id",
+      },
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.status).toBe("APPROVED");
+  });
+
+  it("returns 400 when leave overlaps existing", async () => {
+    const user = createMockUser();
+    setupAuthenticatedUser(user);
+
+    mockDb.query.leavePeriods.findMany.mockResolvedValue([{
+      id: "existing",
+      userId: user.id,
+      startDate: "2024-12-20",
+      endDate: "2024-12-25",
+      status: "APPROVED",
+    }]);
+
+    const request = createMockRequest({
+      method: "POST",
+      url: "/api/leave",
+      body: { startDate: "2024-12-23", endDate: "2024-12-27", leaveType: "VACATION" },
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain("overlap");
   });
 });

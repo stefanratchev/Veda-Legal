@@ -5,6 +5,7 @@ import {
   isOverdue,
   getOverdueDates,
   isWeekday,
+  isOnLeave,
   DEADLINE_TIMEZONE,
 } from "./submission-utils";
 
@@ -153,5 +154,82 @@ describe("getOverdueDates", () => {
     const result = getOverdueDates(now, submittedDates, 2);
     // Should only look back 2 days, not find older overdue dates
     expect(result.length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("getOverdueDates with leave periods", () => {
+  it("excludes dates within approved leave periods", () => {
+    // Monday Dec 23 2024 through Friday Dec 27 2024
+    const now = new Date("2025-01-06T12:00:00Z"); // Well past deadlines
+    const submittedDates = new Set<string>();
+    const approvedLeave = [
+      { startDate: "2024-12-23", endDate: "2024-12-27" },
+    ];
+
+    const overdue = getOverdueDates(now, submittedDates, 30, approvedLeave);
+
+    // Dec 23-27 should NOT be in overdue (on leave)
+    expect(overdue).not.toContain("2024-12-23");
+    expect(overdue).not.toContain("2024-12-24");
+    expect(overdue).not.toContain("2024-12-25");
+    expect(overdue).not.toContain("2024-12-26");
+    expect(overdue).not.toContain("2024-12-27");
+  });
+
+  it("includes dates outside leave periods", () => {
+    const now = new Date("2025-01-06T12:00:00Z");
+    const submittedDates = new Set<string>();
+    const approvedLeave = [
+      { startDate: "2024-12-23", endDate: "2024-12-24" },
+    ];
+
+    const overdue = getOverdueDates(now, submittedDates, 30, approvedLeave);
+
+    // Dec 23-24 should NOT be overdue (on leave)
+    expect(overdue).not.toContain("2024-12-23");
+    expect(overdue).not.toContain("2024-12-24");
+
+    // Dec 26-27 SHOULD be overdue (not on leave, not submitted, weekdays)
+    expect(overdue).toContain("2024-12-26");
+    expect(overdue).toContain("2024-12-27");
+  });
+
+  it("handles multiple leave periods", () => {
+    const now = new Date("2025-01-10T12:00:00Z");
+    const submittedDates = new Set<string>();
+    const approvedLeave = [
+      { startDate: "2024-12-23", endDate: "2024-12-24" },
+      { startDate: "2025-01-02", endDate: "2025-01-03" },
+    ];
+
+    const overdue = getOverdueDates(now, submittedDates, 30, approvedLeave);
+
+    // Both leave periods should be excluded
+    expect(overdue).not.toContain("2024-12-23");
+    expect(overdue).not.toContain("2024-12-24");
+    expect(overdue).not.toContain("2025-01-02");
+    expect(overdue).not.toContain("2025-01-03");
+  });
+});
+
+describe("isOnLeave", () => {
+  it("returns true for date within leave period", () => {
+    const leavePeriods = [{ startDate: "2024-12-23", endDate: "2024-12-27" }];
+    expect(isOnLeave("2024-12-25", leavePeriods)).toBe(true);
+  });
+
+  it("returns false for date outside leave period", () => {
+    const leavePeriods = [{ startDate: "2024-12-23", endDate: "2024-12-27" }];
+    expect(isOnLeave("2024-12-20", leavePeriods)).toBe(false);
+  });
+
+  it("returns true for date on boundary", () => {
+    const leavePeriods = [{ startDate: "2024-12-23", endDate: "2024-12-27" }];
+    expect(isOnLeave("2024-12-23", leavePeriods)).toBe(true);
+    expect(isOnLeave("2024-12-27", leavePeriods)).toBe(true);
+  });
+
+  it("returns false for empty leave periods", () => {
+    expect(isOnLeave("2024-12-25", [])).toBe(false);
   });
 });

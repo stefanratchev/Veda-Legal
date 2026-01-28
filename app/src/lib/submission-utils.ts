@@ -82,6 +82,26 @@ export function getSubmissionDeadline(workday: Date): Date {
 }
 
 /**
+ * Leave period for overdue calculation.
+ */
+export interface LeavePeriodForOverdue {
+  startDate: string;
+  endDate: string;
+}
+
+/**
+ * Check if a date falls within any approved leave period.
+ */
+export function isOnLeave(dateISO: string, leavePeriods: LeavePeriodForOverdue[]): boolean {
+  for (const leave of leavePeriods) {
+    if (dateISO >= leave.startDate && dateISO <= leave.endDate) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Check if a workday's submission is overdue.
  * Returns false for:
  * - Weekend days (no submission required)
@@ -111,12 +131,14 @@ export function isOverdue(workday: Date, now: Date): boolean {
  * @param now Current date/time
  * @param submittedDates Set of already-submitted dates in ISO format (YYYY-MM-DD)
  * @param lookbackDays Number of days to look back (default: 30)
+ * @param approvedLeave Array of approved leave periods to exclude
  * @returns Array of overdue date strings in ISO format
  */
 export function getOverdueDates(
   now: Date,
   submittedDates: Set<string>,
-  lookbackDays: number = DEFAULT_LOOKBACK_DAYS
+  lookbackDays: number = DEFAULT_LOOKBACK_DAYS,
+  approvedLeave: LeavePeriodForOverdue[] = []
 ): string[] {
   const overdueDates: string[] = [];
 
@@ -127,12 +149,18 @@ export function getOverdueDates(
 
     const dateISO = formatDateISO(checkDate);
 
-    // Skip if already submitted or not a weekday
+    // Skip if already submitted
     if (submittedDates.has(dateISO)) {
       continue;
     }
 
+    // Skip if not a weekday
     if (!isWeekday(checkDate)) {
+      continue;
+    }
+
+    // Skip if on approved leave
+    if (isOnLeave(dateISO, approvedLeave)) {
       continue;
     }
 

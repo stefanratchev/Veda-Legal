@@ -33,6 +33,7 @@ function serializeTimeEntry(entry: {
   description: string;
   clientId: string;
   client: { id: string; name: string } | null;
+  topicId: string | null;
   subtopicId: string | null;
   topicName: string;
   subtopicName: string;
@@ -114,6 +115,7 @@ export async function GET(request: NextRequest) {
         hours: true,
         description: true,
         clientId: true,
+        topicId: true,
         subtopicId: true,
         topicName: true,
         subtopicName: true,
@@ -269,6 +271,7 @@ export async function POST(request: NextRequest) {
   // Variables to hold topic/subtopic data for the entry
   let topicName: string;
   let subtopicName: string;
+  let finalTopicId: string | null;
   let finalSubtopicId: string | null;
 
   if (isInternalEntry) {
@@ -291,6 +294,7 @@ export async function POST(request: NextRequest) {
     }
     topicName = topic.name;
     subtopicName = "";
+    finalTopicId = topicId;
     finalSubtopicId = null;
   } else {
     // Regular entries require subtopicId
@@ -303,6 +307,7 @@ export async function POST(request: NextRequest) {
         id: true,
         name: true,
         status: true,
+        topicId: true,
       },
       with: {
         topic: {
@@ -321,6 +326,7 @@ export async function POST(request: NextRequest) {
     }
     topicName = subtopic.topic.name;
     subtopicName = subtopic.name;
+    finalTopicId = subtopic.topicId;
     finalSubtopicId = subtopicId;
   }
 
@@ -349,6 +355,7 @@ export async function POST(request: NextRequest) {
       description: (description || "").trim(),
       userId: user.id,
       clientId: clientId,
+      topicId: finalTopicId,
       subtopicId: finalSubtopicId,
       topicName: topicName,
       subtopicName: subtopicName,
@@ -359,6 +366,7 @@ export async function POST(request: NextRequest) {
       hours: timeEntries.hours,
       description: timeEntries.description,
       clientId: timeEntries.clientId,
+      topicId: timeEntries.topicId,
       subtopicId: timeEntries.subtopicId,
       topicName: timeEntries.topicName,
       subtopicName: timeEntries.subtopicName,

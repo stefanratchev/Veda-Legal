@@ -217,9 +217,15 @@ AZURE_AD_TENANT_ID=<from Azure Portal>
 
 ## Topic/Subtopic Hierarchy
 
-TimeEntries reference a Subtopic, with denormalized `topicName` and `subtopicName` fields for immutability. When a subtopic is selected:
+TimeEntries can reference either:
+1. **A Subtopic** (typical for REGULAR clients) - includes `subtopicId`, `topicId`, and denormalized `topicName`/`subtopicName` for immutability
+2. **A Topic only** (typical for INTERNAL/MANAGEMENT clients) - includes `topicId` and `topicName`, with `subtopicId`/`subtopicName` null
+
+When a subtopic is selected:
 - If `isPrefix` is true: pre-fill description with subtopic name, user adds specifics
 - If `isPrefix` is false: use subtopic name as the full description
+
+**Topic type validation:** Topics have a `type` field (REGULAR, INTERNAL, MANAGEMENT) that must match the client's type. The API enforces this constraint.
 
 To update topics/subtopics, edit `scripts/seed-topics.ts` and run:
 ```bash

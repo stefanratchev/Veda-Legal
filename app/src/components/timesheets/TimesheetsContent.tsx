@@ -262,7 +262,7 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
     } finally {
       setIsLoading(false);
     }
-  }, [formData, selectedDate]);
+  }, [formData, selectedDate, totalHours, isSubmitted]);
 
   const deleteEntry = useCallback(async (entryId: string) => {
     setIsLoading(true);

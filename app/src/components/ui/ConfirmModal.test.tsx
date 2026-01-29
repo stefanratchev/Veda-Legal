@@ -112,6 +112,15 @@ describe("ConfirmModal", () => {
       expect(mockOnCancel).toHaveBeenCalledTimes(1);
       expect(mockOnConfirm).not.toHaveBeenCalled();
     });
+
+    it("calls onConfirm when Enter key is pressed", () => {
+      render(<ConfirmModal {...defaultProps} />);
+
+      fireEvent.keyDown(document, { key: "Enter" });
+
+      expect(mockOnConfirm).toHaveBeenCalledTimes(1);
+      expect(mockOnCancel).not.toHaveBeenCalled();
+    });
   });
 
   describe("Destructive Mode", () => {

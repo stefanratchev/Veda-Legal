@@ -21,14 +21,15 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
-  // Close on Escape key
+  // Handle keyboard shortcuts: Escape to cancel, Enter to confirm
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
+      if (e.key === "Enter") onConfirm();
     };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [onCancel]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel, onConfirm]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

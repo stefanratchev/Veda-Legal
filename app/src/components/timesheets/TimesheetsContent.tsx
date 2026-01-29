@@ -7,8 +7,7 @@ import { EntryForm } from "./EntryForm";
 import { EntriesList } from "./EntriesList";
 import { TeamTimesheets } from "./TeamTimesheets";
 import { M365ActivityPanel } from "./M365ActivityPanel";
-import { SubmitButton } from "./SubmitButton";
-import { SubmitPromptModal } from "./SubmitPromptModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import type { ClientWithType, Topic, TimeEntry, FormData, TeamSummary, M365ActivityResponse } from "@/types";
 import { initialFormData } from "@/types";
 
@@ -23,7 +22,6 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [teamSummaries, setTeamSummaries] = useState<TeamSummary[]>([]);
-  const [datesWithEntries, setDatesWithEntries] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
@@ -73,21 +71,6 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
       console.error("Failed to fetch entries:", err);
     } finally {
       setIsLoadingEntries(false);
-    }
-  }, []);
-
-  // Fetch dates with entries for visible week range
-  const fetchDatesWithEntries = useCallback(async (centerDate: Date) => {
-    try {
-      const year = centerDate.getFullYear();
-      const month = centerDate.getMonth() + 1;
-      const response = await fetch(`/api/timesheets/dates?year=${year}&month=${month}`);
-      if (response.ok) {
-        const dates: string[] = await response.json();
-        setDatesWithEntries(new Set(dates));
-      }
-    } catch (err) {
-      console.error("Failed to fetch dates:", err);
     }
   }, []);
 
@@ -197,11 +180,6 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
     setM365Error(null);
   }, [selectedDate, fetchEntries]);
 
-  // Fetch dots when month changes
-  useEffect(() => {
-    fetchDatesWithEntries(selectedDate);
-  }, [selectedDate, fetchDatesWithEntries]);
-
   // Fetch submitted dates when month changes
   useEffect(() => {
     fetchSubmittedDates(selectedDate);
@@ -265,7 +243,6 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
       }
 
       setEntries((prev) => [data, ...prev]);
-      setDatesWithEntries((prev) => new Set([...prev, formatDateISO(selectedDate)]));
       // Keep client and topic/subtopic selected, only reset duration and description
       setFormData((prev) => ({
         ...initialFormData,
@@ -298,7 +275,6 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
       if (response.ok) {
         const data = await response.json();
         setEntries((prev) => prev.filter((e) => e.id !== entryId));
-        fetchDatesWithEntries(selectedDate);
 
         // Check if submission was revoked due to hours dropping below 8
         if (data.submissionRevoked) {
@@ -334,7 +310,7 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate, fetchDatesWithEntries, fetchOverdueStatus]);
+  }, [selectedDate, fetchOverdueStatus]);
 
   const updateEntry = useCallback((updatedEntry: TimeEntry, revocationData?: { submissionRevoked: boolean; remainingHours: number }) => {
     setEntries((prev) =>
@@ -385,7 +361,6 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
       <WeekStrip
         selectedDate={selectedDate}
         today={today}
-        datesWithEntries={datesWithEntries}
         submittedDates={submittedDates}
         overdueDates={overdueDates}
         onSelectDate={setSelectedDate}
@@ -427,10 +402,6 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
         onUpdateEntry={updateEntry}
         clients={clients}
         topics={topics}
-      />
-
-      {/* Submit Button */}
-      <SubmitButton
         totalHours={totalHours}
         isSubmitted={isSubmitted}
         isLoading={isLoading}
@@ -445,11 +416,13 @@ export function TimesheetsContent({ clients, topics, userName }: TimesheetsConte
 
       {/* Submit Prompt Modal */}
       {showSubmitPrompt && (
-        <SubmitPromptModal
-          date={formatDateISO(selectedDate)}
-          totalHours={totalHours}
-          onSubmit={handleTimesheetSubmit}
-          onDismiss={() => setShowSubmitPrompt(false)}
+        <ConfirmModal
+          title="Submit Timesheet?"
+          message={`You've logged ${totalHours.toFixed(1)} hours for ${selectedDate.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}. Ready to submit?`}
+          confirmLabel="Submit"
+          cancelLabel="Not yet"
+          onConfirm={handleTimesheetSubmit}
+          onCancel={() => setShowSubmitPrompt(false)}
         />
       )}
 

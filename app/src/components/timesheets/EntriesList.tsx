@@ -2,10 +2,91 @@
 
 import { useMemo, useState } from "react";
 import { formatHours } from "@/lib/date-utils";
+import { MIN_SUBMISSION_HOURS } from "@/lib/submission-utils";
 import { EntryRow } from "./EntryRow";
 import { EntryCard } from "./EntryCard";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import type { TimeEntry, ClientWithType, Topic } from "@/types";
+
+function SubmitStatus({
+  canSubmit,
+  hoursToGo,
+  isSubmitted,
+  isLoading,
+  onSubmit,
+}: {
+  canSubmit: boolean;
+  hoursToGo: number;
+  isSubmitted: boolean;
+  isLoading: boolean;
+  onSubmit: () => void;
+}) {
+  if (isSubmitted) {
+    return (
+      <span className="flex items-center gap-1.5 text-[var(--success)]">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        <span className="text-[13px] font-medium">Timesheet Submitted</span>
+      </span>
+    );
+  }
+
+  if (canSubmit) {
+    return (
+      <button
+        onClick={onSubmit}
+        disabled={isLoading}
+        className="px-3 py-1.5 rounded text-[13px] font-medium text-[var(--accent-pink)] bg-[var(--accent-pink-glow)] border border-[var(--border-accent)] hover:bg-[var(--accent-pink)] hover:text-[var(--bg-deep)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isLoading ? "Submitting..." : "Submit Timesheet →"}
+      </button>
+    );
+  }
+
+  return (
+    <span className="text-[13px] text-[var(--text-muted)]">
+      {formatHours(hoursToGo)} to go
+    </span>
+  );
+}
+
+// Shared footer component for daily total and submit status
+function DailyFooter({
+  dailyTotal,
+  showSubmitUI,
+  canSubmit,
+  hoursToGo,
+  isSubmitted,
+  isLoading,
+  onSubmit,
+}: {
+  dailyTotal: number;
+  showSubmitUI: boolean;
+  canSubmit: boolean;
+  hoursToGo: number;
+  isSubmitted: boolean;
+  isLoading: boolean;
+  onSubmit?: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <span className="text-[13px] font-medium text-[var(--text-secondary)]">Daily Total: </span>
+        <span className="text-base text-[var(--accent-pink)]">{formatHours(dailyTotal)}</span>
+      </div>
+      {showSubmitUI && onSubmit && (
+        <SubmitStatus
+          canSubmit={canSubmit}
+          hoursToGo={hoursToGo}
+          isSubmitted={isSubmitted}
+          isLoading={isLoading}
+          onSubmit={onSubmit}
+        />
+      )}
+    </div>
+  );
+}
 
 interface EntriesListProps {
   entries: TimeEntry[];
@@ -15,6 +96,11 @@ interface EntriesListProps {
   readOnly?: boolean;
   clients?: ClientWithType[];
   topics?: Topic[];
+  // Submit functionality (optional - only shown when provided and not readOnly)
+  totalHours?: number;
+  isSubmitted?: boolean;
+  isLoading?: boolean;
+  onSubmit?: () => void;
 }
 
 export function EntriesList({
@@ -25,12 +111,20 @@ export function EntriesList({
   readOnly = false,
   clients = [],
   topics = [],
+  totalHours,
+  isSubmitted = false,
+  isLoading = false,
+  onSubmit,
 }: EntriesListProps) {
   const [entryToDelete, setEntryToDelete] = useState<TimeEntry | null>(null);
 
   const dailyTotal = useMemo(() => {
     return entries.reduce((sum, entry) => sum + entry.hours, 0);
   }, [entries]);
+
+  const canSubmit = totalHours !== undefined && totalHours >= MIN_SUBMISSION_HOURS;
+  const hoursToGo = totalHours !== undefined ? Math.max(0, MIN_SUBMISSION_HOURS - totalHours) : 0;
+  const showSubmitUI = totalHours !== undefined && onSubmit && !readOnly;
 
   const handleConfirmDelete = () => {
     if (entryToDelete && onDeleteEntry) {
@@ -71,10 +165,17 @@ export function EntriesList({
                 readOnly={readOnly}
               />
             ))}
-            {/* Daily Total */}
-            <div className="pt-2 text-center border-t border-[var(--border-subtle)]">
-              <span className="text-[13px] font-medium text-[var(--text-secondary)]">Daily Total: </span>
-              <span className="text-base text-[var(--accent-pink)]">{formatHours(dailyTotal)}</span>
+            {/* Daily Total + Submit */}
+            <div className="pt-2 border-t border-[var(--border-subtle)]">
+              <DailyFooter
+                dailyTotal={dailyTotal}
+                showSubmitUI={showSubmitUI}
+                canSubmit={canSubmit}
+                hoursToGo={hoursToGo}
+                isSubmitted={isSubmitted}
+                isLoading={isLoading}
+                onSubmit={onSubmit}
+              />
             </div>
           </div>
 
@@ -115,11 +216,16 @@ export function EntriesList({
               </tbody>
               <tfoot>
                 <tr className="bg-[var(--bg-surface)]">
-                  <td colSpan={readOnly ? 4 : 5} className="px-4 py-3 text-center">
-                    <span className="text-[13px] font-medium text-[var(--text-secondary)]">Daily Total: </span>
-                    <span className="text-base text-[var(--accent-pink)]">
-                      {formatHours(dailyTotal)}
-                    </span>
+                  <td colSpan={readOnly ? 4 : 5} className="px-4 py-3">
+                    <DailyFooter
+                      dailyTotal={dailyTotal}
+                      showSubmitUI={showSubmitUI}
+                      canSubmit={canSubmit}
+                      hoursToGo={hoursToGo}
+                      isSubmitted={isSubmitted}
+                      isLoading={isLoading}
+                      onSubmit={onSubmit}
+                    />
                   </td>
                 </tr>
               </tfoot>

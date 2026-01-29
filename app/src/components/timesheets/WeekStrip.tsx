@@ -7,7 +7,6 @@ import { useClickOutside } from "@/hooks/useClickOutside";
 interface WeekStripProps {
   selectedDate: Date;
   today: Date;
-  datesWithEntries: Set<string>;
   submittedDates?: Set<string>;
   overdueDates?: Set<string>;
   onSelectDate: (date: Date) => void;
@@ -22,11 +21,11 @@ interface WeekStripProps {
 
 /**
  * Returns the appropriate status icon for a date based on submission status.
- * Priority: submitted > overdue > null (fall back to entry dot)
+ * Priority: submitted > overdue > null
  *
  * Design: Pill badges with filled icons for clear visual hierarchy
  */
-function getStatusIcon(dateStr: string, submittedDates: Set<string>, overdueDates: Set<string>, isSelected: boolean, compact = false) {
+function getStatusIcon(dateStr: string, submittedDates: Set<string>, overdueDates: Set<string>, compact = false) {
   if (submittedDates.has(dateStr)) {
     // Green pill badge with checkmark
     return (
@@ -34,10 +33,7 @@ function getStatusIcon(dateStr: string, submittedDates: Set<string>, overdueDate
         className={`
           inline-flex items-center justify-center rounded-full
           ${compact ? "w-4 h-4" : "w-5 h-5"}
-          ${isSelected
-            ? "bg-[var(--bg-deep)]/30 text-[var(--bg-deep)]"
-            : "bg-[var(--success)] text-white shadow-sm shadow-[var(--success)]/30"
-          }
+          bg-[var(--success)] text-white shadow-sm shadow-[var(--success)]/30
         `}
       >
         <svg
@@ -60,10 +56,7 @@ function getStatusIcon(dateStr: string, submittedDates: Set<string>, overdueDate
         className={`
           inline-flex items-center justify-center rounded-full animate-pulse
           ${compact ? "w-4 h-4" : "w-5 h-5"}
-          ${isSelected
-            ? "bg-[var(--bg-deep)]/30 text-[var(--bg-deep)]"
-            : "bg-[var(--danger)] text-white shadow-sm shadow-[var(--danger)]/40"
-          }
+          bg-[var(--danger)] text-white shadow-sm shadow-[var(--danger)]/40
         `}
       >
         <svg
@@ -86,7 +79,6 @@ const EMPTY_SET = new Set<string>();
 export function WeekStrip({
   selectedDate,
   today,
-  datesWithEntries,
   submittedDates = EMPTY_SET,
   overdueDates = EMPTY_SET,
   onSelectDate,
@@ -163,7 +155,6 @@ export function WeekStrip({
   const isToday = (date: Date): boolean => formatDateISO(date) === formatDateISO(today);
   const isSelected = (date: Date): boolean => formatDateISO(date) === formatDateISO(selectedDate);
   const isWeekend = (date: Date): boolean => date.getDay() === 0 || date.getDay() === 6;
-  const hasEntries = (date: Date): boolean => datesWithEntries.has(formatDateISO(date));
 
   return (
     <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-3">
@@ -187,8 +178,7 @@ export function WeekStrip({
             const selected = isSelected(day);
             const todayDay = isToday(day);
             const weekend = isWeekend(day);
-            const hasEntry = hasEntries(day);
-            const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, selected, false);
+            const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, false);
 
             return (
               <button
@@ -198,25 +188,20 @@ export function WeekStrip({
                   relative flex flex-col items-center gap-0.5 px-2 py-2 rounded
                   transition-all duration-200 flex-1 cursor-pointer
                   ${selected
-                    ? "bg-[var(--accent-pink)] text-[var(--bg-deep)] shadow-lg shadow-[var(--accent-pink-glow)]"
+                    ? "ring-2 ring-[var(--accent-pink)] bg-[var(--bg-surface)]"
                     : "hover:bg-[var(--bg-surface)]"
                   }
-                  ${todayDay && !selected ? "ring-1 ring-[var(--accent-pink)] ring-offset-1 ring-offset-[var(--bg-elevated)]" : ""}
                 `}
               >
-                <span className={`text-[10px] font-medium uppercase tracking-wider ${selected ? "text-[var(--bg-deep)]/70" : weekend ? "text-[var(--text-muted)]/60" : "text-[var(--text-muted)]"}`}>
+                <span className={`text-[10px] font-medium uppercase tracking-wider ${weekend ? "text-[var(--text-muted)]/60" : "text-[var(--text-muted)]"}`}>
                   {getDayName(day)}
                 </span>
-                <span className={`text-base font-heading font-semibold ${selected ? "text-[var(--bg-deep)]" : weekend ? "text-[var(--text-primary)]/70" : "text-[var(--text-primary)]"}`}>
+                <span className={`text-base font-heading font-semibold ${todayDay ? "text-[var(--accent-pink)]" : weekend ? "text-[var(--text-primary)]/70" : "text-[var(--text-primary)]"}`}>
                   {day.getDate()}
                 </span>
-                {/* Status badge (submitted/overdue) or entry indicator dot */}
+                {/* Status badge (submitted/overdue) */}
                 <span className="h-5 flex items-center justify-center">
-                  {statusIcon ? (
-                    statusIcon
-                  ) : hasEntry ? (
-                    <span className={`w-1.5 h-1.5 rounded-full ${selected ? "bg-[var(--bg-deep)]" : "bg-[var(--accent-pink)]"}`} />
-                  ) : null}
+                  {statusIcon}
                 </span>
               </button>
             );
@@ -303,8 +288,7 @@ export function WeekStrip({
                       const selected = isSelected(day);
                       const todayDay = isToday(day);
                       const weekend = isWeekend(day);
-                      const hasEntry = hasEntries(day);
-                      const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, selected, true);
+                      const statusIcon = getStatusIcon(dateStr, submittedDates, overdueDates, true);
 
                       return (
                         <button
@@ -314,19 +298,16 @@ export function WeekStrip({
                             relative w-8 h-8 rounded text-[12px] font-medium
                             transition-all duration-200 cursor-pointer flex flex-col items-center justify-center
                             ${selected
-                              ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                              ? "ring-2 ring-[var(--accent-pink)] bg-[var(--bg-surface)]"
                               : "hover:bg-[var(--bg-surface)]"
                             }
-                            ${todayDay && !selected ? "ring-1 ring-[var(--accent-pink)]" : ""}
-                            ${!selected && weekend ? "text-[var(--text-muted)]" : !selected ? "text-[var(--text-primary)]" : ""}
+                            ${todayDay ? "text-[var(--accent-pink)]" : weekend ? "text-[var(--text-muted)]" : "text-[var(--text-primary)]"}
                           `}
                         >
                           <span className={statusIcon ? "-mt-0.5" : ""}>{day.getDate()}</span>
-                          {/* Status badge (submitted/overdue) or entry indicator dot */}
-                          {statusIcon ? (
+                          {/* Status badge (submitted/overdue) */}
+                          {statusIcon && (
                             <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2">{statusIcon}</span>
-                          ) : hasEntry && (
-                            <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${selected ? "bg-[var(--bg-deep)]" : "bg-[var(--accent-pink)]"}`} />
                           )}
                         </button>
                       );

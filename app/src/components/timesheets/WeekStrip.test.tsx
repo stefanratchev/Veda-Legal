@@ -65,7 +65,6 @@ describe("WeekStrip", () => {
   const defaultProps = {
     selectedDate,
     today,
-    datesWithEntries: new Set<string>(),
     onSelectDate: mockOnSelectDate,
     onPrevWeek: mockOnPrevWeek,
     onNextWeek: mockOnNextWeek,
@@ -133,7 +132,7 @@ describe("WeekStrip", () => {
   });
 
   describe("Selected Date Highlighting", () => {
-    it("highlights the selected date with accent styling", () => {
+    it("highlights the selected date with ring styling", () => {
       render(<WeekStrip {...defaultProps} />);
 
       // Find the button for Dec 26 (selected date)
@@ -144,10 +143,11 @@ describe("WeekStrip", () => {
       );
 
       expect(selectedButton).toBeTruthy();
-      expect(selectedButton).toHaveClass("bg-[var(--accent-pink)]");
+      expect(selectedButton).toHaveClass("ring-2");
+      expect(selectedButton).toHaveClass("ring-[var(--accent-pink)]");
     });
 
-    it("selected date has different text color", () => {
+    it("selected date has subtle background", () => {
       render(<WeekStrip {...defaultProps} />);
 
       const dayButtons = screen.getAllByRole("button");
@@ -155,12 +155,12 @@ describe("WeekStrip", () => {
         btn.textContent?.includes("26") && btn.textContent?.includes("Thu")
       );
 
-      expect(selectedButton).toHaveClass("text-[var(--bg-deep)]");
+      expect(selectedButton).toHaveClass("bg-[var(--bg-surface)]");
     });
   });
 
   describe("Today Highlighting", () => {
-    it("highlights today when it differs from selected date", () => {
+    it("highlights today with pink date number when not selected", () => {
       // Today is Dec 26, selected is Dec 24
       const differentSelectedDate = new Date(2024, 11, 24);
 
@@ -178,13 +178,13 @@ describe("WeekStrip", () => {
         btn.textContent?.includes("26") && btn.textContent?.includes("Thu")
       );
 
-      // Today (not selected) should have ring styling
-      expect(todayButton).toHaveClass("ring-1");
-      expect(todayButton).toHaveClass("ring-[var(--accent-pink)]");
+      // Today's date number should be pink
+      const dateNumber = todayButton?.querySelectorAll("span")[1]; // Second span is the date number
+      expect(dateNumber).toHaveClass("text-[var(--accent-pink)]");
     });
 
-    it("selected date does not have today ring when same as today", () => {
-      // When selected === today, should have selected styling, not today ring
+    it("today has both ring and pink date when selected", () => {
+      // When selected === today, should have both ring and pink date number
       render(<WeekStrip {...defaultProps} />);
 
       const dayButtons = screen.getAllByRole("button");
@@ -192,10 +192,13 @@ describe("WeekStrip", () => {
         btn.textContent?.includes("26") && btn.textContent?.includes("Thu")
       );
 
-      // Should have selected bg, not the ring styling
-      expect(selectedButton).toHaveClass("bg-[var(--accent-pink)]");
-      // The ring class should only apply when todayDay && !selected
-      // When both are true, only selected styling applies
+      // Should have selection ring
+      expect(selectedButton).toHaveClass("ring-2");
+      expect(selectedButton).toHaveClass("ring-[var(--accent-pink)]");
+
+      // Date number should still be pink for today
+      const dateNumber = selectedButton?.querySelectorAll("span")[1];
+      expect(dateNumber).toHaveClass("text-[var(--accent-pink)]");
     });
   });
 
@@ -242,32 +245,6 @@ describe("WeekStrip", () => {
       fireEvent.click(screen.getByText("Today"));
 
       expect(mockOnGoToToday).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("Entry Indicators", () => {
-    it("shows entry indicator dot for dates with entries", () => {
-      const datesWithEntries = new Set(["2024-12-24", "2024-12-26"]);
-
-      const { container } = render(
-        <WeekStrip {...defaultProps} datesWithEntries={datesWithEntries} />
-      );
-
-      // Entry indicators are small dots (w-1.5 h-1.5 rounded-full)
-      const indicators = container.querySelectorAll(".w-1\\.5.h-1\\.5.rounded-full");
-      expect(indicators.length).toBe(2);
-    });
-
-    it("does not show indicator for dates without entries", () => {
-      const datesWithEntries = new Set(["2024-12-24"]);
-
-      const { container } = render(
-        <WeekStrip {...defaultProps} datesWithEntries={datesWithEntries} />
-      );
-
-      // Only one indicator should exist
-      const indicators = container.querySelectorAll(".w-1\\.5.h-1\\.5.rounded-full");
-      expect(indicators.length).toBe(1);
     });
   });
 

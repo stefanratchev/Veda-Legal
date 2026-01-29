@@ -273,7 +273,7 @@ describe("EntriesList", () => {
     it("disables submit button when loading", () => {
       render(<EntriesList {...defaultProps} {...submitProps} totalHours={8.5} isLoading />);
 
-      const submitButtons = screen.getAllByRole("button", { name: /Submit Timesheet/ });
+      const submitButtons = screen.getAllByRole("button", { name: /Submitting/ });
       submitButtons.forEach(btn => {
         expect(btn).toBeDisabled();
       });

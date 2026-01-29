@@ -228,6 +228,71 @@ describe("EntriesList", () => {
     });
   });
 
+  describe("Submit Functionality", () => {
+    const submitProps = {
+      totalHours: 6.5,
+      isSubmitted: false,
+      isLoading: false,
+      onSubmit: vi.fn(),
+    };
+
+    beforeEach(() => {
+      submitProps.onSubmit = vi.fn();
+    });
+
+    it("shows remaining hours when under 8 hours", () => {
+      render(<EntriesList {...defaultProps} {...submitProps} totalHours={6.5} />);
+
+      // 8 - 6.5 = 1.5 hours = "1h 30m to go"
+      expect(screen.getAllByText(/1h 30m to go/)).toHaveLength(2); // mobile + desktop
+    });
+
+    it("shows submit button when 8+ hours logged", () => {
+      render(<EntriesList {...defaultProps} {...submitProps} totalHours={8.5} />);
+
+      const submitButtons = screen.getAllByText("Submit Timesheet →");
+      expect(submitButtons).toHaveLength(2); // mobile + desktop
+    });
+
+    it("calls onSubmit when submit button is clicked", () => {
+      render(<EntriesList {...defaultProps} {...submitProps} totalHours={8.5} />);
+
+      const submitButtons = screen.getAllByText("Submit Timesheet →");
+      fireEvent.click(submitButtons[0]);
+
+      expect(submitProps.onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows submitted state after submission", () => {
+      render(<EntriesList {...defaultProps} {...submitProps} totalHours={8.5} isSubmitted />);
+
+      expect(screen.getAllByText(/Timesheet Submitted/)).toHaveLength(2);
+      expect(screen.queryByText("Submit Timesheet →")).not.toBeInTheDocument();
+    });
+
+    it("disables submit button when loading", () => {
+      render(<EntriesList {...defaultProps} {...submitProps} totalHours={8.5} isLoading />);
+
+      const submitButtons = screen.getAllByRole("button", { name: /Submit Timesheet/ });
+      submitButtons.forEach(btn => {
+        expect(btn).toBeDisabled();
+      });
+    });
+
+    it("does not show submit UI when props are not provided", () => {
+      render(<EntriesList {...defaultProps} />);
+
+      expect(screen.queryByText(/to go/)).not.toBeInTheDocument();
+      expect(screen.queryByText("Submit Timesheet →")).not.toBeInTheDocument();
+    });
+
+    it("does not show submit UI in readOnly mode", () => {
+      render(<EntriesList {...defaultProps} {...submitProps} totalHours={8.5} readOnly />);
+
+      expect(screen.queryByText("Submit Timesheet →")).not.toBeInTheDocument();
+    });
+  });
+
   describe("Empty State", () => {
     it("shows empty state when no entries", () => {
       render(<EntriesList {...defaultProps} entries={[]} />);

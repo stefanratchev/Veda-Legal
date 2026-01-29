@@ -7,6 +7,9 @@ import { formatDateISO } from "./date-utils";
 /** Minimum hours required for a valid submission */
 export const MIN_SUBMISSION_HOURS = 8;
 
+/** First date that can be marked overdue (system launch date) */
+export const TRACKING_START_DATE = "2026-02-01";
+
 /** Default number of days to look back for overdue dates */
 export const DEFAULT_LOOKBACK_DAYS = 30;
 
@@ -98,6 +101,11 @@ export function isOverdue(workday: Date, now: Date): boolean {
   const workdayISO = formatDateISO(workday);
   const nowISO = formatDateISO(now);
   if (workdayISO > nowISO) {
+    return false;
+  }
+
+  // Dates before system launch are never overdue
+  if (workdayISO < TRACKING_START_DATE) {
     return false;
   }
 

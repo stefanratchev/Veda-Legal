@@ -124,7 +124,7 @@ export function EntriesList({
 
   const canSubmit = totalHours !== undefined && totalHours >= MIN_SUBMISSION_HOURS;
   const hoursToGo = totalHours !== undefined ? Math.max(0, MIN_SUBMISSION_HOURS - totalHours) : 0;
-  const showSubmitUI = totalHours !== undefined && onSubmit && !readOnly;
+  const showSubmitUI = totalHours !== undefined && !!onSubmit && !readOnly;
 
   const handleConfirmDelete = () => {
     if (entryToDelete && onDeleteEntry) {

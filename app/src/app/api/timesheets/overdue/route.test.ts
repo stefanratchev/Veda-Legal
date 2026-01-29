@@ -63,13 +63,13 @@ function setupAuthenticatedUser(user: MockUser) {
 describe("GET /api/timesheets/overdue", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Set time to Wednesday 2026-01-28 at 11:00 UTC
+    // Set time to Wednesday 2026-02-11 at 11:00 UTC
     // This means:
-    // - Monday 2026-01-26 deadline passed (Tuesday 10am)
-    // - Tuesday 2026-01-27 deadline passed (Wednesday 10am)
-    // - Wednesday 2026-01-28 deadline NOT passed yet (Thursday 10am)
+    // - Monday 2026-02-09 deadline passed (Tuesday 10am)
+    // - Tuesday 2026-02-10 deadline passed (Wednesday 10am)
+    // - Wednesday 2026-02-11 deadline NOT passed yet (Thursday 10am)
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-01-28T11:00:00.000Z"));
+    vi.setSystemTime(new Date("2026-02-11T11:00:00.000Z"));
   });
 
   afterEach(() => {
@@ -131,15 +131,15 @@ describe("GET /api/timesheets/overdue", () => {
 
       expect(response.status).toBe(200);
       // Should include weekdays from past 30 days where deadline has passed
-      // At 2026-01-28 11:00 UTC:
-      // - Monday 2026-01-26 is overdue (deadline was Tuesday 10am)
-      // - Tuesday 2026-01-27 is overdue (deadline was Wednesday 10am)
-      // Plus all weekdays going back 30 days
+      // At 2026-02-11 11:00 UTC:
+      // - Monday 2026-02-09 is overdue (deadline was Tuesday 10am)
+      // - Tuesday 2026-02-10 is overdue (deadline was Wednesday 10am)
+      // Plus all weekdays going back to Feb 2 (first weekday after launch)
       expect(data.overdue).toBeInstanceOf(Array);
-      expect(data.overdue).toContain("2026-01-26");
-      expect(data.overdue).toContain("2026-01-27");
-      // Wednesday 2026-01-28 should NOT be included (deadline is Thursday 10am)
-      expect(data.overdue).not.toContain("2026-01-28");
+      expect(data.overdue).toContain("2026-02-09");
+      expect(data.overdue).toContain("2026-02-10");
+      // Wednesday 2026-02-11 should NOT be included (deadline is Thursday 10am)
+      expect(data.overdue).not.toContain("2026-02-11");
     });
 
     it("returns empty array when all submitted", async () => {
@@ -150,7 +150,7 @@ describe("GET /api/timesheets/overdue", () => {
       // Generate submissions for all weekdays in the past 30 days
       const submissions = [];
       for (let i = 30; i >= 0; i--) {
-        const date = new Date("2026-01-28");
+        const date = new Date("2026-02-11");
         date.setDate(date.getDate() - i);
         const day = date.getDay();
         // Only weekdays
@@ -159,7 +159,7 @@ describe("GET /api/timesheets/overdue", () => {
             id: `sub-${i}`,
             userId: user.id,
             date: date.toISOString().split("T")[0],
-            submittedAt: "2026-01-28T10:00:00.000Z",
+            submittedAt: "2026-02-11T10:00:00.000Z",
           });
         }
       }
@@ -188,8 +188,8 @@ describe("GET /api/timesheets/overdue", () => {
         {
           id: "sub-1",
           userId: user.id,
-          date: "2026-01-26", // Monday
-          submittedAt: "2026-01-27T09:00:00.000Z",
+          date: "2026-02-09", // Monday
+          submittedAt: "2026-02-10T09:00:00.000Z",
         },
       ]);
 
@@ -203,9 +203,9 @@ describe("GET /api/timesheets/overdue", () => {
 
       expect(response.status).toBe(200);
       // Monday is submitted, should not be in overdue
-      expect(data.overdue).not.toContain("2026-01-26");
+      expect(data.overdue).not.toContain("2026-02-09");
       // Tuesday is not submitted, should be overdue
-      expect(data.overdue).toContain("2026-01-27");
+      expect(data.overdue).toContain("2026-02-10");
     });
 
     it("returns empty array for CONSULTANT (not required to submit)", async () => {
@@ -273,7 +273,7 @@ describe("GET /api/timesheets/overdue", () => {
       // User 1 submitted Monday only, User 2 submitted nothing
       // Admin submitted everything (but we want to verify admin sees all users)
       mockDb.query.timesheetSubmissions.findMany.mockResolvedValue([
-        { id: "sub-1", userId: user1.id, date: "2026-01-26", submittedAt: "2026-01-27T09:00:00.000Z" },
+        { id: "sub-1", userId: user1.id, date: "2026-02-09", submittedAt: "2026-02-10T09:00:00.000Z" },
       ]);
 
       const request = createMockRequest({
@@ -294,14 +294,14 @@ describe("GET /api/timesheets/overdue", () => {
       // User 1 submitted Monday, so only Tuesday should be overdue
       expect(user1Entry).toBeDefined();
       expect(user1Entry.name).toBe("John Doe");
-      expect(user1Entry.dates).not.toContain("2026-01-26");
-      expect(user1Entry.dates).toContain("2026-01-27");
+      expect(user1Entry.dates).not.toContain("2026-02-09");
+      expect(user1Entry.dates).toContain("2026-02-10");
 
       // User 2 submitted nothing, so both days should be overdue
       expect(user2Entry).toBeDefined();
       expect(user2Entry.name).toBe("Jane Smith");
-      expect(user2Entry.dates).toContain("2026-01-26");
-      expect(user2Entry.dates).toContain("2026-01-27");
+      expect(user2Entry.dates).toContain("2026-02-09");
+      expect(user2Entry.dates).toContain("2026-02-10");
     });
 
     it("excludes ADMIN and CONSULTANT from team overdue list", async () => {
@@ -374,7 +374,7 @@ describe("GET /api/timesheets/overdue", () => {
       // Generate submissions for all weekdays for user1 in the past 30 days
       const submissions = [];
       for (let i = 30; i >= 0; i--) {
-        const date = new Date("2026-01-28");
+        const date = new Date("2026-02-11");
         date.setDate(date.getDate() - i);
         const day = date.getDay();
         if (day >= 1 && day <= 5) {
@@ -382,7 +382,7 @@ describe("GET /api/timesheets/overdue", () => {
             id: `sub-${i}`,
             userId: user1.id,
             date: date.toISOString().split("T")[0],
-            submittedAt: "2026-01-28T10:00:00.000Z",
+            submittedAt: "2026-02-11T10:00:00.000Z",
           });
         }
       }

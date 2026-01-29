@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatHours } from "@/lib/date-utils";
+import { MIN_SUBMISSION_HOURS } from "@/lib/submission-utils";
 import { EntryRow } from "./EntryRow";
 import { EntryCard } from "./EntryCard";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -50,6 +51,43 @@ function SubmitStatus({
   );
 }
 
+// Shared footer component for daily total and submit status
+function DailyFooter({
+  dailyTotal,
+  showSubmitUI,
+  canSubmit,
+  hoursToGo,
+  isSubmitted,
+  isLoading,
+  onSubmit,
+}: {
+  dailyTotal: number;
+  showSubmitUI: boolean;
+  canSubmit: boolean;
+  hoursToGo: number;
+  isSubmitted: boolean;
+  isLoading: boolean;
+  onSubmit?: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <span className="text-[13px] font-medium text-[var(--text-secondary)]">Daily Total: </span>
+        <span className="text-base text-[var(--accent-pink)]">{formatHours(dailyTotal)}</span>
+      </div>
+      {showSubmitUI && onSubmit && (
+        <SubmitStatus
+          canSubmit={canSubmit}
+          hoursToGo={hoursToGo}
+          isSubmitted={isSubmitted}
+          isLoading={isLoading}
+          onSubmit={onSubmit}
+        />
+      )}
+    </div>
+  );
+}
+
 interface EntriesListProps {
   entries: TimeEntry[];
   isLoadingEntries: boolean;
@@ -84,9 +122,8 @@ export function EntriesList({
     return entries.reduce((sum, entry) => sum + entry.hours, 0);
   }, [entries]);
 
-  const MIN_HOURS = 8;
-  const canSubmit = totalHours !== undefined && totalHours >= MIN_HOURS;
-  const hoursToGo = totalHours !== undefined ? Math.max(0, MIN_HOURS - totalHours) : 0;
+  const canSubmit = totalHours !== undefined && totalHours >= MIN_SUBMISSION_HOURS;
+  const hoursToGo = totalHours !== undefined ? Math.max(0, MIN_SUBMISSION_HOURS - totalHours) : 0;
   const showSubmitUI = totalHours !== undefined && onSubmit && !readOnly;
 
   const handleConfirmDelete = () => {
@@ -129,20 +166,16 @@ export function EntriesList({
               />
             ))}
             {/* Daily Total + Submit */}
-            <div className="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between">
-              <div>
-                <span className="text-[13px] font-medium text-[var(--text-secondary)]">Daily Total: </span>
-                <span className="text-base text-[var(--accent-pink)]">{formatHours(dailyTotal)}</span>
-              </div>
-              {showSubmitUI && (
-                <SubmitStatus
-                  canSubmit={canSubmit}
-                  hoursToGo={hoursToGo}
-                  isSubmitted={isSubmitted}
-                  isLoading={isLoading}
-                  onSubmit={onSubmit!}
-                />
-              )}
+            <div className="pt-2 border-t border-[var(--border-subtle)]">
+              <DailyFooter
+                dailyTotal={dailyTotal}
+                showSubmitUI={showSubmitUI}
+                canSubmit={canSubmit}
+                hoursToGo={hoursToGo}
+                isSubmitted={isSubmitted}
+                isLoading={isLoading}
+                onSubmit={onSubmit}
+              />
             </div>
           </div>
 
@@ -184,23 +217,15 @@ export function EntriesList({
               <tfoot>
                 <tr className="bg-[var(--bg-surface)]">
                   <td colSpan={readOnly ? 4 : 5} className="px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-[13px] font-medium text-[var(--text-secondary)]">Daily Total: </span>
-                        <span className="text-base text-[var(--accent-pink)]">
-                          {formatHours(dailyTotal)}
-                        </span>
-                      </div>
-                      {showSubmitUI && (
-                        <SubmitStatus
-                          canSubmit={canSubmit}
-                          hoursToGo={hoursToGo}
-                          isSubmitted={isSubmitted}
-                          isLoading={isLoading}
-                          onSubmit={onSubmit!}
-                        />
-                      )}
-                    </div>
+                    <DailyFooter
+                      dailyTotal={dailyTotal}
+                      showSubmitUI={showSubmitUI}
+                      canSubmit={canSubmit}
+                      hoursToGo={hoursToGo}
+                      isSubmitted={isSubmitted}
+                      isLoading={isLoading}
+                      onSubmit={onSubmit}
+                    />
                   </td>
                 </tr>
               </tfoot>

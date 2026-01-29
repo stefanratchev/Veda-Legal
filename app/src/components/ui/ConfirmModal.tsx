@@ -25,7 +25,10 @@ export function ConfirmModal({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
-      if (e.key === "Enter") onConfirm();
+      // Only handle Enter if not already triggered by button focus (prevents double-fire)
+      if (e.key === "Enter" && document.activeElement?.tagName !== "BUTTON") {
+        onConfirm();
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);

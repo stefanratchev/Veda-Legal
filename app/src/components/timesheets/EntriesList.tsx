@@ -15,6 +15,11 @@ interface EntriesListProps {
   readOnly?: boolean;
   clients?: ClientWithType[];
   topics?: Topic[];
+  // Submit functionality (optional - only shown when provided and not readOnly)
+  totalHours?: number;
+  isSubmitted?: boolean;
+  isLoading?: boolean;
+  onSubmit?: () => void;
 }
 
 export function EntriesList({
@@ -25,6 +30,10 @@ export function EntriesList({
   readOnly = false,
   clients = [],
   topics = [],
+  totalHours,
+  isSubmitted = false,
+  isLoading = false,
+  onSubmit,
 }: EntriesListProps) {
   const [entryToDelete, setEntryToDelete] = useState<TimeEntry | null>(null);
 

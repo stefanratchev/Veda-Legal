@@ -46,7 +46,7 @@ function SubmitStatus({
 
   return (
     <span className="text-[13px] text-[var(--text-muted)]">
-      {formatHours(hoursToGo)} to go
+      {formatHours(hoursToGo)} until submit
     </span>
   );
 }
@@ -216,17 +216,23 @@ export function EntriesList({
               </tbody>
               <tfoot>
                 <tr className="bg-[var(--bg-surface)]">
-                  <td colSpan={readOnly ? 4 : 5} className="px-4 py-3">
-                    <DailyFooter
-                      dailyTotal={dailyTotal}
-                      showSubmitUI={showSubmitUI}
-                      canSubmit={canSubmit}
-                      hoursToGo={hoursToGo}
-                      isSubmitted={isSubmitted}
-                      isLoading={isLoading}
-                      onSubmit={onSubmit}
-                    />
+                  <td className="px-4 py-3"></td>
+                  <td className="px-4 py-3"></td>
+                  <td className="px-4 py-3 text-right text-[13px] text-[var(--accent-pink)] whitespace-nowrap">
+                    {formatHours(dailyTotal)}
                   </td>
+                  <td className="px-4 py-3">
+                    {showSubmitUI && onSubmit && (
+                      <SubmitStatus
+                        canSubmit={canSubmit}
+                        hoursToGo={hoursToGo}
+                        isSubmitted={isSubmitted}
+                        isLoading={isLoading}
+                        onSubmit={onSubmit}
+                      />
+                    )}
+                  </td>
+                  {!readOnly && <td className="px-4 py-3"></td>}
                 </tr>
               </tfoot>
             </table>

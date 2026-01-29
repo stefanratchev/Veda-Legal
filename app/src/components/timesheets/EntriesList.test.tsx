@@ -222,9 +222,13 @@ describe("EntriesList", () => {
     it("shows daily total in both mobile and desktop views", () => {
       render(<EntriesList {...defaultProps} />);
 
-      // "Daily Total:" label should appear twice (mobile + desktop)
+      // "Daily Total:" label appears in mobile view only
       const totalLabels = screen.getAllByText("Daily Total:");
-      expect(totalLabels).toHaveLength(2);
+      expect(totalLabels).toHaveLength(1);
+
+      // Hours value (4h = 2.5 + 1 + 0.5) appears twice (mobile + desktop footer)
+      const hoursValues = screen.getAllByText("4h");
+      expect(hoursValues).toHaveLength(2);
     });
   });
 

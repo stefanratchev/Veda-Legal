@@ -247,8 +247,8 @@ describe("EntriesList", () => {
     it("shows remaining hours when under 8 hours", () => {
       render(<EntriesList {...defaultProps} {...submitProps} totalHours={6.5} />);
 
-      // 8 - 6.5 = 1.5 hours = "1h 30m to go"
-      expect(screen.getAllByText(/1h 30m to go/)).toHaveLength(2); // mobile + desktop
+      // 8 - 6.5 = 1.5 hours = "1h 30m until submit"
+      expect(screen.getAllByText(/1h 30m until submit/)).toHaveLength(2); // mobile + desktop
     });
 
     it("shows submit button when 8+ hours logged", () => {

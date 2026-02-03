@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { formatDateISO, toDecimalHours } from "@/lib/date-utils";
+import { useCurrentDate } from "@/hooks/useCurrentDate";
 import { MIN_SUBMISSION_HOURS } from "@/lib/submission-utils";
 import { WeekStrip } from "./WeekStrip";
 import { EntryForm } from "./EntryForm";
@@ -19,8 +20,8 @@ interface TimesheetsContentProps {
 }
 
 export function TimesheetsContent({ clients, topics, userName }: TimesheetsContentProps) {
-  const today = useMemo(() => new Date(), []);
-  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const today = useCurrentDate();
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [teamSummaries, setTeamSummaries] = useState<TeamSummary[]>([]);
   const [formData, setFormData] = useState<FormData>(initialFormData);

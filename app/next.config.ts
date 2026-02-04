@@ -37,8 +37,8 @@ const nextConfig: NextConfig = {
             value:
               "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://login.microsoftonline.com;",
           },
-          // Add HSTS in production (uncomment when deploying)
-          // { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+          // HSTS - Enable HTTPS enforcement in production
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
         ],
       },
     ];

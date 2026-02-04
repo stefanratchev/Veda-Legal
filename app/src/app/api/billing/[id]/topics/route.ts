@@ -3,13 +3,13 @@ import { eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
-import { requireWriteAccess, serializeDecimal, errorResponse } from "@/lib/api-utils";
+import { requireAdmin, serializeDecimal, errorResponse } from "@/lib/api-utils";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-// POST /api/billing/[id]/topics - Add topic
+// POST /api/billing/[id]/topics - Add topic (admin only)
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

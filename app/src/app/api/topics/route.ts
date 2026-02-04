@@ -3,7 +3,7 @@ import { eq, asc, max, and } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import { topics, subtopics } from "@/lib/schema";
-import { requireAuth, requireWriteAccess, errorResponse } from "@/lib/api-utils";
+import { requireAuth, requireAdmin, errorResponse } from "@/lib/api-utils";
 
 const VALID_TOPIC_TYPES = ["REGULAR", "INTERNAL", "MANAGEMENT"] as const;
 type TopicType = (typeof VALID_TOPIC_TYPES)[number];
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
 
 // POST /api/topics - Create topic (admin only)
 export async function POST(request: NextRequest) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

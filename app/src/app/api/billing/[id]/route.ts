@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { serviceDescriptions } from "@/lib/schema";
 import {
   requireAuth,
-  requireWriteAccess,
+  requireAdmin,
   serializeDecimal,
   errorResponse,
   getUserFromSession,
@@ -162,9 +162,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// PATCH /api/billing/[id] - Update status (finalize/unlock)
+// PATCH /api/billing/[id] - Update status (finalize/unlock) - admin only
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -229,9 +229,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// DELETE /api/billing/[id] - Delete draft service description
+// DELETE /api/billing/[id] - Delete draft service description (admin only)
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

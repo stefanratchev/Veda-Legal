@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
-import { requireWriteAccess, serializeDecimal, errorResponse } from "@/lib/api-utils";
+import { requireAdmin, serializeDecimal, errorResponse } from "@/lib/api-utils";
 
 type RouteParams = { params: Promise<{ id: string; topicId: string }> };
 
-// PATCH /api/billing/[id]/topics/[topicId] - Update topic
+// PATCH /api/billing/[id]/topics/[topicId] - Update topic (admin only)
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -87,9 +87,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// DELETE /api/billing/[id]/topics/[topicId] - Delete topic
+// DELETE /api/billing/[id]/topics/[topicId] - Delete topic (admin only)
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

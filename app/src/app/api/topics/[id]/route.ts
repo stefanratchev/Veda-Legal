@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, asc, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { topics, subtopics } from "@/lib/schema";
-import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
+import { requireAdmin, errorResponse } from "@/lib/api-utils";
 
 const VALID_TOPIC_TYPES = ["REGULAR", "INTERNAL", "MANAGEMENT"] as const;
 
@@ -10,9 +10,9 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// PATCH /api/topics/[id] - Update topic
+// PATCH /api/topics/[id] - Update topic (admin only)
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -106,9 +106,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 }
 
-// DELETE /api/topics/[id] - Delete topic (only if no subtopics)
+// DELETE /api/topics/[id] - Delete topic (admin only, only if no subtopics)
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

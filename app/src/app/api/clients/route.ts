@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { clients } from "@/lib/schema";
 import {
   requireAuth,
-  requireWriteAccess,
+  requireAdmin,
   isValidEmail,
   serializeDecimal,
   errorResponse,
@@ -85,9 +85,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/clients - Create client
+// POST /api/clients - Create client (admin only)
 export async function POST(request: NextRequest) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -136,14 +136,6 @@ export async function POST(request: NextRequest) {
     return errorResponse("Invalid client type value", 400);
   }
 
-  // Only admins can create MANAGEMENT clients
-  if (validatedClientType === "MANAGEMENT") {
-    const postUser = await getUserFromSession(auth.session.user?.email);
-    if (!postUser || !hasAdminAccess(postUser.position)) {
-      return errorResponse("Only administrators can create management clients", 403);
-    }
-  }
-
   try {
     const now = new Date().toISOString();
     const [client] = await db.insert(clients).values({
@@ -182,9 +174,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH /api/clients - Update client
+// PATCH /api/clients - Update client (admin only)
 export async function PATCH(request: NextRequest) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -240,14 +232,6 @@ export async function PATCH(request: NextRequest) {
     return errorResponse("Invalid client type value", 400);
   }
 
-  // Only admins can set clientType to MANAGEMENT
-  if (clientType === "MANAGEMENT") {
-    const patchUser = await getUserFromSession(auth.session.user?.email);
-    if (!patchUser || !hasAdminAccess(patchUser.position)) {
-      return errorResponse("Only administrators can set management client type", 403);
-    }
-  }
-
   // Build update object - always set updatedAt
   const updateData: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
@@ -296,9 +280,9 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// DELETE /api/clients - Delete client
+// DELETE /api/clients - Delete client (admin only)
 export async function DELETE(request: NextRequest) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

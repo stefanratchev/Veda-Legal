@@ -3,15 +3,15 @@ import { eq, max } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import { topics, subtopics } from "@/lib/schema";
-import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
+import { requireAdmin, errorResponse } from "@/lib/api-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// POST /api/topics/[id]/subtopics - Create subtopic
+// POST /api/topics/[id]/subtopics - Create subtopic (admin only)
 export async function POST(request: NextRequest, context: RouteContext) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

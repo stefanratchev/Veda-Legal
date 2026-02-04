@@ -4,8 +4,8 @@ import { createMockRequest } from "@/test/helpers/api";
 import { createMockUser } from "@/test/mocks/factories";
 
 // Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireWriteAccess, mockDb } = vi.hoisted(() => ({
-  mockRequireWriteAccess: vi.fn(),
+const { mockRequireAdmin, mockDb } = vi.hoisted(() => ({
+  mockRequireAdmin: vi.fn(),
   mockDb: {
     query: {
       timeEntries: {
@@ -25,7 +25,7 @@ vi.mock("@/lib/api-utils", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/api-utils")>();
   return {
     ...original,
-    requireWriteAccess: mockRequireWriteAccess,
+    requireAdmin: mockRequireAdmin,
   };
 });
 
@@ -44,7 +44,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
   describe("Authentication", () => {
     it("returns 401 when not authenticated", async () => {
-      mockRequireWriteAccess.mockResolvedValue({ error: "Unauthorized", status: 401 });
+      mockRequireAdmin.mockResolvedValue({ error: "Unauthorized", status: 401 });
 
       const request = createMockRequest({
         method: "PATCH",
@@ -60,7 +60,7 @@ describe("PATCH /api/subtopics/[id]", () => {
     });
 
     it("returns 403 when user lacks write access", async () => {
-      mockRequireWriteAccess.mockResolvedValue({ error: "Forbidden", status: 403 });
+      mockRequireAdmin.mockResolvedValue({ error: "Forbidden", status: 403 });
 
       const request = createMockRequest({
         method: "PATCH",
@@ -79,7 +79,7 @@ describe("PATCH /api/subtopics/[id]", () => {
   describe("Validation", () => {
     it("returns 400 for invalid JSON body", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -98,7 +98,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("returns 400 when name is empty string", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -117,7 +117,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("returns 400 when name is not a string", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -136,7 +136,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("returns 400 when name exceeds max length", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -155,7 +155,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("returns 400 for negative display order", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -174,7 +174,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("returns 400 for non-numeric display order", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -193,7 +193,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("returns 400 for invalid status", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -214,7 +214,7 @@ describe("PATCH /api/subtopics/[id]", () => {
   describe("Happy Path", () => {
     it("updates subtopic name", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -251,7 +251,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("auto-detects isPrefix when name ends with colon", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -287,7 +287,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("updates subtopic display order", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -322,7 +322,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("updates subtopic status to INACTIVE", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -357,7 +357,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("updates multiple fields at once", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -395,7 +395,7 @@ describe("PATCH /api/subtopics/[id]", () => {
 
     it("trims whitespace from name", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -432,7 +432,7 @@ describe("PATCH /api/subtopics/[id]", () => {
   describe("Not Found", () => {
     it("returns 404 when subtopic not found", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -461,7 +461,7 @@ describe("PATCH /api/subtopics/[id]", () => {
   describe("Error Handling", () => {
     it("returns 500 on database error during update", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -495,7 +495,7 @@ describe("DELETE /api/subtopics/[id]", () => {
 
   describe("Authentication", () => {
     it("returns 401 when not authenticated", async () => {
-      mockRequireWriteAccess.mockResolvedValue({ error: "Unauthorized", status: 401 });
+      mockRequireAdmin.mockResolvedValue({ error: "Unauthorized", status: 401 });
 
       const request = createMockRequest({
         method: "DELETE",
@@ -510,7 +510,7 @@ describe("DELETE /api/subtopics/[id]", () => {
     });
 
     it("returns 403 when user lacks write access", async () => {
-      mockRequireWriteAccess.mockResolvedValue({ error: "Forbidden", status: 403 });
+      mockRequireAdmin.mockResolvedValue({ error: "Forbidden", status: 403 });
 
       const request = createMockRequest({
         method: "DELETE",
@@ -528,7 +528,7 @@ describe("DELETE /api/subtopics/[id]", () => {
   describe("Business Rules", () => {
     it("returns 400 when subtopic has time entries", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -552,7 +552,7 @@ describe("DELETE /api/subtopics/[id]", () => {
   describe("Happy Path", () => {
     it("deletes subtopic when no time entries exist", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -578,7 +578,7 @@ describe("DELETE /api/subtopics/[id]", () => {
   describe("Error Handling", () => {
     it("returns 500 on database error during time entries check", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -598,7 +598,7 @@ describe("DELETE /api/subtopics/[id]", () => {
 
     it("returns 500 on database error during delete", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 

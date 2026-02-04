@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { topics } from "@/lib/schema";
-import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
+import { requireAdmin, errorResponse } from "@/lib/api-utils";
 
 interface ReorderItem {
   id: string;
   displayOrder: number;
 }
 
-// PATCH /api/topics/reorder - Batch update topic display orders
+// PATCH /api/topics/reorder - Batch update topic display orders (admin only)
 export async function PATCH(request: NextRequest) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

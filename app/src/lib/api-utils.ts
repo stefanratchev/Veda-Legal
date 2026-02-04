@@ -114,6 +114,36 @@ export async function requireAuth(request: NextRequest): Promise<AuthResult> {
 }
 
 /**
+ * Require admin access (ADMIN or PARTNER position).
+ * Use for sensitive operations: billing, client management, topic management.
+ */
+export async function requireAdmin(request: NextRequest): Promise<AuthResult> {
+  const auth = await requireAuth(request);
+  if ("error" in auth) return auth;
+
+  const userEmail = auth.session.user?.email;
+
+  if (!userEmail) {
+    return { error: "Email required for authorization", status: 403 };
+  }
+
+  const user = await db.query.users.findFirst({
+    where: eq(users.email, userEmail),
+    columns: { position: true },
+  });
+
+  if (!user) {
+    return { error: "User not registered. Contact administrator.", status: 403 };
+  }
+
+  if (!ADMIN_POSITIONS.includes(user.position as (typeof ADMIN_POSITIONS)[number])) {
+    return { error: "Admin access required", status: 403 };
+  }
+
+  return { session: auth.session };
+}
+
+/**
  * Require write access (any position can write).
  */
 export async function requireWriteAccess(request: NextRequest): Promise<AuthResult> {

@@ -11,7 +11,7 @@ import {
 } from "@/lib/schema";
 import {
   requireAuth,
-  requireWriteAccess,
+  requireAdmin,
   errorResponse,
 } from "@/lib/api-utils";
 import { BILLING_START_DATE } from "@/lib/billing-config";
@@ -92,9 +92,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/billing - Create new service description
+// POST /api/billing - Create new service description (admin only)
 export async function POST(request: NextRequest) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

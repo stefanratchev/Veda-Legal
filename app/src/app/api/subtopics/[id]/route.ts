@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { subtopics, timeEntries } from "@/lib/schema";
-import { requireWriteAccess, errorResponse } from "@/lib/api-utils";
+import { requireAdmin, errorResponse } from "@/lib/api-utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// PATCH /api/subtopics/[id] - Update subtopic
+// PATCH /api/subtopics/[id] - Update subtopic (admin only)
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -79,9 +79,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 }
 
-// DELETE /api/subtopics/[id] - Delete subtopic (only if no entries reference it)
+// DELETE /api/subtopics/[id] - Delete subtopic (admin only, only if no entries reference it)
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const auth = await requireWriteAccess(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

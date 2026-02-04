@@ -4,9 +4,9 @@ import { createMockRequest } from "@/test/helpers/api";
 import { createMockUser } from "@/test/mocks/factories";
 
 // Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireAuth, mockRequireWriteAccess, mockDb } = vi.hoisted(() => ({
+const { mockRequireAuth, mockRequireAdmin, mockDb } = vi.hoisted(() => ({
   mockRequireAuth: vi.fn(),
-  mockRequireWriteAccess: vi.fn(),
+  mockRequireAdmin: vi.fn(),
   mockDb: {
     query: {
       topics: {
@@ -27,7 +27,7 @@ vi.mock("@/lib/api-utils", async (importOriginal) => {
   return {
     ...original,
     requireAuth: mockRequireAuth,
-    requireWriteAccess: mockRequireWriteAccess,
+    requireAdmin: mockRequireAdmin,
   };
 });
 
@@ -307,7 +307,7 @@ describe("POST /api/topics", () => {
 
   describe("Authentication", () => {
     it("returns 401 when not authenticated", async () => {
-      mockRequireWriteAccess.mockResolvedValue({ error: "Unauthorized", status: 401 });
+      mockRequireAdmin.mockResolvedValue({ error: "Unauthorized", status: 401 });
 
       const request = createMockRequest({
         method: "POST",
@@ -323,7 +323,7 @@ describe("POST /api/topics", () => {
     });
 
     it("returns 403 when user lacks write access", async () => {
-      mockRequireWriteAccess.mockResolvedValue({ error: "Forbidden", status: 403 });
+      mockRequireAdmin.mockResolvedValue({ error: "Forbidden", status: 403 });
 
       const request = createMockRequest({
         method: "POST",
@@ -342,7 +342,7 @@ describe("POST /api/topics", () => {
   describe("Validation", () => {
     it("returns 400 for invalid JSON body", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -361,7 +361,7 @@ describe("POST /api/topics", () => {
 
     it("returns 400 when name is missing", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -380,7 +380,7 @@ describe("POST /api/topics", () => {
 
     it("returns 400 when name is empty string", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -399,7 +399,7 @@ describe("POST /api/topics", () => {
 
     it("returns 400 when name is not a string", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -418,7 +418,7 @@ describe("POST /api/topics", () => {
 
     it("returns 400 when name exceeds max length", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -437,7 +437,7 @@ describe("POST /api/topics", () => {
 
     it("returns 400 for invalid topicType value", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -458,7 +458,7 @@ describe("POST /api/topics", () => {
   describe("Happy Path", () => {
     it("creates topic with valid data", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -497,7 +497,7 @@ describe("POST /api/topics", () => {
 
     it("trims whitespace from name", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -533,7 +533,7 @@ describe("POST /api/topics", () => {
 
     it("assigns next display order automatically", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -570,7 +570,7 @@ describe("POST /api/topics", () => {
 
     it("accepts valid topicType values (REGULAR, INTERNAL, MANAGEMENT)", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -607,7 +607,7 @@ describe("POST /api/topics", () => {
 
     it("defaults topicType to REGULAR when not provided", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -644,7 +644,7 @@ describe("POST /api/topics", () => {
 
     it("creates topic with MANAGEMENT type", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -683,7 +683,7 @@ describe("POST /api/topics", () => {
   describe("Error Handling", () => {
     it("returns 500 on database error during max order fetch", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 
@@ -706,7 +706,7 @@ describe("POST /api/topics", () => {
 
     it("returns 500 on database error during insert", async () => {
       const user = createMockUser({ position: "ADMIN" });
-      mockRequireWriteAccess.mockResolvedValue({
+      mockRequireAdmin.mockResolvedValue({
         session: { user: { name: user.name, email: user.email } },
       });
 

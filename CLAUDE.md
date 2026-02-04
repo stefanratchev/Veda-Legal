@@ -88,7 +88,8 @@ app/src/
 - **Client Components** (`"use client"`) handle interactivity, call API routes for mutations
 - **API Routes** use shared helpers from `lib/api-utils.ts`:
   - `requireAuth()` - Validates session (supports both server session and JWT)
-  - `requireWriteAccess()` - Checks user has any valid position (all positions can write)
+  - `requireAdmin()` - Requires ADMIN or PARTNER position (billing, clients, topics)
+  - `requireWriteAccess()` - Checks user has any valid position (time entries)
 
 ### Shared Code
 - **Types:** Import from `@/types` for Client, TimeEntry, FormData interfaces
@@ -106,8 +107,8 @@ The schema uses a `Position` enum with five levels. Access is controlled via pos
 | ASSOCIATE | | ✓ | |
 | CONSULTANT | | ✓ | |
 
-- **Admin Access:** Can manage clients, reports, billing (enforced by `(admin)` route group layout)
-- **Write Access:** Can log time entries
+- **Admin Access:** Can manage clients, reports, billing, topics (enforced by `(admin)` route group layout AND `requireAdmin()` in API routes)
+- **Write Access:** Can log time entries (enforced by `requireWriteAccess()`)
 - **Team View:** Can view other users' timesheets
 
 ### User Impersonation

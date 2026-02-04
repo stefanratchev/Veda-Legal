@@ -14,6 +14,7 @@ import {
   requireWriteAccess,
   errorResponse,
 } from "@/lib/api-utils";
+import { BILLING_START_DATE } from "@/lib/billing-config";
 
 // GET /api/billing - List all service descriptions
 export async function GET(request: NextRequest) {
@@ -176,8 +177,10 @@ export async function POST(request: NextRequest) {
 
     // Filter entries: include only those in date range and not in FINALIZED service descriptions
     const filteredEntries = unbilledEntries.filter((entry) => {
-      // Check date range
-      if (entry.date < startDateStr || entry.date > endDateStr) {
+      // Check date range (with billing start date as floor)
+      const effectiveStartDate =
+        startDateStr < BILLING_START_DATE ? BILLING_START_DATE : startDateStr;
+      if (entry.date < effectiveStartDate || entry.date > endDateStr) {
         return false;
       }
       // Check if any billing line item is in a FINALIZED service description

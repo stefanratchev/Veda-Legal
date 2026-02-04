@@ -8,7 +8,8 @@ import {
   serviceDescriptionTopics,
   serviceDescriptions,
 } from "@/lib/schema";
-import { eq, and, isNull, sql, min, max, sum } from "drizzle-orm";
+import { eq, and, isNull, sql, min, max, sum, gte } from "drizzle-orm";
+import { BILLING_START_DATE } from "@/lib/billing-config";
 
 /**
  * GET /api/billing/unbilled-summary
@@ -64,6 +65,7 @@ export async function GET(request: NextRequest) {
       .where(
         and(
           eq(clients.status, "ACTIVE"),
+          gte(timeEntries.date, BILLING_START_DATE),
           // Exclude entries that are in a FINALIZED service description
           isNull(serviceDescriptions.id)
         )

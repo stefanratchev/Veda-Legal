@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { DEADLINE_TIMEZONE, getTimezoneOffsetHours } from "@/lib/submission-utils";
 import type { M365CalendarEvent, M365Email, M365ActivityResponse } from "@/types/m365";
 
 const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
@@ -94,9 +95,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
   }
 
-  // Calculate date range for Graph API queries
-  const startDateTime = `${date}T00:00:00.000Z`;
-  const endDateTime = `${date}T23:59:59.999Z`;
+  // Calculate date range aligned to the user's local day (Europe/Sofia).
+  // Sofia midnight = 22:00 UTC (winter, UTC+2) or 21:00 UTC (summer, UTC+3).
+  const queryDate = new Date(`${date}T12:00:00Z`);
+  const offsetHours = getTimezoneOffsetHours(queryDate, DEADLINE_TIMEZONE);
+  const startDateTime = new Date(Date.UTC(
+    queryDate.getUTCFullYear(), queryDate.getUTCMonth(), queryDate.getUTCDate(),
+    -offsetHours, 0, 0, 0
+  )).toISOString();
+  const endDateTime = new Date(Date.UTC(
+    queryDate.getUTCFullYear(), queryDate.getUTCMonth(), queryDate.getUTCDate(),
+    24 - offsetHours, 0, 0, 0
+  )).toISOString();
 
   try {
     // Fetch calendar events and emails (inbox + sent) in parallel
@@ -136,10 +146,17 @@ export async function GET(request: NextRequest) {
     const sentData = await sentResponse.json();
 
     // Transform calendar events - calculate duration, extract attendees
+    // Graph API returns dateTime without Z suffix even for UTC values,
+    // so we normalize by appending Z for unambiguous frontend parsing.
     const calendar: M365CalendarEvent[] = (calendarData.value || []).map(
       (event: GraphCalendarEvent) => {
-        const startTime = new Date(event.start?.dateTime);
-        const endTime = new Date(event.end?.dateTime);
+        const startDt = event.start?.dateTime;
+        const endDt = event.end?.dateTime;
+        const startUtc = startDt && !startDt.endsWith("Z") ? startDt + "Z" : startDt;
+        const endUtc = endDt && !endDt.endsWith("Z") ? endDt + "Z" : endDt;
+
+        const startTime = new Date(startUtc);
+        const endTime = new Date(endUtc);
         const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
 
         const attendees = (event.attendees || []).map(
@@ -148,7 +165,7 @@ export async function GET(request: NextRequest) {
 
         return {
           subject: event.subject,
-          start: event.start?.dateTime,
+          start: startUtc,
           durationMinutes,
           attendees,
         };
@@ -211,6 +228,7 @@ async function fetchCalendarEvents(
   return fetch(url.toString(), {
     headers: {
       Authorization: `Bearer ${accessToken}`,
+      Prefer: 'outlook.timezone="UTC"',
     },
   });
 }

@@ -122,13 +122,13 @@ describe("GET /api/m365/activity", () => {
         accessToken: "valid-access-token",
       });
 
-      // Mock calendar events response
+      // Mock calendar events response (Graph API returns dateTime WITHOUT Z suffix)
       const calendarEvents = {
         value: [
           {
             subject: "Client Meeting",
-            start: { dateTime: "2024-12-20T10:00:00.000Z" },
-            end: { dateTime: "2024-12-20T11:00:00.000Z" },
+            start: { dateTime: "2024-12-20T10:00:00.0000000" },
+            end: { dateTime: "2024-12-20T11:00:00.0000000" },
             attendees: [
               { emailAddress: { name: "John Doe", address: "john@example.com" } },
               { emailAddress: { name: "Jane Smith", address: "jane@example.com" } },
@@ -136,8 +136,8 @@ describe("GET /api/m365/activity", () => {
           },
           {
             subject: "Team Standup",
-            start: { dateTime: "2024-12-20T09:00:00.000Z" },
-            end: { dateTime: "2024-12-20T09:30:00.000Z" },
+            start: { dateTime: "2024-12-20T09:00:00.0000000" },
+            end: { dateTime: "2024-12-20T09:30:00.0000000" },
             attendees: [],
           },
         ],
@@ -196,8 +196,9 @@ describe("GET /api/m365/activity", () => {
       expect(data.emails).toHaveLength(2);
 
       // Verify calendar event structure (M365CalendarEvent)
+      // Z suffix should be appended by the route for unambiguous UTC parsing
       expect(data.calendar[0]).toHaveProperty("subject", "Client Meeting");
-      expect(data.calendar[0]).toHaveProperty("start", "2024-12-20T10:00:00.000Z");
+      expect(data.calendar[0]).toHaveProperty("start", "2024-12-20T10:00:00.0000000Z");
       expect(data.calendar[0]).toHaveProperty("durationMinutes", 60);
       expect(data.calendar[0]).toHaveProperty("attendees");
       expect(data.calendar[0].attendees).toEqual(["John Doe", "Jane Smith"]);
@@ -246,6 +247,126 @@ describe("GET /api/m365/activity", () => {
       expect(response.status).toBe(200);
       expect(data.calendar).toEqual([]);
       expect(data.emails).toEqual([]);
+    });
+  });
+
+  describe("Timezone handling", () => {
+    it("sends Prefer: outlook.timezone header on calendar request", async () => {
+      mockGetServerSession.mockResolvedValue({
+        user: { email: "test@example.com", name: "Test User" },
+        accessToken: "valid-access-token",
+      });
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) });
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/m365/activity?date=2024-12-20",
+      });
+
+      await GET(request);
+
+      // First fetch call is the calendar request
+      const calendarCall = mockFetch.mock.calls[0];
+      const calendarUrl = calendarCall[0] as string;
+      const calendarOptions = calendarCall[1] as RequestInit;
+
+      expect(calendarUrl).toContain("calendarView");
+      expect(calendarOptions.headers).toHaveProperty("Prefer", 'outlook.timezone="UTC"');
+    });
+
+    it("uses Sofia-timezone-aligned date range for queries", async () => {
+      mockGetServerSession.mockResolvedValue({
+        user: { email: "test@example.com", name: "Test User" },
+        accessToken: "valid-access-token",
+      });
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) });
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/m365/activity?date=2024-12-20",
+      });
+
+      await GET(request);
+
+      // December = EET (UTC+2), so Sofia midnight = 22:00 UTC previous day
+      const calendarUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calendarUrl).toContain("startDateTime=2024-12-19T22%3A00%3A00.000Z");
+      expect(calendarUrl).toContain("endDateTime=2024-12-20T22%3A00%3A00.000Z");
+    });
+
+    it("appends Z suffix to calendar event start times from Graph API", async () => {
+      mockGetServerSession.mockResolvedValue({
+        user: { email: "test@example.com", name: "Test User" },
+        accessToken: "valid-access-token",
+      });
+
+      const calendarEvents = {
+        value: [
+          {
+            subject: "Meeting",
+            start: { dateTime: "2024-12-20T10:00:00.0000000" },
+            end: { dateTime: "2024-12-20T11:00:00.0000000" },
+            attendees: [],
+          },
+        ],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(calendarEvents) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) });
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/m365/activity?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.calendar[0].start).toBe("2024-12-20T10:00:00.0000000Z");
+    });
+
+    it("does not double-append Z if already present", async () => {
+      mockGetServerSession.mockResolvedValue({
+        user: { email: "test@example.com", name: "Test User" },
+        accessToken: "valid-access-token",
+      });
+
+      const calendarEvents = {
+        value: [
+          {
+            subject: "Meeting",
+            start: { dateTime: "2024-12-20T10:00:00.000Z" },
+            end: { dateTime: "2024-12-20T11:00:00.000Z" },
+            attendees: [],
+          },
+        ],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(calendarEvents) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: [] }) });
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/m365/activity?date=2024-12-20",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      // Should NOT become "...ZZ"
+      expect(data.calendar[0].start).toBe("2024-12-20T10:00:00.000Z");
     });
   });
 

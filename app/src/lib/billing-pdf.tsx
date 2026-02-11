@@ -386,22 +386,47 @@ export function generateReference(data: ServiceDescription): string {
   return `SD-${year}${month}-${idPart}`;
 }
 
+export function calculateTopicBaseTotal(topic: ServiceDescription["topics"][0]): number {
+  if (topic.pricingMode === "FIXED") {
+    return topic.fixedFee || 0;
+  }
+  const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+  const billedHours = topic.capHours ? Math.min(rawHours, topic.capHours) : rawHours;
+  const hourlyTotal = billedHours * (topic.hourlyRate || 0);
+  const fixedTotal = topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
+  return Math.round((hourlyTotal + fixedTotal) * 100) / 100;
+}
+
 export function calculateTopicTotal(topic: ServiceDescription["topics"][0]): number {
-  if (topic.pricingMode === "FIXED") return topic.fixedFee || 0;
-  const totalHours = topic.lineItems.reduce(
-    (sum, item) => sum + (item.hours || 0),
-    0
-  );
-  const hourlyTotal = totalHours * (topic.hourlyRate || 0);
-  const fixedTotal = topic.lineItems.reduce(
-    (sum, item) => sum + (item.fixedAmount || 0),
-    0
-  );
-  return hourlyTotal + fixedTotal;
+  let total = calculateTopicBaseTotal(topic);
+
+  if (topic.discountType === "PERCENTAGE" && topic.discountValue) {
+    total = total * (1 - topic.discountValue / 100);
+  } else if (topic.discountType === "AMOUNT" && topic.discountValue) {
+    total = total - topic.discountValue;
+  }
+
+  return Math.round(Math.max(total, 0) * 100) / 100;
 }
 
 export function calculateTopicHours(topic: ServiceDescription["topics"][0]): number {
   return topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+}
+
+export function calculateGrandTotal(
+  topics: ServiceDescription["topics"],
+  discountType: "PERCENTAGE" | "AMOUNT" | null,
+  discountValue: number | null,
+): number {
+  let subtotal = topics.reduce((sum, topic) => sum + calculateTopicTotal(topic), 0);
+
+  if (discountType === "PERCENTAGE" && discountValue) {
+    subtotal = subtotal * (1 - discountValue / 100);
+  } else if (discountType === "AMOUNT" && discountValue) {
+    subtotal = subtotal - discountValue;
+  }
+
+  return Math.round(Math.max(subtotal, 0) * 100) / 100;
 }
 
 interface ServiceDescriptionPDFProps {
@@ -409,10 +434,12 @@ interface ServiceDescriptionPDFProps {
 }
 
 export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
-  const grandTotal = data.topics.reduce(
+  const subtotal = data.topics.reduce(
     (sum, topic) => sum + calculateTopicTotal(topic),
     0
   );
+  const grandTotal = calculateGrandTotal(data.topics, data.discountType, data.discountValue);
+  const hasOverallDiscount = data.discountType && data.discountValue;
   const reference = generateReference(data);
   const documentDate = formatDocumentDate();
 
@@ -465,6 +492,26 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
               </Text>
             </View>
           ))}
+          {hasOverallDiscount && (
+            <>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryTopic}>Subtotal</Text>
+                <Text style={styles.summaryAmount}>
+                  {formatCurrency(subtotal)}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryTopic}>
+                  Overall Discount ({data.discountType === "PERCENTAGE"
+                    ? `${data.discountValue}%`
+                    : formatCurrency(data.discountValue!)})
+                </Text>
+                <Text style={styles.summaryAmount}>
+                  -{formatCurrency(subtotal - grandTotal)}
+                </Text>
+              </View>
+            </>
+          )}
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total Fees</Text>
             <Text style={styles.totalAmount}>{formatCurrency(grandTotal)}</Text>
@@ -478,7 +525,10 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
         {/* Topic sections */}
         {data.topics.map((topic) => {
           const totalHours = calculateTopicHours(topic);
+          const baseTopicTotal = calculateTopicBaseTotal(topic);
           const topicTotal = calculateTopicTotal(topic);
+          const hasTopicDiscount = topic.discountType && topic.discountValue;
+          const isCapped = topic.pricingMode === "HOURLY" && topic.capHours && totalHours > topic.capHours;
 
           return (
             <View key={topic.id} style={styles.topicContainer}>
@@ -518,9 +568,13 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
               {/* Topic footer with totals */}
               <View style={styles.topicFooter}>
                 <View style={styles.topicFooterRow}>
-                  <Text style={styles.topicFooterLabel}>Total Time:</Text>
+                  <Text style={styles.topicFooterLabel}>
+                    Total Time:
+                  </Text>
                   <Text style={styles.topicFooterValue}>
-                    {formatHours(totalHours)}
+                    {isCapped
+                      ? `${formatHours(topic.capHours!)} (capped from ${formatHours(totalHours)})`
+                      : formatHours(totalHours)}
                   </Text>
                 </View>
                 {topic.pricingMode === "HOURLY" ? (
@@ -533,9 +587,65 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
                         {formatCurrency(topic.hourlyRate || 0)}
                       </Text>
                     </View>
+                    {hasTopicDiscount ? (
+                      <>
+                        <View style={styles.topicFooterRow}>
+                          <Text style={styles.topicFooterLabel}>Subtotal:</Text>
+                          <Text style={styles.topicFooterValue}>
+                            {formatCurrency(baseTopicTotal)}
+                          </Text>
+                        </View>
+                        <View style={styles.topicFooterRow}>
+                          <Text style={styles.topicFooterLabel}>
+                            Discount ({topic.discountType === "PERCENTAGE"
+                              ? `${topic.discountValue}%`
+                              : formatCurrency(topic.discountValue!)}):
+                          </Text>
+                          <Text style={styles.topicFooterValue}>
+                            -{formatCurrency(baseTopicTotal - topicTotal)}
+                          </Text>
+                        </View>
+                        <View style={styles.topicFooterTotal}>
+                          <Text style={styles.topicFooterTotalLabel}>
+                            Topic Fee:
+                          </Text>
+                          <Text style={styles.topicFooterTotalValue}>
+                            {formatCurrency(topicTotal)}
+                          </Text>
+                        </View>
+                      </>
+                    ) : (
+                      <View style={styles.topicFooterTotal}>
+                        <Text style={styles.topicFooterTotalLabel}>
+                          Topic Fee:
+                        </Text>
+                        <Text style={styles.topicFooterTotalValue}>
+                          {formatCurrency(topicTotal)}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                ) : hasTopicDiscount ? (
+                  <>
+                    <View style={styles.topicFooterRow}>
+                      <Text style={styles.topicFooterLabel}>Subtotal:</Text>
+                      <Text style={styles.topicFooterValue}>
+                        {formatCurrency(baseTopicTotal)}
+                      </Text>
+                    </View>
+                    <View style={styles.topicFooterRow}>
+                      <Text style={styles.topicFooterLabel}>
+                        Discount ({topic.discountType === "PERCENTAGE"
+                          ? `${topic.discountValue}%`
+                          : formatCurrency(topic.discountValue!)}):
+                      </Text>
+                      <Text style={styles.topicFooterValue}>
+                        -{formatCurrency(baseTopicTotal - topicTotal)}
+                      </Text>
+                    </View>
                     <View style={styles.topicFooterTotal}>
                       <Text style={styles.topicFooterTotalLabel}>
-                        Topic Fee:
+                        Fixed Fee:
                       </Text>
                       <Text style={styles.topicFooterTotalValue}>
                         {formatCurrency(topicTotal)}

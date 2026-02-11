@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
 import { requireAdmin, serializeDecimal, errorResponse } from "@/lib/api-utils";
+import { resolveDiscountFields, validateDiscountFields, validateCapHours } from "@/lib/billing-utils";
 
 type RouteParams = { params: Promise<{ id: string; topicId: string }> };
 
@@ -37,6 +38,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Cannot modify finalized service description", 400);
     }
 
+    // Fetch existing topic to validate against current DB state
+    const existing = await db.query.serviceDescriptionTopics.findFirst({
+      where: and(eq(serviceDescriptionTopics.id, topicId), eq(serviceDescriptionTopics.serviceDescriptionId, id)),
+      columns: { discountType: true, discountValue: true },
+    });
+
+    if (!existing) {
+      return errorResponse("Topic not found", 404);
+    }
+
+    // Validate discount fields
+    if (body.discountType !== undefined || body.discountValue !== undefined) {
+      const { type, value } = resolveDiscountFields(body, existing);
+      const discountError = validateDiscountFields(type, value);
+      if (discountError) return errorResponse(discountError, 400);
+    }
+    const capError = validateCapHours(body.capHours);
+    if (capError) return errorResponse(capError, 400);
+
     const updateData: Record<string, unknown> = {
       updatedAt: new Date().toISOString(),
     };
@@ -45,6 +65,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updateData.topicName = body.topicName.trim();
     }
     if (body.pricingMode !== undefined) {
+      if (!["HOURLY", "FIXED"].includes(body.pricingMode)) {
+        return errorResponse("pricingMode must be HOURLY or FIXED", 400);
+      }
       updateData.pricingMode = body.pricingMode;
     }
     if (body.hourlyRate !== undefined) {
@@ -55,6 +78,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     if (body.displayOrder !== undefined) {
       updateData.displayOrder = body.displayOrder;
+    }
+    if (body.capHours !== undefined) {
+      updateData.capHours = body.capHours != null ? String(body.capHours) : null;
+    }
+    if (body.discountType !== undefined) {
+      updateData.discountType = body.discountType || null;
+    }
+    if (body.discountValue !== undefined) {
+      updateData.discountValue = body.discountValue != null ? String(body.discountValue) : null;
+    }
+
+    if (body.pricingMode === "FIXED") {
+      updateData.capHours = null;
     }
 
     const [topic] = await db.update(serviceDescriptionTopics)
@@ -67,6 +103,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         pricingMode: serviceDescriptionTopics.pricingMode,
         hourlyRate: serviceDescriptionTopics.hourlyRate,
         fixedFee: serviceDescriptionTopics.fixedFee,
+        capHours: serviceDescriptionTopics.capHours,
+        discountType: serviceDescriptionTopics.discountType,
+        discountValue: serviceDescriptionTopics.discountValue,
       });
 
     if (!topic) {
@@ -80,6 +119,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       pricingMode: topic.pricingMode,
       hourlyRate: serializeDecimal(topic.hourlyRate),
       fixedFee: serializeDecimal(topic.fixedFee),
+      capHours: serializeDecimal(topic.capHours),
+      discountType: topic.discountType,
+      discountValue: serializeDecimal(topic.discountValue),
     });
   } catch (error) {
     console.error("Database error updating topic:", error);
@@ -112,7 +154,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // Check if topic exists before deleting
     const existingTopic = await db.query.serviceDescriptionTopics.findFirst({
-      where: eq(serviceDescriptionTopics.id, topicId),
+      where: and(eq(serviceDescriptionTopics.id, topicId), eq(serviceDescriptionTopics.serviceDescriptionId, id)),
       columns: { id: true },
     });
 

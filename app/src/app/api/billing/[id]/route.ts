@@ -2,93 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, asc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions } from "@/lib/schema";
-import {
-  requireAuth,
-  requireAdmin,
-  serializeDecimal,
-  errorResponse,
-  getUserFromSession,
-} from "@/lib/api-utils";
+import { requireAdmin, errorResponse, getUserFromSession } from "@/lib/api-utils";
+import { serializeServiceDescription, resolveDiscountFields, validateDiscountFields } from "@/lib/billing-utils";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-// Helper to serialize a full service description
-function serializeServiceDescription(sd: {
-  id: string;
-  clientId: string;
-  client: {
-    id: string;
-    name: string;
-    invoicedName: string | null;
-    invoiceAttn: string | null;
-    hourlyRate: string | null;
-  };
-  periodStart: string;
-  periodEnd: string;
-  status: "DRAFT" | "FINALIZED";
-  finalizedAt: string | null;
-  topics: Array<{
-    id: string;
-    topicName: string;
-    displayOrder: number;
-    pricingMode: "HOURLY" | "FIXED";
-    hourlyRate: string | null;
-    fixedFee: string | null;
-    lineItems: Array<{
-      id: string;
-      timeEntryId: string | null;
-      date: string | null;
-      description: string;
-      hours: string | null;
-      fixedAmount: string | null;
-      displayOrder: number;
-      timeEntry: { description: string; hours: string } | null;
-    }>;
-  }>;
-  createdAt: string;
-  updatedAt: string;
-}) {
-  return {
-    id: sd.id,
-    clientId: sd.clientId,
-    client: {
-      id: sd.client.id,
-      name: sd.client.name,
-      invoicedName: sd.client.invoicedName,
-      invoiceAttn: sd.client.invoiceAttn,
-      hourlyRate: serializeDecimal(sd.client.hourlyRate),
-    },
-    periodStart: sd.periodStart,
-    periodEnd: sd.periodEnd,
-    status: sd.status,
-    finalizedAt: sd.finalizedAt || null,
-    topics: sd.topics.map((topic) => ({
-      id: topic.id,
-      topicName: topic.topicName,
-      displayOrder: topic.displayOrder,
-      pricingMode: topic.pricingMode,
-      hourlyRate: serializeDecimal(topic.hourlyRate),
-      fixedFee: serializeDecimal(topic.fixedFee),
-      lineItems: topic.lineItems.map((item) => ({
-        id: item.id,
-        timeEntryId: item.timeEntryId,
-        date: item.date || null,
-        description: item.description,
-        hours: serializeDecimal(item.hours),
-        fixedAmount: serializeDecimal(item.fixedAmount),
-        displayOrder: item.displayOrder,
-        originalDescription: item.timeEntry?.description,
-        originalHours: item.timeEntry ? serializeDecimal(item.timeEntry.hours) : undefined,
-      })),
-    })),
-    createdAt: sd.createdAt,
-    updatedAt: sd.updatedAt,
-  };
-}
-
 // GET /api/billing/[id] - Get service description with all details
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -105,6 +26,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         periodEnd: true,
         status: true,
         finalizedAt: true,
+        discountType: true,
+        discountValue: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -126,6 +49,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             pricingMode: true,
             hourlyRate: true,
             fixedFee: true,
+            capHours: true,
+            discountType: true,
+            discountValue: true,
           },
           orderBy: (topics) => [asc(topics.displayOrder)],
           with: {
@@ -143,6 +69,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               with: {
                 timeEntry: {
                   columns: { description: true, hours: true },
+                  with: {
+                    user: {
+                      columns: { name: true },
+                    },
+                  },
                 },
               },
             },
@@ -178,35 +109,61 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { status } = body;
+  const { status, discountType: bodyDiscountType, discountValue: bodyDiscountValue } = body;
 
-  if (!status || !["DRAFT", "FINALIZED"].includes(status)) {
+  if (status && !["DRAFT", "FINALIZED"].includes(status)) {
     return errorResponse("Invalid status", 400);
+  }
+
+  if (!status && bodyDiscountType === undefined && bodyDiscountValue === undefined) {
+    return errorResponse("No update fields provided", 400);
   }
 
   try {
     const existing = await db.query.serviceDescriptions.findFirst({
       where: eq(serviceDescriptions.id, id),
-      columns: { status: true },
+      columns: { status: true, discountType: true, discountValue: true },
     });
 
     if (!existing) {
       return errorResponse("Service description not found", 404);
     }
 
+    // Validate discount fields against resulting DB state
+    if (bodyDiscountType !== undefined || bodyDiscountValue !== undefined) {
+      if (existing.status === "FINALIZED") {
+        return errorResponse("Cannot modify finalized service description", 400);
+      }
+      const { type: resultType, value: resultValue } = resolveDiscountFields(
+        { discountType: bodyDiscountType, discountValue: bodyDiscountValue },
+        existing,
+      );
+      const discountError = validateDiscountFields(resultType, resultValue);
+      if (discountError) return errorResponse(discountError, 400);
+    }
+
     const updateData: Record<string, unknown> = {
-      status,
       updatedAt: new Date().toISOString(),
     };
 
-    if (status === "FINALIZED") {
-      const user = await getUserFromSession(auth.session.user?.email);
-      updateData.finalizedAt = new Date().toISOString();
-      updateData.finalizedById = user?.id || null;
-    } else {
-      // Unlocking - clear finalized info
-      updateData.finalizedAt = null;
-      updateData.finalizedById = null;
+    if (status) {
+      updateData.status = status;
+      if (status === "FINALIZED") {
+        const user = await getUserFromSession(auth.session.user?.email);
+        updateData.finalizedAt = new Date().toISOString();
+        updateData.finalizedById = user?.id || null;
+      } else {
+        // Unlocking - clear finalized info
+        updateData.finalizedAt = null;
+        updateData.finalizedById = null;
+      }
+    }
+
+    if (bodyDiscountType !== undefined) {
+      updateData.discountType = bodyDiscountType || null;
+    }
+    if (bodyDiscountValue !== undefined) {
+      updateData.discountValue = bodyDiscountValue != null ? String(bodyDiscountValue) : null;
     }
 
     const [updated] = await db.update(serviceDescriptions)

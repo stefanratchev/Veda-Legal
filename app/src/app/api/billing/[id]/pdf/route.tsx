@@ -3,86 +3,15 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { eq, asc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions } from "@/lib/schema";
-import { requireAuth, serializeDecimal, errorResponse } from "@/lib/api-utils";
+import { requireAdmin, errorResponse } from "@/lib/api-utils";
+import { serializeServiceDescription } from "@/lib/billing-utils";
 import { ServiceDescriptionPDF } from "@/lib/billing-pdf";
-import { ServiceDescription } from "@/types";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-// Helper to serialize the data for PDF
-function serializeForPDF(sd: {
-  id: string;
-  clientId: string;
-  client: {
-    id: string;
-    name: string;
-    invoicedName: string | null;
-    invoiceAttn: string | null;
-    hourlyRate: string | null;
-  };
-  periodStart: string;
-  periodEnd: string;
-  status: "DRAFT" | "FINALIZED";
-  finalizedAt: string | null;
-  topics: Array<{
-    id: string;
-    topicName: string;
-    displayOrder: number;
-    pricingMode: "HOURLY" | "FIXED";
-    hourlyRate: string | null;
-    fixedFee: string | null;
-    lineItems: Array<{
-      id: string;
-      timeEntryId: string | null;
-      date: string | null;
-      description: string;
-      hours: string | null;
-      fixedAmount: string | null;
-      displayOrder: number;
-    }>;
-  }>;
-  createdAt: string;
-  updatedAt: string;
-}): ServiceDescription {
-  return {
-    id: sd.id,
-    clientId: sd.clientId,
-    client: {
-      id: sd.client.id,
-      name: sd.client.name,
-      invoicedName: sd.client.invoicedName,
-      invoiceAttn: sd.client.invoiceAttn,
-      hourlyRate: serializeDecimal(sd.client.hourlyRate),
-    },
-    periodStart: sd.periodStart,
-    periodEnd: sd.periodEnd,
-    status: sd.status,
-    finalizedAt: sd.finalizedAt || null,
-    topics: sd.topics.map((topic) => ({
-      id: topic.id,
-      topicName: topic.topicName,
-      displayOrder: topic.displayOrder,
-      pricingMode: topic.pricingMode,
-      hourlyRate: serializeDecimal(topic.hourlyRate),
-      fixedFee: serializeDecimal(topic.fixedFee),
-      lineItems: topic.lineItems.map((item) => ({
-        id: item.id,
-        timeEntryId: item.timeEntryId,
-        date: item.date || null,
-        description: item.description,
-        hours: serializeDecimal(item.hours),
-        fixedAmount: serializeDecimal(item.fixedAmount),
-        displayOrder: item.displayOrder,
-      })),
-    })),
-    createdAt: sd.createdAt,
-    updatedAt: sd.updatedAt,
-  };
-}
-
 // GET /api/billing/[id]/pdf - Generate and download PDF
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -99,6 +28,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         periodEnd: true,
         status: true,
         finalizedAt: true,
+        discountType: true,
+        discountValue: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -120,6 +51,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             pricingMode: true,
             hourlyRate: true,
             fixedFee: true,
+            capHours: true,
+            discountType: true,
+            discountValue: true,
           },
           orderBy: (topics) => [asc(topics.displayOrder)],
           with: {
@@ -144,7 +78,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Service description not found", 404);
     }
 
-    const data = serializeForPDF(sd);
+    const data = serializeServiceDescription(sd);
     const pdfBuffer = await renderToBuffer(<ServiceDescriptionPDF data={data} />);
 
     const clientName = (data.client.invoicedName || data.client.name).replace(/[^a-zA-Z0-9]/g, "_");

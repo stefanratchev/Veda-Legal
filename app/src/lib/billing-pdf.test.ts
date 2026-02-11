@@ -6,6 +6,7 @@ import {
   generateReference,
   calculateTopicTotal,
   calculateTopicHours,
+  calculateGrandTotal,
 } from "./billing-pdf";
 import { ServiceDescription } from "@/types";
 
@@ -103,6 +104,9 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY",
         hourlyRate: 100,
         fixedFee: null,
+        capHours: null,
+        discountType: null,
+        discountValue: null,
         lineItems: [
           { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
           { id: "b", timeEntryId: null, date: "2026-02-02", description: "More work", hours: 3.5, fixedAmount: null, displayOrder: 2 },
@@ -120,6 +124,9 @@ describe("billing-pdf utilities", () => {
         pricingMode: "FIXED",
         hourlyRate: null,
         fixedFee: 1500,
+        capHours: null,
+        discountType: null,
+        discountValue: null,
         lineItems: [
           { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
         ],
@@ -136,6 +143,9 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY",
         hourlyRate: 100,
         fixedFee: null,
+        capHours: null,
+        discountType: null,
+        discountValue: null,
         lineItems: [
           { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
           { id: "b", timeEntryId: null, date: "2026-02-02", description: "Expense", hours: null, fixedAmount: 50, displayOrder: 2 },
@@ -153,6 +163,9 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY",
         hourlyRate: 100,
         fixedFee: null,
+        capHours: null,
+        discountType: null,
+        discountValue: null,
         lineItems: [],
       };
 
@@ -167,11 +180,108 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY",
         hourlyRate: null,
         fixedFee: null,
+        capHours: null,
+        discountType: null,
+        discountValue: null,
         lineItems: [
           { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 5, fixedAmount: null, displayOrder: 1 },
         ],
       };
 
+      expect(calculateTopicTotal(topic)).toBe(0);
+    });
+
+    it("caps hours when rawHours exceeds capHours", () => {
+      const topic: ServiceDescription["topics"][0] = {
+        id: "1", topicName: "Test", displayOrder: 1,
+        pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
+        capHours: 20, discountType: null, discountValue: null,
+        lineItems: [
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 30, fixedAmount: null, displayOrder: 1 },
+        ],
+      };
+      expect(calculateTopicTotal(topic)).toBe(2000);
+    });
+
+    it("does not cap when rawHours is below capHours", () => {
+      const topic: ServiceDescription["topics"][0] = {
+        id: "1", topicName: "Test", displayOrder: 1,
+        pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
+        capHours: 50, discountType: null, discountValue: null,
+        lineItems: [
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
+        ],
+      };
+      expect(calculateTopicTotal(topic)).toBe(1000);
+    });
+
+    it("applies percentage discount to hourly topic", () => {
+      const topic: ServiceDescription["topics"][0] = {
+        id: "1", topicName: "Test", displayOrder: 1,
+        pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
+        capHours: null, discountType: "PERCENTAGE", discountValue: 10,
+        lineItems: [
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
+        ],
+      };
+      expect(calculateTopicTotal(topic)).toBe(900);
+    });
+
+    it("applies amount discount to hourly topic", () => {
+      const topic: ServiceDescription["topics"][0] = {
+        id: "1", topicName: "Test", displayOrder: 1,
+        pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
+        capHours: null, discountType: "AMOUNT", discountValue: 250,
+        lineItems: [
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
+        ],
+      };
+      expect(calculateTopicTotal(topic)).toBe(750);
+    });
+
+    it("applies cap AND discount together (cap first, then discount)", () => {
+      const topic: ServiceDescription["topics"][0] = {
+        id: "1", topicName: "Test", displayOrder: 1,
+        pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
+        capHours: 20, discountType: "PERCENTAGE", discountValue: 10,
+        lineItems: [
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 30, fixedAmount: null, displayOrder: 1 },
+        ],
+      };
+      expect(calculateTopicTotal(topic)).toBe(1800);
+    });
+
+    it("applies percentage discount to fixed topic", () => {
+      const topic: ServiceDescription["topics"][0] = {
+        id: "1", topicName: "Test", displayOrder: 1,
+        pricingMode: "FIXED", hourlyRate: null, fixedFee: 5000,
+        capHours: null, discountType: "PERCENTAGE", discountValue: 20,
+        lineItems: [
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
+        ],
+      };
+      expect(calculateTopicTotal(topic)).toBe(4000);
+    });
+
+    it("applies amount discount to fixed topic", () => {
+      const topic: ServiceDescription["topics"][0] = {
+        id: "1", topicName: "Test", displayOrder: 1,
+        pricingMode: "FIXED", hourlyRate: null, fixedFee: 5000,
+        capHours: null, discountType: "AMOUNT", discountValue: 500,
+        lineItems: [],
+      };
+      expect(calculateTopicTotal(topic)).toBe(4500);
+    });
+
+    it("floors discount result at zero", () => {
+      const topic: ServiceDescription["topics"][0] = {
+        id: "1", topicName: "Test", displayOrder: 1,
+        pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
+        capHours: null, discountType: "AMOUNT", discountValue: 5000,
+        lineItems: [
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
+        ],
+      };
       expect(calculateTopicTotal(topic)).toBe(0);
     });
   });
@@ -185,6 +295,9 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY",
         hourlyRate: 100,
         fixedFee: null,
+        capHours: null,
+        discountType: null,
+        discountValue: null,
         lineItems: [
           { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
           { id: "b", timeEntryId: null, date: "2026-02-02", description: "More work", hours: 3.5, fixedAmount: null, displayOrder: 2 },
@@ -202,6 +315,9 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY",
         hourlyRate: 100,
         fixedFee: null,
+        capHours: null,
+        discountType: null,
+        discountValue: null,
         lineItems: [
           { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
           { id: "b", timeEntryId: null, date: "2026-02-02", description: "Fixed item", hours: null, fixedAmount: 100, displayOrder: 2 },
@@ -219,10 +335,62 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY",
         hourlyRate: 100,
         fixedFee: null,
+        capHours: null,
+        discountType: null,
+        discountValue: null,
         lineItems: [],
       };
 
       expect(calculateTopicHours(topic)).toBe(0);
+    });
+  });
+
+  describe("calculateGrandTotal", () => {
+    const makeTopic = (overrides: Partial<ServiceDescription["topics"][0]>): ServiceDescription["topics"][0] => ({
+      id: "1", topicName: "Test", displayOrder: 1,
+      pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
+      capHours: null, discountType: null, discountValue: null,
+      lineItems: [],
+      ...overrides,
+    });
+
+    it("sums topic totals with no overall discount", () => {
+      const topics = [
+        makeTopic({ id: "1", lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1 }] }),
+        makeTopic({ id: "2", lineItems: [{ id: "b", timeEntryId: null, date: null, description: "W", hours: 5, fixedAmount: null, displayOrder: 1 }] }),
+      ];
+      expect(calculateGrandTotal(topics, null, null)).toBe(1500);
+    });
+
+    it("applies overall percentage discount", () => {
+      const topics = [
+        makeTopic({ lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1 }] }),
+      ];
+      expect(calculateGrandTotal(topics, "PERCENTAGE", 10)).toBe(900);
+    });
+
+    it("applies overall amount discount", () => {
+      const topics = [
+        makeTopic({ lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1 }] }),
+      ];
+      expect(calculateGrandTotal(topics, "AMOUNT", 300)).toBe(700);
+    });
+
+    it("stacks topic discount and overall discount sequentially", () => {
+      const topics = [
+        makeTopic({
+          discountType: "PERCENTAGE", discountValue: 10,
+          lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1 }],
+        }),
+      ];
+      expect(calculateGrandTotal(topics, "PERCENTAGE", 5)).toBe(855);
+    });
+
+    it("floors overall discount at zero", () => {
+      const topics = [
+        makeTopic({ lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 1, fixedAmount: null, displayOrder: 1 }] }),
+      ];
+      expect(calculateGrandTotal(topics, "AMOUNT", 5000)).toBe(0);
     });
   });
 });

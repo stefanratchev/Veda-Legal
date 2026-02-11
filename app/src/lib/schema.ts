@@ -11,6 +11,7 @@ export const topicStatus = pgEnum("TopicStatus", ['ACTIVE', 'INACTIVE'])
 export const userStatus = pgEnum("UserStatus", ['PENDING', 'ACTIVE', 'INACTIVE'])
 export const clientType = pgEnum("ClientType", ['REGULAR', 'INTERNAL', 'MANAGEMENT'])
 export const topicType = pgEnum("TopicType", ['REGULAR', 'INTERNAL', 'MANAGEMENT'])
+export const discountTypeEnum = pgEnum("DiscountType", ['PERCENTAGE', 'AMOUNT'])
 
 
 export const serviceDescriptionTopics = pgTable("service_description_topics", {
@@ -21,6 +22,9 @@ export const serviceDescriptionTopics = pgTable("service_description_topics", {
 	pricingMode: pricingMode().default('HOURLY').notNull(),
 	hourlyRate: numeric({ precision: 10, scale:  2 }),
 	fixedFee: numeric({ precision: 10, scale:  2 }),
+	capHours: numeric({ precision: 6, scale: 2 }),
+	discountType: discountTypeEnum(),
+	discountValue: numeric({ precision: 10, scale: 2 }),
 	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ precision: 3, mode: 'string' }).notNull(),
 }, (table) => [
@@ -40,6 +44,8 @@ export const serviceDescriptions = pgTable("service_descriptions", {
 	status: serviceDescriptionStatus().default('DRAFT').notNull(),
 	finalizedAt: timestamp({ precision: 3, mode: 'string' }),
 	finalizedById: text(),
+	discountType: discountTypeEnum(),
+	discountValue: numeric({ precision: 10, scale: 2 }),
 	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ precision: 3, mode: 'string' }).notNull(),
 }, (table) => [

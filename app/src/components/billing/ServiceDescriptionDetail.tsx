@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ServiceDescription, ServiceDescriptionTopic, PricingMode } from "@/types";
+import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
 import { TopicSection } from "./TopicSection";
 import { AddTopicModal } from "./AddTopicModal";
 
@@ -17,21 +18,6 @@ function formatPeriod(start: string, end: string): string {
   const endMonth = endDate.toLocaleString("en-GB", { month: "long", year: "numeric" });
   if (startMonth === endMonth) return startMonth;
   return `${startMonth} - ${endMonth}`;
-}
-
-function formatCurrency(amount: number): string {
-  return "€" + amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function calculateTopicTotal(topic: ServiceDescriptionTopic): number {
-  if (topic.pricingMode === "FIXED") {
-    return topic.fixedFee || 0;
-  }
-  // Hourly: rate × total hours + fixed amounts
-  const totalHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
-  const hourlyTotal = totalHours * (topic.hourlyRate || 0);
-  const fixedTotal = topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
-  return hourlyTotal + fixedTotal;
 }
 
 export function ServiceDescriptionDetail({ serviceDescription: initialData }: ServiceDescriptionDetailProps) {
@@ -54,9 +40,71 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     }));
   }, [data.topics]);
 
-  const grandTotal = useMemo(() => {
+  const subtotal = useMemo(() => {
     return topicTotals.reduce((sum, t) => sum + t.total, 0);
   }, [topicTotals]);
+
+  const grandTotal = useMemo(() => {
+    return calculateGrandTotal(data.topics, data.discountType, data.discountValue);
+  }, [data.topics, data.discountType, data.discountValue]);
+
+  const [isUpdatingDiscount, setIsUpdatingDiscount] = useState(false);
+  const [localOverallDiscount, setLocalOverallDiscount] = useState<string>(data.discountValue != null ? String(data.discountValue) : "");
+  useEffect(() => { setLocalOverallDiscount(data.discountValue != null ? String(data.discountValue) : ""); }, [data.discountValue]);
+
+  const handleOverallDiscountTypeChange = useCallback(
+    async (type: "PERCENTAGE" | "AMOUNT" | null) => {
+      setIsUpdatingDiscount(true);
+      try {
+        const payload = type
+          ? { discountType: type, discountValue: data.discountValue || null }
+          : { discountType: null, discountValue: null };
+        const response = await fetch(`/api/billing/${data.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (response.ok) {
+          setData((prev) => ({
+            ...prev,
+            discountType: type,
+            discountValue: type ? prev.discountValue : null,
+          }));
+        }
+      } catch (error) {
+        console.error("Failed to update discount:", error);
+      } finally {
+        setIsUpdatingDiscount(false);
+      }
+    },
+    [data.id, data.discountValue]
+  );
+
+  const handleOverallDiscountValueChange = useCallback(
+    async (value: string) => {
+      const parsed = parseFloat(value);
+      const val = !isNaN(parsed) ? parsed : null;
+      setIsUpdatingDiscount(true);
+      try {
+        const response = await fetch(`/api/billing/${data.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            discountType: data.discountType,
+            discountValue: val,
+          }),
+        });
+        if (response.ok) {
+          setData((prev) => ({ ...prev, discountValue: val }));
+        }
+      } catch (error) {
+        console.error("Failed to update discount value:", error);
+      } finally {
+        setIsUpdatingDiscount(false);
+      }
+    },
+    [data.id, data.discountType]
+  );
 
   // Navigate back
   const handleBack = useCallback(() => {
@@ -75,7 +123,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   }, []);
 
   const handleAddTopic = useCallback(
-    async (topicName: string, pricingMode: PricingMode, hourlyRate: number | null, fixedFee: number | null) => {
+    async (topicName: string, pricingMode: PricingMode, hourlyRate: number | null, fixedFee: number | null, capHours: number | null, discountType: "PERCENTAGE" | "AMOUNT" | null, discountValue: number | null) => {
       setIsAddingTopic(true);
       setAddTopicError(null);
 
@@ -83,7 +131,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
         const response = await fetch(`/api/billing/${data.id}/topics`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topicName, pricingMode, hourlyRate, fixedFee }),
+          body: JSON.stringify({ topicName, pricingMode, hourlyRate, fixedFee, capHours, discountType, discountValue }),
         });
 
         const result = await response.json();
@@ -322,67 +370,140 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleBack}
-            className="p-2 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
-            title="Back to billing"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">
-                {data.client.invoicedName || data.client.name}
-              </h1>
-              <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded ${
-                  isFinalized
-                    ? "bg-[var(--success-bg)] text-[var(--success)]"
-                    : "bg-[var(--warning-bg)] text-[var(--warning)]"
-                }`}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: isFinalized ? "var(--success)" : "var(--warning)" }}
-                />
-                {isFinalized ? "Finalized" : "Draft"}
-              </span>
-            </div>
-            <p className="text-[var(--text-muted)] text-sm mt-0.5">
+      <div className="flex items-center gap-4">
+        <button
+          onClick={handleBack}
+          className="p-2 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+          title="Back to billing"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div>
+          <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">
+            {data.client.invoicedName || data.client.name}
+          </h1>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-[var(--text-muted)] text-base">
               {formatPeriod(data.periodStart, data.periodEnd)}
             </p>
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded ${
+                isFinalized
+                  ? "bg-[var(--success-bg)] text-[var(--success)]"
+                  : "bg-[var(--warning-bg)] text-[var(--warning)]"
+              }`}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: isFinalized ? "var(--success)" : "var(--warning)" }}
+              />
+              {isFinalized ? "Finalized" : "Draft"}
+            </span>
           </div>
-        </div>
-        <div className="text-right">
-          <p className="text-[var(--text-muted)] text-xs uppercase tracking-wide">Total</p>
-          <p className="font-heading text-2xl font-semibold text-[var(--text-primary)]">
-            {formatCurrency(grandTotal)}
-          </p>
         </div>
       </div>
 
       {/* Summary Section */}
-      <div className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border-subtle)] p-4">
-        <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Summary</h2>
-        <div className="space-y-2">
+      <div className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border-subtle)] p-5">
+        <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Summary</h2>
+        <div className="space-y-2.5">
+          {/* Topic rows with dotted leaders */}
           {topicTotals.map((topic) => (
-            <div key={topic.id} className="flex items-center justify-between text-sm">
-              <span className="text-[var(--text-primary)]">{topic.name}</span>
-              <span className="text-[var(--text-secondary)]">{formatCurrency(topic.total)}</span>
+            <div key={topic.id} className="flex items-baseline gap-2 text-sm">
+              <span className="text-[var(--text-primary)] shrink-0">{topic.name}</span>
+              <span className="flex-1 border-b border-dotted border-[var(--border-subtle)]" />
+              <span className="text-[var(--text-secondary)] shrink-0 [font-variant-numeric:tabular-nums]">
+                {formatCurrency(topic.total)}
+              </span>
             </div>
           ))}
           {topicTotals.length === 0 && (
             <p className="text-sm text-[var(--text-muted)] italic">No topics yet</p>
           )}
+
+          {/* Subtotal + Discount + Grand Total */}
           {topicTotals.length > 0 && (
-            <div className="flex items-center justify-between text-sm font-medium pt-2 border-t border-[var(--border-subtle)]">
-              <span className="text-[var(--text-primary)]">Total</span>
-              <span className="text-[var(--text-primary)]">{formatCurrency(grandTotal)}</span>
-            </div>
+            <>
+              {/* Subtotal - always shown */}
+              <div className="flex items-center justify-between text-sm pt-3 border-t border-[var(--border-subtle)]">
+                <span className="text-[var(--text-secondary)]">Subtotal</span>
+                <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
+                  {formatCurrency(subtotal)}
+                </span>
+              </div>
+
+              {/* Discount controls (DRAFT only) */}
+              {isEditable && (
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[var(--text-muted)]">Overall Discount</span>
+                    <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
+                      <button
+                        onClick={() => handleOverallDiscountTypeChange(data.discountType === "PERCENTAGE" ? null : "PERCENTAGE")}
+                        disabled={isUpdatingDiscount}
+                        className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                          data.discountType === "PERCENTAGE"
+                            ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                            : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+                        }`}
+                      >
+                        %
+                      </button>
+                      <button
+                        onClick={() => handleOverallDiscountTypeChange(data.discountType === "AMOUNT" ? null : "AMOUNT")}
+                        disabled={isUpdatingDiscount}
+                        className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                          data.discountType === "AMOUNT"
+                            ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                            : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+                        }`}
+                      >
+                        EUR
+                      </button>
+                    </div>
+                    {data.discountType && (
+                      <input
+                        type="number"
+                        value={localOverallDiscount}
+                        onChange={(e) => setLocalOverallDiscount(e.target.value)}
+                        onBlur={(e) => handleOverallDiscountValueChange(e.target.value)}
+                        placeholder="0"
+                        className="w-20 px-2 py-1 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
+                        step="0.01"
+                        min="0"
+                      />
+                    )}
+                  </div>
+                  {data.discountType && data.discountValue ? (
+                    <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
+                      -{formatCurrency(subtotal - grandTotal)}
+                    </span>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Discount display when finalized */}
+              {!isEditable && data.discountType && data.discountValue && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-muted)]">
+                    Overall Discount ({data.discountType === "PERCENTAGE" ? `${data.discountValue}%` : formatCurrency(data.discountValue)})
+                  </span>
+                  <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
+                    -{formatCurrency(subtotal - grandTotal)}
+                  </span>
+                </div>
+              )}
+
+              {/* Grand Total */}
+              <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
+                <span className="text-lg font-semibold text-[var(--text-primary)]">Total</span>
+                <span className="text-lg font-semibold text-[var(--text-primary)] [font-variant-numeric:tabular-nums]">
+                  {formatCurrency(grandTotal)}
+                </span>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -403,61 +524,59 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
             onDeleteLineItem={handleDeleteLineItem}
           />
         ))}
+
+        {/* Add Topic Button - dashed, inline with topics */}
+        {isEditable && (
+          <button
+            onClick={handleOpenAddTopic}
+            className="w-full py-3 border-2 border-dashed border-[var(--border-subtle)] rounded-lg text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] hover:bg-[var(--bg-surface)] transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Topic
+          </button>
+        )}
       </div>
 
       {/* Footer Actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-[var(--border-subtle)]">
-        <div>
-          {isEditable && (
-            <button
-              onClick={handleOpenAddTopic}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] rounded transition-colors"
-            >
+      <div className="flex items-center justify-end gap-3 pt-4">
+        <button
+          onClick={handleExportPDF}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)] rounded hover:bg-[var(--bg-surface)] transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Export PDF
+        </button>
+        <button
+          onClick={handleToggleStatus}
+          disabled={isUpdatingStatus}
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded transition-colors disabled:opacity-50 ${
+            isFinalized
+              ? "text-[var(--warning)] border border-[var(--warning)] hover:bg-[var(--warning-bg)]"
+              : "bg-[var(--accent-pink)] text-[var(--bg-deep)] hover:bg-[var(--accent-pink-dim)]"
+          }`}
+        >
+          {isUpdatingStatus ? (
+            "..."
+          ) : isFinalized ? (
+            <>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
               </svg>
-              Add Topic
-            </button>
+              Unlock
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Finalize
+            </>
           )}
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExportPDF}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)] rounded hover:bg-[var(--bg-surface)] transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export PDF
-          </button>
-          <button
-            onClick={handleToggleStatus}
-            disabled={isUpdatingStatus}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded transition-colors disabled:opacity-50 ${
-              isFinalized
-                ? "text-[var(--warning)] border border-[var(--warning)] hover:bg-[var(--warning-bg)]"
-                : "bg-[var(--accent-pink)] text-[var(--bg-deep)] hover:bg-[var(--accent-pink-dim)]"
-            }`}
-          >
-            {isUpdatingStatus ? (
-              "..."
-            ) : isFinalized ? (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                </svg>
-                Unlock
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Finalize
-              </>
-            )}
-          </button>
-        </div>
+        </button>
       </div>
 
       {/* Add Topic Modal */}

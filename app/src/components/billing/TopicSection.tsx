@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { ServiceDescriptionTopic, PricingMode } from "@/types";
 import { LineItemRow } from "./LineItemRow";
 import { AddLineItemModal } from "./AddLineItemModal";
+import { calculateTopicTotal, calculateTopicBaseTotal, formatCurrency } from "@/lib/billing-pdf";
 
 interface TopicSectionProps {
   topic: ServiceDescriptionTopic;
@@ -15,10 +16,6 @@ interface TopicSectionProps {
   onAddLineItem: (topicId: string, data: { date?: string; description: string; hours?: number; fixedAmount?: number }) => Promise<void>;
   onUpdateLineItem: (topicId: string, itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
   onDeleteLineItem: (topicId: string, itemId: string) => Promise<void>;
-}
-
-function formatCurrency(amount: number): string {
-  return "€" + amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatHours(hours: number): string {
@@ -45,13 +42,23 @@ export function TopicSection({
   const [addItemError, setAddItemError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // Local state for numeric inputs (only fire API on blur)
+  const [localRate, setLocalRate] = useState<string>(topic.hourlyRate != null ? String(topic.hourlyRate) : "");
+  const [localFee, setLocalFee] = useState<string>(topic.fixedFee != null ? String(topic.fixedFee) : "");
+  const [localCap, setLocalCap] = useState<string>(topic.capHours != null ? String(topic.capHours) : "");
+  const [localDiscount, setLocalDiscount] = useState<string>(topic.discountValue != null ? String(topic.discountValue) : "");
+
+  useEffect(() => { setLocalRate(topic.hourlyRate != null ? String(topic.hourlyRate) : ""); }, [topic.hourlyRate]);
+  useEffect(() => { setLocalFee(topic.fixedFee != null ? String(topic.fixedFee) : ""); }, [topic.fixedFee]);
+  useEffect(() => { setLocalCap(topic.capHours != null ? String(topic.capHours) : ""); }, [topic.capHours]);
+  useEffect(() => { setLocalDiscount(topic.discountValue != null ? String(topic.discountValue) : ""); }, [topic.discountValue]);
+
   // Calculate totals
-  const totalHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
-  const topicTotal =
-    topic.pricingMode === "FIXED"
-      ? topic.fixedFee || 0
-      : totalHours * (topic.hourlyRate || 0) +
-        topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
+  const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+  const billedHours = topic.capHours && topic.pricingMode === "HOURLY" ? Math.min(rawHours, topic.capHours) : rawHours;
+  const baseTotal = calculateTopicBaseTotal(topic);
+  const topicTotal = calculateTopicTotal(topic);
+  const hasDiscount = topic.discountType && topic.discountValue;
 
   const handleToggle = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -75,7 +82,8 @@ export function TopicSection({
   const handleHourlyRateChange = useCallback(
     async (value: string) => {
       if (!isEditable) return;
-      const rate = parseFloat(value) || null;
+      const parsed = parseFloat(value);
+      const rate = !isNaN(parsed) ? parsed : null;
       setIsUpdating(true);
       try {
         await onUpdateTopic(topic.id, { hourlyRate: rate });
@@ -91,10 +99,68 @@ export function TopicSection({
   const handleFixedFeeChange = useCallback(
     async (value: string) => {
       if (!isEditable) return;
-      const fee = parseFloat(value) || null;
+      const parsed = parseFloat(value);
+      const fee = !isNaN(parsed) ? parsed : null;
       setIsUpdating(true);
       try {
         await onUpdateTopic(topic.id, { fixedFee: fee });
+      } catch {
+        // Error handled by parent
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+    [isEditable, topic.id, onUpdateTopic]
+  );
+
+  const handleCapHoursChange = useCallback(
+    async (value: string) => {
+      if (!isEditable) return;
+      const parsed = parseFloat(value);
+      const cap = !isNaN(parsed) ? parsed : null;
+      setIsUpdating(true);
+      try {
+        await onUpdateTopic(topic.id, { capHours: cap });
+      } catch {
+        // Error handled by parent
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+    [isEditable, topic.id, onUpdateTopic]
+  );
+
+  const handleDiscountTypeChange = useCallback(
+    async (type: "PERCENTAGE" | "AMOUNT" | null) => {
+      if (!isEditable) return;
+      setIsUpdating(true);
+      try {
+        if (!type) {
+          await onUpdateTopic(topic.id, { discountType: null, discountValue: null });
+        } else if (topic.discountValue) {
+          // Has an existing value — just change the type
+          await onUpdateTopic(topic.id, { discountType: type, discountValue: topic.discountValue });
+        } else {
+          // No value yet — set type only, value will be sent when user enters one
+          await onUpdateTopic(topic.id, { discountType: type, discountValue: null });
+        }
+      } catch {
+        // Error handled by parent
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+    [isEditable, topic.id, topic.discountValue, onUpdateTopic]
+  );
+
+  const handleDiscountValueChange = useCallback(
+    async (value: string) => {
+      if (!isEditable) return;
+      const parsed = parseFloat(value);
+      const val = !isNaN(parsed) ? parsed : null;
+      setIsUpdating(true);
+      try {
+        await onUpdateTopic(topic.id, { discountValue: val });
       } catch {
         // Error handled by parent
       } finally {
@@ -169,13 +235,36 @@ export function TopicSection({
           </h3>
           <span className="text-xs text-[var(--text-muted)]">
             {topic.lineItems.length} item{topic.lineItems.length !== 1 ? "s" : ""}
-            {topic.pricingMode === "HOURLY" && totalHours > 0 && ` \u2022 ${formatHours(totalHours)}`}
+            {topic.pricingMode === "HOURLY" && rawHours > 0 && (
+              <>
+                {` \u2022 ${formatHours(billedHours)}`}
+                {topic.capHours && rawHours > topic.capHours && (
+                  <span className="text-[var(--warning)]"> (capped from {formatHours(rawHours)})</span>
+                )}
+              </>
+            )}
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-[var(--text-secondary)]">
-            {formatCurrency(topicTotal)}
-          </span>
+          {hasDiscount ? (
+            <div className="text-right">
+              <div className="text-xs text-[var(--text-muted)] line-through">
+                {formatCurrency(baseTotal)}
+              </div>
+              <div className="text-xs text-[var(--text-muted)]">
+                Discount ({topic.discountType === "PERCENTAGE" ? `${topic.discountValue}%` : formatCurrency(topic.discountValue!)}): -{formatCurrency(
+                  baseTotal - topicTotal
+                )}
+              </div>
+              <div className="text-sm font-medium text-[var(--text-primary)]">
+                {formatCurrency(topicTotal)}
+              </div>
+            </div>
+          ) : (
+            <span className="text-sm font-medium text-[var(--text-secondary)]">
+              {formatCurrency(topicTotal)}
+            </span>
+          )}
           {isEditable && (
             <button
               onClick={(e) => {
@@ -198,124 +287,203 @@ export function TopicSection({
         <div className="border-t border-[var(--border-subtle)]">
           {/* Pricing controls */}
           <div className="p-4 border-b border-[var(--border-subtle)] bg-[var(--bg-deep)]">
-            <div className="flex items-center gap-6">
-              {/* Pricing mode toggle */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[var(--text-muted)]">Pricing:</span>
-                <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePricingModeChange("HOURLY");
-                    }}
-                    disabled={!isEditable || isUpdating}
-                    className={`px-3 py-1 text-xs font-medium transition-colors ${
-                      topic.pricingMode === "HOURLY"
-                        ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
-                        : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                    } ${!isEditable ? "cursor-not-allowed opacity-60" : ""}`}
-                  >
-                    Hourly
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePricingModeChange("FIXED");
-                    }}
-                    disabled={!isEditable || isUpdating}
-                    className={`px-3 py-1 text-xs font-medium transition-colors ${
-                      topic.pricingMode === "FIXED"
-                        ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
-                        : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                    } ${!isEditable ? "cursor-not-allowed opacity-60" : ""}`}
-                  >
-                    Fixed
-                  </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Left column: Pricing */}
+              <div className="border border-[var(--border-subtle)] rounded-lg p-3 space-y-3">
+                <h4 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Pricing</h4>
+
+                {/* Mode toggle */}
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-[var(--text-secondary)] w-16 shrink-0">Mode</label>
+                  <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePricingModeChange("HOURLY"); }}
+                      disabled={!isEditable || isUpdating}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                        topic.pricingMode === "HOURLY"
+                          ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                          : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      } ${!isEditable ? "cursor-not-allowed opacity-60" : ""}`}
+                    >
+                      Hourly
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePricingModeChange("FIXED"); }}
+                      disabled={!isEditable || isUpdating}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                        topic.pricingMode === "FIXED"
+                          ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                          : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      } ${!isEditable ? "cursor-not-allowed opacity-60" : ""}`}
+                    >
+                      Fixed
+                    </button>
+                  </div>
                 </div>
+
+                {/* Rate or Fee */}
+                {topic.pricingMode === "HOURLY" ? (
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-[var(--text-secondary)] w-16 shrink-0">Rate</label>
+                    <input
+                      type="number"
+                      value={localRate}
+                      onChange={(e) => setLocalRate(e.target.value)}
+                      onBlur={(e) => handleHourlyRateChange(e.target.value)}
+                      disabled={!isEditable}
+                      placeholder={clientHourlyRate ? String(clientHourlyRate) : "0"}
+                      className="w-24 px-2 py-1.5 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
+                      step="0.01"
+                      min="0"
+                    />
+                    <span className="text-xs text-[var(--text-muted)]">EUR/h</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-[var(--text-secondary)] w-16 shrink-0">Fee</label>
+                    <input
+                      type="number"
+                      value={localFee}
+                      onChange={(e) => setLocalFee(e.target.value)}
+                      onBlur={(e) => handleFixedFeeChange(e.target.value)}
+                      disabled={!isEditable}
+                      placeholder="0"
+                      className="w-24 px-2 py-1.5 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
+                      step="0.01"
+                      min="0"
+                    />
+                    <span className="text-xs text-[var(--text-muted)]">EUR</span>
+                  </div>
+                )}
               </div>
 
-              {/* Rate/Fee input */}
-              {topic.pricingMode === "HOURLY" ? (
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-[var(--text-muted)]">Rate:</label>
-                  <input
-                    type="number"
-                    value={topic.hourlyRate ?? ""}
-                    onChange={(e) => handleHourlyRateChange(e.target.value)}
-                    onBlur={(e) => handleHourlyRateChange(e.target.value)}
-                    disabled={!isEditable}
-                    placeholder={clientHourlyRate ? String(clientHourlyRate) : "0"}
-                    className="w-24 px-2 py-1 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
-                    step="0.01"
-                    min="0"
-                  />
-                  <span className="text-xs text-[var(--text-muted)]">EUR/h</span>
+              {/* Right column: Adjustments */}
+              <div className="border border-[var(--border-subtle)] rounded-lg p-3 space-y-3">
+                <h4 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Adjustments</h4>
+
+                {/* Cap (HOURLY only) */}
+                {topic.pricingMode === "HOURLY" && (
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-[var(--text-secondary)] w-16 shrink-0">Cap</label>
+                    <input
+                      type="number"
+                      value={localCap}
+                      onChange={(e) => setLocalCap(e.target.value)}
+                      onBlur={(e) => handleCapHoursChange(e.target.value)}
+                      disabled={!isEditable}
+                      placeholder="No cap"
+                      className="w-24 px-2 py-1.5 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
+                      step="0.25"
+                      min="0"
+                    />
+                    <span className="text-xs text-[var(--text-muted)]">hrs</span>
+                  </div>
+                )}
+
+                {/* Discount */}
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-[var(--text-secondary)] w-16 shrink-0">Discount</label>
+                  <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDiscountTypeChange(topic.discountType === "PERCENTAGE" ? null : "PERCENTAGE"); }}
+                      disabled={!isEditable || isUpdating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                        topic.discountType === "PERCENTAGE"
+                          ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                          : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      } ${!isEditable ? "cursor-not-allowed opacity-60" : ""}`}
+                    >
+                      %
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDiscountTypeChange(topic.discountType === "AMOUNT" ? null : "AMOUNT"); }}
+                      disabled={!isEditable || isUpdating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                        topic.discountType === "AMOUNT"
+                          ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                          : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      } ${!isEditable ? "cursor-not-allowed opacity-60" : ""}`}
+                    >
+                      EUR
+                    </button>
+                  </div>
+                  {topic.discountType && (
+                    <input
+                      type="number"
+                      value={localDiscount}
+                      onChange={(e) => setLocalDiscount(e.target.value)}
+                      onBlur={(e) => handleDiscountValueChange(e.target.value)}
+                      disabled={!isEditable}
+                      placeholder="0"
+                      className="w-20 px-2 py-1.5 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
+                      step="0.01"
+                      min="0"
+                    />
+                  )}
                 </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-[var(--text-muted)]">Fixed Fee:</label>
-                  <input
-                    type="number"
-                    value={topic.fixedFee ?? ""}
-                    onChange={(e) => handleFixedFeeChange(e.target.value)}
-                    onBlur={(e) => handleFixedFeeChange(e.target.value)}
-                    disabled={!isEditable}
-                    placeholder="0"
-                    className="w-24 px-2 py-1 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
-                    step="0.01"
-                    min="0"
-                  />
-                  <span className="text-xs text-[var(--text-muted)]">EUR</span>
-                </div>
-              )}
+              </div>
             </div>
           </div>
 
-          {/* Line items table */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] uppercase tracking-wide">
-                  <th className="px-4 py-2 text-left font-medium w-28">Date</th>
-                  <th className="px-4 py-2 text-left font-medium">Description</th>
-                  <th className="px-4 py-2 text-right font-medium w-24">Time</th>
-                  {isEditable && <th className="px-4 py-2 text-right font-medium w-16">Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {topic.lineItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={isEditable ? 4 : 3} className="px-4 py-6 text-center text-sm text-[var(--text-muted)] italic">
-                      No line items yet
-                    </td>
+          {/* Line items */}
+          {topic.lineItems.length === 0 ? (
+            <div className="p-6">
+              {isEditable ? (
+                <button
+                  onClick={handleOpenAddItem}
+                  className="w-full py-6 border-2 border-dashed border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] hover:bg-[var(--bg-surface)] transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Line Item
+                </button>
+              ) : (
+                <p className="text-center text-sm text-[var(--text-muted)] italic">No line items</p>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-xs text-[var(--text-muted)] uppercase tracking-wide">
+                    <th className="px-4 py-2.5 text-left font-medium w-24">Date</th>
+                    <th className="px-4 py-2.5 text-left font-medium w-28">Lawyer</th>
+                    <th className="px-4 py-2.5 text-left font-medium">Description</th>
+                    <th className="px-4 py-2.5 text-right font-medium w-24">Hours</th>
+                    {isEditable && <th className="px-4 py-2.5 text-right font-medium w-10"></th>}
                   </tr>
-                ) : (
-                  topic.lineItems.map((item) => (
+                </thead>
+                <tbody>
+                  {topic.lineItems.map((item, index) => (
                     <LineItemRow
                       key={item.id}
                       item={item}
                       isEditable={isEditable}
+                      isEvenRow={index % 2 === 0}
                       onUpdate={handleUpdateItem}
                       onDelete={handleDeleteItem}
                     />
-                  ))
+                  ))}
+                </tbody>
+                {isEditable && (
+                  <tfoot>
+                    <tr className="border-t border-[var(--border-subtle)]">
+                      <td colSpan={isEditable ? 5 : 4}>
+                        <button
+                          onClick={handleOpenAddItem}
+                          className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors w-full"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                          </svg>
+                          Add Line Item
+                        </button>
+                      </td>
+                    </tr>
+                  </tfoot>
                 )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Add line item button */}
-          {isEditable && (
-            <div className="p-3 border-t border-[var(--border-subtle)]">
-              <button
-                onClick={handleOpenAddItem}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] rounded transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                </svg>
-                Add Line Item
-              </button>
+              </table>
             </div>
           )}
         </div>

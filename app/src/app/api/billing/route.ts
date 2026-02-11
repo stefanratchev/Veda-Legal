@@ -10,15 +10,16 @@ import {
   timeEntries,
 } from "@/lib/schema";
 import {
-  requireAuth,
   requireAdmin,
+  serializeDecimal,
   errorResponse,
 } from "@/lib/api-utils";
+import { calculateGrandTotal } from "@/lib/billing-pdf";
 import { BILLING_START_DATE } from "@/lib/billing-config";
 
 // GET /api/billing - List all service descriptions
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -31,6 +32,8 @@ export async function GET(request: NextRequest) {
         periodStart: true,
         periodEnd: true,
         status: true,
+        discountType: true,
+        discountValue: true,
         updatedAt: true,
       },
       with: {
@@ -42,6 +45,9 @@ export async function GET(request: NextRequest) {
             pricingMode: true,
             hourlyRate: true,
             fixedFee: true,
+            capHours: true,
+            discountType: true,
+            discountValue: true,
           },
           with: {
             lineItems: {
@@ -53,25 +59,27 @@ export async function GET(request: NextRequest) {
       orderBy: [desc(serviceDescriptions.updatedAt)],
     });
 
-    // Calculate total amount for each service description
+    // Calculate total amount for each service description using canonical functions
     const result = allServiceDescriptions.map((sd) => {
-      let totalAmount = 0;
-      for (const topic of sd.topics) {
-        if (topic.pricingMode === "FIXED" && topic.fixedFee) {
-          totalAmount += Number(topic.fixedFee);
-        } else if (topic.pricingMode === "HOURLY" && topic.hourlyRate) {
-          const totalHours = topic.lineItems.reduce(
-            (sum, item) => sum + (item.hours ? Number(item.hours) : 0),
-            0
-          );
-          totalAmount += totalHours * Number(topic.hourlyRate);
-          // Add fixed amounts from line items
-          totalAmount += topic.lineItems.reduce(
-            (sum, item) => sum + (item.fixedAmount ? Number(item.fixedAmount) : 0),
-            0
-          );
-        }
-      }
+      const topics = sd.topics.map((t) => ({
+        id: "", topicName: "", displayOrder: 0,
+        pricingMode: t.pricingMode as "HOURLY" | "FIXED",
+        hourlyRate: serializeDecimal(t.hourlyRate),
+        fixedFee: serializeDecimal(t.fixedFee),
+        capHours: serializeDecimal(t.capHours),
+        discountType: (t.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
+        discountValue: serializeDecimal(t.discountValue),
+        lineItems: t.lineItems.map((li) => ({
+          id: "", timeEntryId: null, date: null, description: "", displayOrder: 0,
+          hours: serializeDecimal(li.hours),
+          fixedAmount: serializeDecimal(li.fixedAmount),
+        })),
+      }));
+      const totalAmount = Math.round(calculateGrandTotal(
+        topics,
+        (sd.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
+        serializeDecimal(sd.discountValue),
+      ) * 100) / 100;
 
       return {
         id: sd.id,
@@ -80,7 +88,7 @@ export async function GET(request: NextRequest) {
         periodStart: sd.periodStart,
         periodEnd: sd.periodEnd,
         status: sd.status,
-        totalAmount: Math.round(totalAmount * 100) / 100,
+        totalAmount,
         updatedAt: sd.updatedAt,
       };
     });

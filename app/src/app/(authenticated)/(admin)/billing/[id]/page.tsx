@@ -61,6 +61,8 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
     periodEnd: sd.periodEnd,
     status: sd.status as "DRAFT" | "FINALIZED",
     finalizedAt: sd.finalizedAt || null,
+    discountType: (sd.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
+    discountValue: serializeDecimal(sd.discountValue),
     topics: sd.topics.map((topic) => ({
       id: topic.id,
       topicName: topic.topicName,
@@ -68,6 +70,9 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
       pricingMode: topic.pricingMode as "HOURLY" | "FIXED",
       hourlyRate: serializeDecimal(topic.hourlyRate),
       fixedFee: serializeDecimal(topic.fixedFee),
+      capHours: serializeDecimal(topic.capHours),
+      discountType: (topic.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
+      discountValue: serializeDecimal(topic.discountValue),
       lineItems: topic.lineItems.map((item) => ({
         id: item.id,
         timeEntryId: item.timeEntryId,

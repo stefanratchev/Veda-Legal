@@ -19,34 +19,36 @@
 
 **Step 1: Add the discountType enum and new columns**
 
-Add after the `pricingMode` enum (line 7):
+Add after the `topicType` enum (line 13):
 
 ```typescript
-export const discountType = pgEnum("DiscountType", ['PERCENTAGE', 'AMOUNT'])
+export const discountTypeEnum = pgEnum("DiscountType", ['PERCENTAGE', 'AMOUNT'])
 ```
+
+> **Note:** The variable is named `discountTypeEnum` (not `discountType`) to avoid naming collision with the column name `discountType` used in table definitions.
 
 Add to `serviceDescriptionTopics` table (after `fixedFee`, line 23):
 
 ```typescript
 capHours: numeric({ precision: 6, scale: 2 }),
-discountType: discountType(),
+discountType: discountTypeEnum(),
 discountValue: numeric({ precision: 10, scale: 2 }),
 ```
 
-Add to `serviceDescriptions` table (after `finalizedById`, line 43):
+Add to `serviceDescriptions` table (after `finalizedById`, line 42):
 
 ```typescript
-discountType: discountType(),
+discountType: discountTypeEnum(),
 discountValue: numeric({ precision: 10, scale: 2 }),
 ```
 
 **Step 2: Generate migration**
 
-Run: `npm run db:generate`
+Run: `cd app && npm run db:generate`
 
 **Step 3: Apply migration to dev database**
 
-Run: `npm run db:push`
+Run: `cd app && npm run db:push`
 
 **Step 4: Commit**
 
@@ -63,7 +65,7 @@ feat(schema): add discountType enum, capHours and discount columns
 
 **Step 1: Add DiscountType and update interfaces**
 
-Add after `PricingMode` type (line 116):
+Add after `PricingMode` type:
 
 ```typescript
 /**
@@ -72,7 +74,7 @@ Add after `PricingMode` type (line 116):
 export type DiscountType = "PERCENTAGE" | "AMOUNT";
 ```
 
-Add to `ServiceDescriptionTopic` interface (after `fixedFee`, line 143):
+Add to `ServiceDescriptionTopic` interface (after `fixedFee`):
 
 ```typescript
 capHours: number | null;
@@ -80,7 +82,7 @@ discountType: DiscountType | null;
 discountValue: number | null;
 ```
 
-Add to `ServiceDescription` interface (after `finalizedAt`, line 163):
+Add to `ServiceDescription` interface (after `finalizedAt`):
 
 ```typescript
 discountType: DiscountType | null;
@@ -101,7 +103,41 @@ feat(types): add DiscountType, capHours, and discount fields to interfaces
 - Modify: `app/src/lib/billing-pdf.test.ts`
 - Modify: `app/src/lib/billing-pdf.tsx`
 
-**Step 1: Write failing tests for capHours**
+**Step 1: Update existing test objects to include new nullable fields**
+
+All existing test topic objects in `billing-pdf.test.ts` must include the new fields to satisfy the updated `ServiceDescription["topics"][0]` type. Add these three properties to every existing topic object in the test file:
+
+```typescript
+capHours: null, discountType: null, discountValue: null,
+```
+
+The existing tests in `calculateTopicTotal`, `calculateTopicHours`, and other describe blocks all construct topic objects inline. Each one needs the three new nullable fields added.
+
+For example, the first test (line 99-112) becomes:
+```typescript
+it("calculates hourly total correctly", () => {
+  const topic: ServiceDescription["topics"][0] = {
+    id: "1",
+    topicName: "Test",
+    displayOrder: 1,
+    pricingMode: "HOURLY",
+    hourlyRate: 100,
+    fixedFee: null,
+    capHours: null,
+    discountType: null,
+    discountValue: null,
+    lineItems: [
+      { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
+      { id: "b", timeEntryId: null, date: "2026-02-02", description: "More work", hours: 3.5, fixedAmount: null, displayOrder: 2 },
+    ],
+  };
+  expect(calculateTopicTotal(topic)).toBe(550);
+});
+```
+
+Do this for ALL existing topic objects in the file (there are 7 in `calculateTopicTotal` and 3 in `calculateTopicHours`).
+
+**Step 2: Write failing tests for capHours**
 
 Add to `billing-pdf.test.ts` in the `calculateTopicTotal` describe block:
 
@@ -131,7 +167,7 @@ it("does not cap when rawHours is below capHours", () => {
 });
 ```
 
-**Step 2: Write failing tests for topic discount**
+**Step 3: Write failing tests for topic discount**
 
 ```typescript
 it("applies percentage discount to hourly topic", () => {
@@ -205,14 +241,24 @@ it("floors discount result at zero", () => {
 });
 ```
 
-**Step 3: Write failing tests for calculateGrandTotal**
+**Step 4: Write failing tests for calculateGrandTotal**
+
+Update the import at the top of the file to include `calculateGrandTotal`:
+```typescript
+import {
+  formatCurrency,
+  formatDate,
+  formatPeriod,
+  generateReference,
+  calculateTopicTotal,
+  calculateTopicHours,
+  calculateGrandTotal,
+} from "./billing-pdf";
+```
 
 Add a new describe block:
 
 ```typescript
-import { calculateGrandTotal } from "./billing-pdf";
-// (update the import at the top)
-
 describe("calculateGrandTotal", () => {
   const makeTopic = (overrides: Partial<ServiceDescription["topics"][0]>): ServiceDescription["topics"][0] => ({
     id: "1", topicName: "Test", displayOrder: 1,
@@ -264,14 +310,14 @@ describe("calculateGrandTotal", () => {
 });
 ```
 
-**Step 4: Run tests to verify they fail**
+**Step 5: Run tests to verify they fail**
 
 Run: `cd app && npm run test -- billing-pdf --run`
-Expected: All new tests FAIL (missing fields in type, missing function)
+Expected: All new tests FAIL (missing function `calculateGrandTotal`)
 
-**Step 5: Update calculateTopicTotal in billing-pdf.tsx**
+**Step 6: Update calculateTopicTotal in billing-pdf.tsx**
 
-Replace the existing `calculateTopicTotal` (line 389-401):
+Replace the existing `calculateTopicTotal` function:
 
 ```typescript
 export function calculateTopicTotal(topic: ServiceDescription["topics"][0]): number {
@@ -297,7 +343,7 @@ export function calculateTopicTotal(topic: ServiceDescription["topics"][0]): num
 }
 ```
 
-**Step 6: Add calculateGrandTotal function**
+**Step 7: Add calculateGrandTotal function**
 
 Add after `calculateTopicHours`:
 
@@ -319,12 +365,29 @@ export function calculateGrandTotal(
 }
 ```
 
-**Step 7: Run tests to verify they pass**
+**Step 8: Also add a helper `calculateTopicBaseTotal` for PDF display**
+
+This function computes the topic total BEFORE discount, needed for showing the base amount and discount line in both the UI and PDF:
+
+```typescript
+export function calculateTopicBaseTotal(topic: ServiceDescription["topics"][0]): number {
+  if (topic.pricingMode === "FIXED") {
+    return topic.fixedFee || 0;
+  }
+  const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+  const billedHours = topic.capHours ? Math.min(rawHours, topic.capHours) : rawHours;
+  const hourlyTotal = billedHours * (topic.hourlyRate || 0);
+  const fixedTotal = topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
+  return hourlyTotal + fixedTotal;
+}
+```
+
+**Step 9: Run tests to verify they pass**
 
 Run: `cd app && npm run test -- billing-pdf --run`
 Expected: ALL tests PASS
 
-**Step 8: Commit**
+**Step 10: Commit**
 
 ```
 feat(billing): add capHours and discount logic to calculateTopicTotal and calculateGrandTotal
@@ -340,7 +403,7 @@ feat(billing): add capHours and discount logic to calculateTopicTotal and calcul
 
 **Step 1: Update POST topic route to accept new fields**
 
-In `route.ts` (topics POST), update the destructure (line 26) and insert (line 55-63):
+In `route.ts` (topics POST), update the destructure and insert:
 
 Destructure new fields from body:
 ```typescript
@@ -408,7 +471,7 @@ if (body.discountValue !== undefined) {
 }
 ```
 
-Add validation before the update:
+Add validation before the update (after building updateData, before the db.update call):
 ```typescript
 // Validate discount pair
 const effectiveDiscountType = body.discountType !== undefined ? body.discountType : undefined;
@@ -441,7 +504,18 @@ if (body.pricingMode === "FIXED") {
 }
 ```
 
-Update returning clause and response to include new fields (same pattern as POST).
+Update returning clause and response to include new fields (same pattern as POST):
+```typescript
+// In .returning():
+capHours: serviceDescriptionTopics.capHours,
+discountType: serviceDescriptionTopics.discountType,
+discountValue: serviceDescriptionTopics.discountValue,
+
+// In response:
+capHours: serializeDecimal(topic.capHours),
+discountType: topic.discountType,
+discountValue: serializeDecimal(topic.discountValue),
+```
 
 **Step 3: Commit**
 
@@ -451,11 +525,12 @@ feat(api): accept capHours, discountType, discountValue in topic POST/PATCH
 
 ---
 
-### Task 5: Update API — service description routes
+### Task 5: Update API — service description routes + PDF route
 
 **Files:**
 - Modify: `app/src/app/api/billing/[id]/route.ts` (GET serializer + PATCH)
 - Modify: `app/src/app/api/billing/route.ts` (GET list totals)
+- Modify: `app/src/app/api/billing/[id]/pdf/route.tsx` (PDF query + serializer)
 
 **Step 1: Update GET [id] serializer**
 
@@ -519,7 +594,17 @@ if (bodyDiscountType !== undefined || bodyDiscountValue !== undefined) {
   if ((bodyDiscountType && !bodyDiscountValue) || (!bodyDiscountType && bodyDiscountValue)) {
     return errorResponse("discountType and discountValue must both be set or both be null", 400);
   }
-  // ... same validation as topic discount
+  if (bodyDiscountType && !["PERCENTAGE", "AMOUNT"].includes(bodyDiscountType)) {
+    return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
+  }
+  if (bodyDiscountValue !== undefined && bodyDiscountValue !== null) {
+    if (typeof bodyDiscountValue !== "number" || bodyDiscountValue <= 0) {
+      return errorResponse("discountValue must be a positive number", 400);
+    }
+    if (bodyDiscountType === "PERCENTAGE" && bodyDiscountValue > 100) {
+      return errorResponse("Percentage discount cannot exceed 100", 400);
+    }
+  }
   updateData.discountType = bodyDiscountType || null;
   updateData.discountValue = bodyDiscountValue ? String(bodyDiscountValue) : null;
 }
@@ -529,7 +614,7 @@ Make the `status` field optional (currently required). The PATCH should work for
 
 **Step 3: Update GET list route totals**
 
-In `app/src/app/api/billing/route.ts`, update the total calculation (lines 57-74) to account for caps, topic discounts, and overall SD discount.
+In `app/src/app/api/billing/route.ts`, update the total calculation to account for caps, topic discounts, and overall SD discount.
 
 Update the query to include the new columns:
 ```typescript
@@ -542,14 +627,14 @@ topics: {
     discountType: true,
     discountValue: true,
   },
-  // ...
+  // ...existing lineItems...
 },
 ```
 
 Also fetch SD-level discount columns:
 ```typescript
 columns: {
-  // ...existing
+  // ...existing columns
   discountType: true,
   discountValue: true,
 },
@@ -591,14 +676,57 @@ const result = allServiceDescriptions.map((sd) => {
     subtotal = subtotal - Number(sd.discountValue);
   }
   const totalAmount = Math.max(Math.round(subtotal * 100) / 100, 0);
-  // ...return
+  // ...return rest of object with totalAmount
 });
 ```
 
-**Step 4: Commit**
+**Step 4: Update PDF route query and serializer**
+
+In `app/src/app/api/billing/[id]/pdf/route.tsx`:
+
+Update the DB query columns for the SD to include new fields (after `finalizedAt`, line 101):
+```typescript
+discountType: true,
+discountValue: true,
+```
+
+Update the DB query columns for topics to include new fields (after `fixedFee`, line 122):
+```typescript
+capHours: true,
+discountType: true,
+discountValue: true,
+```
+
+Update the `serializeForPDF` function type signature. Add to the SD type (after `finalizedAt: string | null;`, line 26):
+```typescript
+discountType: "PERCENTAGE" | "AMOUNT" | null;
+discountValue: string | null;
+```
+
+Add to the topic type (after `fixedFee: string | null;`, line 33):
+```typescript
+capHours: string | null;
+discountType: "PERCENTAGE" | "AMOUNT" | null;
+discountValue: string | null;
+```
+
+Update the return object. Add to the SD serialization (after `finalizedAt`, line 60):
+```typescript
+discountType: sd.discountType,
+discountValue: serializeDecimal(sd.discountValue),
+```
+
+Add to each topic in the map (after `fixedFee`, line 67):
+```typescript
+capHours: serializeDecimal(topic.capHours),
+discountType: topic.discountType,
+discountValue: serializeDecimal(topic.discountValue),
+```
+
+**Step 5: Commit**
 
 ```
-feat(api): support discount/cap fields in service description GET/PATCH and list totals
+feat(api): support discount/cap fields in service description GET/PATCH, list totals, and PDF route
 ```
 
 ---
@@ -610,21 +738,14 @@ feat(api): support discount/cap fields in service description GET/PATCH and list
 
 **Step 1: Serialize new fields**
 
-Add to the topic serialization (after `fixedFee`, around line 70):
-```typescript
-capHours: serializeDecimal(topic.capHours),
-discountType: topic.pricingMode === "FIXED" ? null : (topic.discountType as "PERCENTAGE" | "AMOUNT" | null),
-discountValue: serializeDecimal(topic.discountValue),
-```
-
-Wait — discountType applies to both FIXED and HOURLY topics. Just serialize it directly:
+Add to the topic serialization (after `fixedFee`):
 ```typescript
 capHours: serializeDecimal(topic.capHours),
 discountType: (topic.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
 discountValue: serializeDecimal(topic.discountValue),
 ```
 
-Add to the SD-level serialization (after `finalizedAt`, around line 63):
+Add to the SD-level serialization (after `finalizedAt`):
 ```typescript
 discountType: (sd.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
 discountValue: serializeDecimal(sd.discountValue),
@@ -645,7 +766,7 @@ feat(page): serialize discount and cap fields for client component
 
 **Step 1: Add capHours handler**
 
-Add after `handleFixedFeeChange` (around line 105):
+Add after `handleFixedFeeChange`:
 
 ```typescript
 const handleCapHoursChange = useCallback(
@@ -709,29 +830,25 @@ const handleDiscountValueChange = useCallback(
 
 **Step 3: Update topicTotal calculation**
 
-Replace the existing calculation (lines 49-54) with the cap+discount logic:
+Import `calculateTopicTotal`, `calculateTopicBaseTotal`, and `formatCurrency` from `@/lib/billing-pdf`:
+
+```typescript
+import { calculateTopicTotal, calculateTopicBaseTotal, formatCurrency } from "@/lib/billing-pdf";
+```
+
+Replace the existing topic total calculation with:
 
 ```typescript
 const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
 const billedHours = topic.capHours && topic.pricingMode === "HOURLY" ? Math.min(rawHours, topic.capHours) : rawHours;
-
-let baseTotal =
-  topic.pricingMode === "FIXED"
-    ? topic.fixedFee || 0
-    : billedHours * (topic.hourlyRate || 0) +
-      topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
-
-if (topic.discountType === "PERCENTAGE" && topic.discountValue) {
-  baseTotal = baseTotal * (1 - topic.discountValue / 100);
-} else if (topic.discountType === "AMOUNT" && topic.discountValue) {
-  baseTotal = baseTotal - topic.discountValue;
-}
-const topicTotal = Math.max(baseTotal, 0);
+const baseTotal = calculateTopicBaseTotal(topic);
+const topicTotal = calculateTopicTotal(topic);
+const hasDiscount = topic.discountType && topic.discountValue;
 ```
 
 **Step 4: Add UI controls inline with rate**
 
-In the pricing controls row (the `<div className="flex items-center gap-6">` around line 201), add cap and discount inputs after the Rate/Fee input section.
+In the pricing controls row (the `<div className="flex items-center gap-6">`), add cap and discount inputs after the Rate/Fee input section.
 
 For HOURLY mode, add cap hours input to the right of rate:
 ```tsx
@@ -804,7 +921,7 @@ Add discount toggle + value (for both HOURLY and FIXED modes):
 
 **Step 5: Update the header summary to show cap info**
 
-In the header span showing hours (around line 172), update to show cap:
+In the header span showing hours, update to show cap:
 ```tsx
 {topic.pricingMode === "HOURLY" && rawHours > 0 && (
   <>
@@ -816,7 +933,33 @@ In the header span showing hours (around line 172), update to show cap:
 )}
 ```
 
-**Step 6: Commit**
+**Step 6: Add discount breakdown in the topic total display area**
+
+In the topic footer/total area (where `topicTotal` is displayed), add a discount breakdown when active:
+
+```tsx
+{hasDiscount ? (
+  <div className="text-right">
+    <div className="text-xs text-[var(--text-muted)] line-through">
+      {formatCurrency(baseTotal)}
+    </div>
+    <div className="text-xs text-[var(--text-muted)]">
+      Discount ({topic.discountType === "PERCENTAGE" ? `${topic.discountValue}%` : formatCurrency(topic.discountValue!)}): -{formatCurrency(
+        topic.discountType === "PERCENTAGE" ? baseTotal * topic.discountValue! / 100 : topic.discountValue!
+      )}
+    </div>
+    <div className="text-sm font-medium text-[var(--text-primary)]">
+      {formatCurrency(topicTotal)}
+    </div>
+  </div>
+) : (
+  <span className="text-sm font-medium text-[var(--text-primary)]">
+    {formatCurrency(topicTotal)}
+  </span>
+)}
+```
+
+**Step 7: Commit**
 
 ```
 feat(ui): add cap and discount controls to TopicSection
@@ -833,10 +976,10 @@ feat(ui): add cap and discount controls to TopicSection
 
 Replace the local `calculateTopicTotal` with imports from `billing-pdf.tsx`:
 ```typescript
-import { calculateTopicTotal, calculateGrandTotal } from "@/lib/billing-pdf";
+import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
 ```
 
-Remove the local `calculateTopicTotal` function (lines 26-35).
+Remove the local `calculateTopicTotal` function.
 
 **Step 2: Update grandTotal to use calculateGrandTotal**
 
@@ -923,11 +1066,39 @@ After the topic totals list, before the total row, add an overall discount secti
     <div className="flex items-center gap-2">
       <span className="text-[var(--text-muted)]">Overall Discount:</span>
       <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
-        <button onClick={() => handleOverallDiscountTypeChange(data.discountType === "PERCENTAGE" ? null : "PERCENTAGE")} disabled={isUpdatingDiscount} className={`px-2 py-0.5 text-xs font-medium transition-colors ${data.discountType === "PERCENTAGE" ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]" : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"}`}>%</button>
-        <button onClick={() => handleOverallDiscountTypeChange(data.discountType === "AMOUNT" ? null : "AMOUNT")} disabled={isUpdatingDiscount} className={`px-2 py-0.5 text-xs font-medium transition-colors ${data.discountType === "AMOUNT" ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]" : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"}`}>EUR</button>
+        <button
+          onClick={() => handleOverallDiscountTypeChange(data.discountType === "PERCENTAGE" ? null : "PERCENTAGE")}
+          disabled={isUpdatingDiscount}
+          className={`px-2 py-0.5 text-xs font-medium transition-colors ${
+            data.discountType === "PERCENTAGE"
+              ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+              : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+          }`}
+        >
+          %
+        </button>
+        <button
+          onClick={() => handleOverallDiscountTypeChange(data.discountType === "AMOUNT" ? null : "AMOUNT")}
+          disabled={isUpdatingDiscount}
+          className={`px-2 py-0.5 text-xs font-medium transition-colors ${
+            data.discountType === "AMOUNT"
+              ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+              : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+          }`}
+        >
+          EUR
+        </button>
       </div>
       {data.discountType && (
-        <input type="number" value={data.discountValue ?? ""} onChange={(e) => handleOverallDiscountValueChange(e.target.value)} placeholder="0" className="w-20 px-2 py-0.5 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]" step="0.01" min="0" />
+        <input
+          type="number"
+          value={data.discountValue ?? ""}
+          onChange={(e) => handleOverallDiscountValueChange(e.target.value)}
+          placeholder="0"
+          className="w-20 px-2 py-0.5 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
+          step="0.01"
+          min="0"
+        />
       )}
     </div>
     {data.discountType && data.discountValue ? (
@@ -985,6 +1156,7 @@ feat(ui): add overall discount controls and updated grand total to ServiceDescri
 
 **Files:**
 - Modify: `app/src/components/billing/AddTopicModal.tsx`
+- Modify: `app/src/components/billing/ServiceDescriptionDetail.tsx` (update handleAddTopic call)
 
 **Step 1: Update props and state**
 
@@ -1011,13 +1183,97 @@ onSubmit(trimmedName, pricingMode, rate, fee, cap, dType, dVal);
 
 **Step 2: Add UI fields below the rate/fee inputs**
 
-Add cap hours input (only for HOURLY mode) and discount toggle + value.
+Add after the hourly rate / fixed fee section (after line 160 `</div>` closing the conditional), before the button row:
+
+```tsx
+{/* Hour Cap (HOURLY mode only) */}
+{pricingMode === "HOURLY" && (
+  <div>
+    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+      Hour Cap <span className="text-xs text-[var(--text-muted)]">(optional)</span>
+    </label>
+    <div className="relative">
+      <input
+        type="number"
+        value={capHours}
+        onChange={(e) => setCapHours(e.target.value)}
+        placeholder="No cap"
+        className="w-full px-3 py-2 pr-12 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
+        step="0.25"
+        min="0"
+      />
+      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">hrs</span>
+    </div>
+  </div>
+)}
+
+{/* Discount (optional) */}
+<div>
+  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+    Discount <span className="text-xs text-[var(--text-muted)]">(optional)</span>
+  </label>
+  <div className="flex items-center gap-3">
+    <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
+      <button
+        type="button"
+        onClick={() => setDiscountToggle(discountToggle === "PERCENTAGE" ? null : "PERCENTAGE")}
+        className={`px-3 py-2 text-sm font-medium transition-colors ${
+          discountToggle === "PERCENTAGE"
+            ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+            : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+        }`}
+      >
+        %
+      </button>
+      <button
+        type="button"
+        onClick={() => setDiscountToggle(discountToggle === "AMOUNT" ? null : "AMOUNT")}
+        className={`px-3 py-2 text-sm font-medium transition-colors ${
+          discountToggle === "AMOUNT"
+            ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+            : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+        }`}
+      >
+        EUR
+      </button>
+    </div>
+    {discountToggle && (
+      <div className="relative flex-1">
+        <input
+          type="number"
+          value={discountVal}
+          onChange={(e) => setDiscountVal(e.target.value)}
+          placeholder="0"
+          className="w-full px-3 py-2 pr-12 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
+          step="0.01"
+          min="0"
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">
+          {discountToggle === "PERCENTAGE" ? "%" : "EUR"}
+        </span>
+      </div>
+    )}
+  </div>
+</div>
+```
 
 **Step 3: Update parent call in ServiceDescriptionDetail**
 
-Update `handleAddTopic` to pass through new fields to the API:
+Update `handleAddTopic` to accept and pass through new fields to the API:
 ```typescript
-body: JSON.stringify({ topicName, pricingMode, hourlyRate, fixedFee, capHours, discountType, discountValue }),
+const handleAddTopic = async (
+  topicName: string,
+  pricingMode: PricingMode,
+  hourlyRate: number | null,
+  fixedFee: number | null,
+  capHours: number | null,
+  discountType: "PERCENTAGE" | "AMOUNT" | null,
+  discountValue: number | null,
+) => {
+  // ...existing code...
+  body: JSON.stringify({ topicName, pricingMode, hourlyRate, fixedFee, capHours, discountType, discountValue }),
+  // ...existing code...
+};
 ```
 
 **Step 4: Commit**
@@ -1035,14 +1291,59 @@ feat(ui): add cap and discount fields to AddTopicModal
 
 **Step 1: Update the ServiceDescriptionPDF component**
 
-Update `grandTotal` calculation to use `calculateGrandTotal`:
+Import `calculateTopicBaseTotal` (already exported in Task 3) and update `grandTotal` calculation to use `calculateGrandTotal`:
 ```typescript
 const subtotal = data.topics.reduce((sum, topic) => sum + calculateTopicTotal(topic), 0);
 const grandTotal = calculateGrandTotal(data.topics, data.discountType, data.discountValue);
 const hasOverallDiscount = data.discountType && data.discountValue;
 ```
 
-**Step 2: Update Summary of Fees section**
+**Step 2: Update topic footer for caps and discounts**
+
+In each topic's detail section, compute `baseTopicTotal` explicitly for display:
+
+```typescript
+const totalHours = calculateTopicHours(topic);
+const baseTopicTotal = calculateTopicBaseTotal(topic);
+const topicTotal = calculateTopicTotal(topic);
+const hasTopicDiscount = topic.discountType && topic.discountValue;
+```
+
+For HOURLY topics with cap, update the total time display:
+```tsx
+<Text style={styles.topicFooterLabel}>
+  Total Time: {formatHours(topic.capHours && totalHours > topic.capHours ? topic.capHours : totalHours)}
+  {topic.capHours && totalHours > topic.capHours
+    ? ` (capped from ${formatHours(totalHours)})`
+    : ""}
+</Text>
+```
+
+For topics with discount, add a discount line after the base total and before the final topic fee:
+```tsx
+{hasTopicDiscount && (
+  <>
+    <View style={styles.topicFooterRow}>
+      <Text style={styles.topicFooterLabel}>Subtotal:</Text>
+      <Text style={styles.topicFooterValue}>{formatCurrency(baseTopicTotal)}</Text>
+    </View>
+    <View style={styles.topicFooterRow}>
+      <Text style={styles.topicFooterLabel}>
+        Discount ({topic.discountType === "PERCENTAGE" ? `${topic.discountValue}%` : formatCurrency(topic.discountValue!)}):
+      </Text>
+      <Text style={styles.topicFooterValue}>
+        -{formatCurrency(topic.discountType === "PERCENTAGE" ? baseTopicTotal * topic.discountValue! / 100 : topic.discountValue!)}
+      </Text>
+    </View>
+    <View style={styles.topicFooterRow}>
+      <Text style={styles.topicFooterLabel}>Topic fee:</Text>
+      <Text style={styles.topicFooterValue}>{formatCurrency(topicTotal)}</Text>
+    </View>
+  </>
+)}
+```
+
+**Step 3: Update Summary of Fees section**
 
 After topic rows, before the total row, add overall discount row if applicable:
 ```tsx
@@ -1063,38 +1364,6 @@ After topic rows, before the total row, add overall discount row if applicable:
   </>
 )}
 ```
-
-**Step 3: Update topic footer for caps and discounts**
-
-In the topic detail sections, update the footer:
-
-For HOURLY topics with cap:
-```tsx
-<Text style={styles.topicFooterLabel}>
-  Total Time:{topic.capHours && totalHours > topic.capHours ? ` ${formatHours(totalHours)} (capped at ${formatHours(topic.capHours)})` : ""}
-</Text>
-<Text style={styles.topicFooterValue}>
-  {topic.capHours && totalHours > topic.capHours ? formatHours(topic.capHours) : formatHours(totalHours)}
-</Text>
-```
-
-Actually, simplify: show "Total Time: Xh (capped at Yh)" when cap exceeded, otherwise just "Total Time: Xh".
-
-For topics with discount, add a discount line before the final topic fee:
-```tsx
-{topic.discountType && topic.discountValue && (
-  <View style={styles.topicFooterRow}>
-    <Text style={styles.topicFooterLabel}>
-      Discount ({topic.discountType === "PERCENTAGE" ? `${topic.discountValue}%` : formatCurrency(topic.discountValue)}):
-    </Text>
-    <Text style={styles.topicFooterValue}>
-      -{formatCurrency(topic.discountType === "PERCENTAGE" ? baseTopicTotal * topic.discountValue / 100 : topic.discountValue)}
-    </Text>
-  </View>
-)}
-```
-
-Where `baseTopicTotal` is the total before discount (need to compute this separately for the PDF display).
 
 **Step 4: Commit**
 
@@ -1120,12 +1389,12 @@ Expected: Build succeeds with no type errors
 
 1. Start dev server: `npm run dev`
 2. Create a new service description for a client
-3. On a topic, set cap hours → verify total adjusts
-4. On a topic, toggle discount % → set 10% → verify total adjusts
-5. Add overall discount → verify grand total adjusts
-6. Export PDF → verify cap/discount lines appear
-7. Finalize → verify read-only state
-8. Unlock → verify editable again
+3. On a topic, set cap hours -> verify total adjusts
+4. On a topic, toggle discount % -> set 10% -> verify total adjusts
+5. Add overall discount -> verify grand total adjusts
+6. Export PDF -> verify cap/discount lines appear
+7. Finalize -> verify read-only state
+8. Unlock -> verify editable again
 
 **Step 4: Commit any fixes, then final commit**
 
@@ -1137,14 +1406,14 @@ test: verify billing discounts and time caps end-to-end
 
 ## Verification Checklist
 
-- [ ] `npm run test -- --run` — all tests pass
-- [ ] `npm run build` — no type errors
-- [ ] `npm run db:push` — schema synced
-- [ ] Create SD with hourly topic, set cap < actual hours → total capped
-- [ ] Set % discount on topic → total reduced
-- [ ] Set EUR discount on topic → total reduced
-- [ ] Set overall % discount → grand total reduced
-- [ ] Cap + discount together → cap first, then discount
-- [ ] Topic discount + overall discount → stacked sequentially
+- [ ] `npm run test -- --run` -- all tests pass
+- [ ] `npm run build` -- no type errors
+- [ ] `npm run db:push` -- schema synced
+- [ ] Create SD with hourly topic, set cap < actual hours -> total capped
+- [ ] Set % discount on topic -> total reduced
+- [ ] Set EUR discount on topic -> total reduced
+- [ ] Set overall % discount -> grand total reduced
+- [ ] Cap + discount together -> cap first, then discount
+- [ ] Topic discount + overall discount -> stacked sequentially
 - [ ] PDF shows cap annotation, discount lines, overall discount
 - [ ] Finalized SD is read-only (no discount/cap editing)

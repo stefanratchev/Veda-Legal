@@ -387,21 +387,56 @@ export function generateReference(data: ServiceDescription): string {
 }
 
 export function calculateTopicTotal(topic: ServiceDescription["topics"][0]): number {
-  if (topic.pricingMode === "FIXED") return topic.fixedFee || 0;
-  const totalHours = topic.lineItems.reduce(
-    (sum, item) => sum + (item.hours || 0),
-    0
-  );
-  const hourlyTotal = totalHours * (topic.hourlyRate || 0);
-  const fixedTotal = topic.lineItems.reduce(
-    (sum, item) => sum + (item.fixedAmount || 0),
-    0
-  );
-  return hourlyTotal + fixedTotal;
+  let baseTotal: number;
+
+  if (topic.pricingMode === "FIXED") {
+    baseTotal = topic.fixedFee || 0;
+  } else {
+    const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+    const billedHours = topic.capHours ? Math.min(rawHours, topic.capHours) : rawHours;
+    const hourlyTotal = billedHours * (topic.hourlyRate || 0);
+    const fixedTotal = topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
+    baseTotal = hourlyTotal + fixedTotal;
+  }
+
+  if (topic.discountType === "PERCENTAGE" && topic.discountValue) {
+    baseTotal = baseTotal * (1 - topic.discountValue / 100);
+  } else if (topic.discountType === "AMOUNT" && topic.discountValue) {
+    baseTotal = baseTotal - topic.discountValue;
+  }
+
+  return Math.max(baseTotal, 0);
 }
 
 export function calculateTopicHours(topic: ServiceDescription["topics"][0]): number {
   return topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+}
+
+export function calculateGrandTotal(
+  topics: ServiceDescription["topics"],
+  discountType: "PERCENTAGE" | "AMOUNT" | null,
+  discountValue: number | null,
+): number {
+  let subtotal = topics.reduce((sum, topic) => sum + calculateTopicTotal(topic), 0);
+
+  if (discountType === "PERCENTAGE" && discountValue) {
+    subtotal = subtotal * (1 - discountValue / 100);
+  } else if (discountType === "AMOUNT" && discountValue) {
+    subtotal = subtotal - discountValue;
+  }
+
+  return Math.max(subtotal, 0);
+}
+
+export function calculateTopicBaseTotal(topic: ServiceDescription["topics"][0]): number {
+  if (topic.pricingMode === "FIXED") {
+    return topic.fixedFee || 0;
+  }
+  const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+  const billedHours = topic.capHours ? Math.min(rawHours, topic.capHours) : rawHours;
+  const hourlyTotal = billedHours * (topic.hourlyRate || 0);
+  const fixedTotal = topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
+  return hourlyTotal + fixedTotal;
 }
 
 interface ServiceDescriptionPDFProps {

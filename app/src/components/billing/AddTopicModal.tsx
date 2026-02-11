@@ -7,7 +7,7 @@ interface AddTopicModalProps {
   isLoading: boolean;
   error: string | null;
   defaultHourlyRate: number | null;
-  onSubmit: (topicName: string, pricingMode: PricingMode, hourlyRate: number | null, fixedFee: number | null) => void;
+  onSubmit: (topicName: string, pricingMode: PricingMode, hourlyRate: number | null, fixedFee: number | null, capHours: number | null, discountType: "PERCENTAGE" | "AMOUNT" | null, discountValue: number | null) => void;
   onClose: () => void;
 }
 
@@ -16,6 +16,9 @@ export function AddTopicModal({ isLoading, error, defaultHourlyRate, onSubmit, o
   const [pricingMode, setPricingMode] = useState<PricingMode>("HOURLY");
   const [hourlyRate, setHourlyRate] = useState(defaultHourlyRate?.toString() || "");
   const [fixedFee, setFixedFee] = useState("");
+  const [capHours, setCapHours] = useState("");
+  const [discountToggle, setDiscountToggle] = useState<"PERCENTAGE" | "AMOUNT" | null>(null);
+  const [discountVal, setDiscountVal] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,8 +41,11 @@ export function AddTopicModal({ isLoading, error, defaultHourlyRate, onSubmit, o
 
     const rate = pricingMode === "HOURLY" && hourlyRate ? parseFloat(hourlyRate) : null;
     const fee = pricingMode === "FIXED" && fixedFee ? parseFloat(fixedFee) : null;
+    const cap = pricingMode === "HOURLY" && capHours ? parseFloat(capHours) : null;
+    const dType = discountToggle;
+    const dVal = discountToggle && discountVal ? parseFloat(discountVal) : null;
 
-    onSubmit(trimmedName, pricingMode, rate, fee);
+    onSubmit(trimmedName, pricingMode, rate, fee, cap, dType, dVal);
   };
 
   return (
@@ -158,6 +164,76 @@ export function AddTopicModal({ isLoading, error, defaultHourlyRate, onSubmit, o
               </div>
             </div>
           )}
+
+          {/* Hour Cap (HOURLY mode only) */}
+          {pricingMode === "HOURLY" && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                Hour Cap <span className="text-xs text-[var(--text-muted)]">(optional)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={capHours}
+                  onChange={(e) => setCapHours(e.target.value)}
+                  placeholder="No cap"
+                  className="w-full px-3 py-2 pr-12 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
+                  step="0.25"
+                  min="0"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">hrs</span>
+              </div>
+            </div>
+          )}
+
+          {/* Discount (optional) */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+              Discount <span className="text-xs text-[var(--text-muted)]">(optional)</span>
+            </label>
+            <div className="flex items-center gap-3">
+              <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
+                <button
+                  type="button"
+                  onClick={() => setDiscountToggle(discountToggle === "PERCENTAGE" ? null : "PERCENTAGE")}
+                  className={`px-3 py-2 text-sm font-medium transition-colors ${
+                    discountToggle === "PERCENTAGE"
+                      ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                      : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  %
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDiscountToggle(discountToggle === "AMOUNT" ? null : "AMOUNT")}
+                  className={`px-3 py-2 text-sm font-medium transition-colors ${
+                    discountToggle === "AMOUNT"
+                      ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                      : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  EUR
+                </button>
+              </div>
+              {discountToggle && (
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    value={discountVal}
+                    onChange={(e) => setDiscountVal(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3 py-2 pr-12 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
+                    step="0.01"
+                    min="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">
+                    {discountToggle === "PERCENTAGE" ? "%" : "EUR"}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <button

@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
 import { requireAdmin, serializeDecimal, errorResponse } from "@/lib/api-utils";
+import { resolveDiscountFields, validateDiscountFields, validateCapHours } from "@/lib/billing-utils";
 
 type RouteParams = { params: Promise<{ id: string; topicId: string }> };
 
@@ -49,32 +50,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // Validate discount fields
     if (body.discountType !== undefined || body.discountValue !== undefined) {
-      // Merge sent fields with existing DB state
-      const resultType = body.discountType !== undefined ? (body.discountType || null) : existing.discountType;
-      const resultValue = body.discountValue !== undefined ? body.discountValue : (existing.discountValue ? Number(existing.discountValue) : null);
-
-      if (resultType && !["PERCENTAGE", "AMOUNT"].includes(resultType)) {
-        return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
-      }
-      if (resultValue != null) {
-        if (typeof resultValue !== "number" || !Number.isFinite(resultValue) || resultValue <= 0) {
-          return errorResponse("discountValue must be a positive number", 400);
-        }
-        if (resultType === "PERCENTAGE" && resultValue > 100) {
-          return errorResponse("Percentage discount cannot exceed 100", 400);
-        }
-      }
-      // discountType without discountValue is allowed (user sets type first, then value)
-      // discountValue without discountType is not allowed
-      if (!resultType && resultValue != null) {
-        return errorResponse("discountValue requires a discountType", 400);
-      }
+      const { type, value } = resolveDiscountFields(body, existing);
+      const discountError = validateDiscountFields(type, value);
+      if (discountError) return errorResponse(discountError, 400);
     }
-    if (body.capHours !== undefined && body.capHours !== null) {
-      if (typeof body.capHours !== "number" || !Number.isFinite(body.capHours) || body.capHours <= 0) {
-        return errorResponse("capHours must be a positive number", 400);
-      }
-    }
+    const capError = validateCapHours(body.capHours);
+    if (capError) return errorResponse(capError, 400);
 
     const updateData: Record<string, unknown> = {
       updatedAt: new Date().toISOString(),
@@ -84,6 +65,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updateData.topicName = body.topicName.trim();
     }
     if (body.pricingMode !== undefined) {
+      if (!["HOURLY", "FIXED"].includes(body.pricingMode)) {
+        return errorResponse("pricingMode must be HOURLY or FIXED", 400);
+      }
       updateData.pricingMode = body.pricingMode;
     }
     if (body.hourlyRate !== undefined) {

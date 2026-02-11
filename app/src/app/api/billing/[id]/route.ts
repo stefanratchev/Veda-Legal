@@ -2,99 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, asc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions } from "@/lib/schema";
-import {
-  requireAdmin,
-  serializeDecimal,
-  errorResponse,
-  getUserFromSession,
-} from "@/lib/api-utils";
+import { requireAdmin, errorResponse, getUserFromSession } from "@/lib/api-utils";
+import { serializeServiceDescription, resolveDiscountFields, validateDiscountFields } from "@/lib/billing-utils";
 
 type RouteParams = { params: Promise<{ id: string }> };
-
-// Helper to serialize a full service description
-function serializeServiceDescription(sd: {
-  id: string;
-  clientId: string;
-  client: {
-    id: string;
-    name: string;
-    invoicedName: string | null;
-    invoiceAttn: string | null;
-    hourlyRate: string | null;
-  };
-  periodStart: string;
-  periodEnd: string;
-  status: "DRAFT" | "FINALIZED";
-  finalizedAt: string | null;
-  discountType: "PERCENTAGE" | "AMOUNT" | null;
-  discountValue: string | null;
-  topics: Array<{
-    id: string;
-    topicName: string;
-    displayOrder: number;
-    pricingMode: "HOURLY" | "FIXED";
-    hourlyRate: string | null;
-    fixedFee: string | null;
-    capHours: string | null;
-    discountType: "PERCENTAGE" | "AMOUNT" | null;
-    discountValue: string | null;
-    lineItems: Array<{
-      id: string;
-      timeEntryId: string | null;
-      date: string | null;
-      description: string;
-      hours: string | null;
-      fixedAmount: string | null;
-      displayOrder: number;
-      timeEntry: { description: string; hours: string; user: { name: string | null } | null } | null;
-    }>;
-  }>;
-  createdAt: string;
-  updatedAt: string;
-}) {
-  return {
-    id: sd.id,
-    clientId: sd.clientId,
-    client: {
-      id: sd.client.id,
-      name: sd.client.name,
-      invoicedName: sd.client.invoicedName,
-      invoiceAttn: sd.client.invoiceAttn,
-      hourlyRate: serializeDecimal(sd.client.hourlyRate),
-    },
-    periodStart: sd.periodStart,
-    periodEnd: sd.periodEnd,
-    status: sd.status,
-    finalizedAt: sd.finalizedAt || null,
-    discountType: sd.discountType,
-    discountValue: serializeDecimal(sd.discountValue),
-    topics: sd.topics.map((topic) => ({
-      id: topic.id,
-      topicName: topic.topicName,
-      displayOrder: topic.displayOrder,
-      pricingMode: topic.pricingMode,
-      hourlyRate: serializeDecimal(topic.hourlyRate),
-      fixedFee: serializeDecimal(topic.fixedFee),
-      capHours: serializeDecimal(topic.capHours),
-      discountType: topic.discountType,
-      discountValue: serializeDecimal(topic.discountValue),
-      lineItems: topic.lineItems.map((item) => ({
-        id: item.id,
-        timeEntryId: item.timeEntryId,
-        date: item.date || null,
-        description: item.description,
-        hours: serializeDecimal(item.hours),
-        fixedAmount: serializeDecimal(item.fixedAmount),
-        displayOrder: item.displayOrder,
-        originalDescription: item.timeEntry?.description,
-        originalHours: item.timeEntry ? serializeDecimal(item.timeEntry.hours) : undefined,
-        employeeName: item.timeEntry?.user?.name ?? undefined,
-      })),
-    })),
-    createdAt: sd.createdAt,
-    updatedAt: sd.updatedAt,
-  };
-}
 
 // GET /api/billing/[id] - Get service description with all details
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -223,26 +134,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       if (existing.status === "FINALIZED") {
         return errorResponse("Cannot modify finalized service description", 400);
       }
-      // Merge sent fields with existing DB state
-      const resultType = bodyDiscountType !== undefined ? (bodyDiscountType || null) : existing.discountType;
-      const resultValue = bodyDiscountValue !== undefined ? bodyDiscountValue : (existing.discountValue ? Number(existing.discountValue) : null);
-
-      if (resultType && !["PERCENTAGE", "AMOUNT"].includes(resultType)) {
-        return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
-      }
-      if (resultValue != null) {
-        if (typeof resultValue !== "number" || !Number.isFinite(resultValue) || resultValue <= 0) {
-          return errorResponse("discountValue must be a positive number", 400);
-        }
-        if (resultType === "PERCENTAGE" && resultValue > 100) {
-          return errorResponse("Percentage discount cannot exceed 100", 400);
-        }
-      }
-      // discountType without discountValue is allowed (user sets type first, then value)
-      // discountValue without discountType is not allowed
-      if (!resultType && resultValue != null) {
-        return errorResponse("discountValue requires a discountType", 400);
-      }
+      const { type: resultType, value: resultValue } = resolveDiscountFields(
+        { discountType: bodyDiscountType, discountValue: bodyDiscountValue },
+        existing,
+      );
+      const discountError = validateDiscountFields(resultType, resultValue);
+      if (discountError) return errorResponse(discountError, 400);
     }
 
     const updateData: Record<string, unknown> = {

@@ -4,6 +4,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
 import { requireAdmin, serializeDecimal, errorResponse } from "@/lib/api-utils";
+import { validateDiscountFields, validateCapHours } from "@/lib/billing-utils";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -30,26 +31,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   // Validate discount fields
-  if (discountType && !["PERCENTAGE", "AMOUNT"].includes(discountType)) {
-    return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
-  }
-  if (discountValue != null) {
-    if (typeof discountValue !== "number" || !Number.isFinite(discountValue) || discountValue <= 0) {
-      return errorResponse("discountValue must be a positive number", 400);
-    }
-    if (discountType === "PERCENTAGE" && discountValue > 100) {
-      return errorResponse("Percentage discount cannot exceed 100", 400);
-    }
-  }
-  // discountValue without discountType is not allowed
-  if (!discountType && discountValue != null) {
-    return errorResponse("discountValue requires a discountType", 400);
-  }
-  if (capHours !== undefined && capHours !== null) {
-    if (typeof capHours !== "number" || !Number.isFinite(capHours) || capHours <= 0) {
-      return errorResponse("capHours must be a positive number", 400);
-    }
-  }
+  const discountError = validateDiscountFields(discountType, discountValue);
+  if (discountError) return errorResponse(discountError, 400);
+  const capError = validateCapHours(capHours);
+  if (capError) return errorResponse(capError, 400);
 
   try {
     // Verify service description exists and is draft
@@ -79,7 +64,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       serviceDescriptionId: id,
       topicName: topicName.trim(),
       displayOrder: maxOrder + 1,
-      pricingMode: pricingMode || "HOURLY",
+      pricingMode: (pricingMode && ["HOURLY", "FIXED"].includes(pricingMode)) ? pricingMode : "HOURLY",
       hourlyRate: hourlyRate ? String(hourlyRate) : null,
       fixedFee: fixedFee ? String(fixedFee) : null,
       capHours: pricingMode === "FIXED" ? null : (capHours != null ? String(capHours) : null),

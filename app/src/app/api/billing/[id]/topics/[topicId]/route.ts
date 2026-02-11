@@ -56,6 +56,42 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body.displayOrder !== undefined) {
       updateData.displayOrder = body.displayOrder;
     }
+    if (body.capHours !== undefined) {
+      updateData.capHours = body.capHours ? String(body.capHours) : null;
+    }
+    if (body.discountType !== undefined) {
+      updateData.discountType = body.discountType || null;
+    }
+    if (body.discountValue !== undefined) {
+      updateData.discountValue = body.discountValue ? String(body.discountValue) : null;
+    }
+
+    // Validate discount pair
+    const effectiveDiscountType = body.discountType !== undefined ? body.discountType : undefined;
+    const effectiveDiscountValue = body.discountValue !== undefined ? body.discountValue : undefined;
+    if (effectiveDiscountType !== undefined || effectiveDiscountValue !== undefined) {
+      if ((effectiveDiscountType && !effectiveDiscountValue) || (!effectiveDiscountType && effectiveDiscountValue)) {
+        return errorResponse("discountType and discountValue must both be set or both be null", 400);
+      }
+      if (effectiveDiscountType && !["PERCENTAGE", "AMOUNT"].includes(effectiveDiscountType)) {
+        return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
+      }
+      if (effectiveDiscountValue && (typeof effectiveDiscountValue !== "number" || effectiveDiscountValue <= 0)) {
+        return errorResponse("discountValue must be a positive number", 400);
+      }
+      if (effectiveDiscountType === "PERCENTAGE" && effectiveDiscountValue > 100) {
+        return errorResponse("Percentage discount cannot exceed 100", 400);
+      }
+    }
+    if (body.capHours !== undefined && body.capHours !== null) {
+      if (typeof body.capHours !== "number" || body.capHours <= 0) {
+        return errorResponse("capHours must be a positive number", 400);
+      }
+    }
+
+    if (body.pricingMode === "FIXED") {
+      updateData.capHours = null;
+    }
 
     const [topic] = await db.update(serviceDescriptionTopics)
       .set(updateData)
@@ -67,6 +103,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         pricingMode: serviceDescriptionTopics.pricingMode,
         hourlyRate: serviceDescriptionTopics.hourlyRate,
         fixedFee: serviceDescriptionTopics.fixedFee,
+        capHours: serviceDescriptionTopics.capHours,
+        discountType: serviceDescriptionTopics.discountType,
+        discountValue: serviceDescriptionTopics.discountValue,
       });
 
     if (!topic) {
@@ -80,6 +119,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       pricingMode: topic.pricingMode,
       hourlyRate: serializeDecimal(topic.hourlyRate),
       fixedFee: serializeDecimal(topic.fixedFee),
+      capHours: serializeDecimal(topic.capHours),
+      discountType: topic.discountType,
+      discountValue: serializeDecimal(topic.discountValue),
     });
   } catch (error) {
     console.error("Database error updating topic:", error);

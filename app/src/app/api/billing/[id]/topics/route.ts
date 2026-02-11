@@ -23,10 +23,31 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { topicName, pricingMode, hourlyRate, fixedFee } = body;
+  const { topicName, pricingMode, hourlyRate, fixedFee, capHours, discountType, discountValue } = body;
 
   if (!topicName || typeof topicName !== "string" || topicName.trim().length === 0) {
     return errorResponse("Topic name is required", 400);
+  }
+
+  // Validate discount fields
+  if ((discountType && !discountValue) || (!discountType && discountValue)) {
+    return errorResponse("discountType and discountValue must both be set or both be null", 400);
+  }
+  if (discountType && !["PERCENTAGE", "AMOUNT"].includes(discountType)) {
+    return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
+  }
+  if (discountValue !== undefined && discountValue !== null) {
+    if (typeof discountValue !== "number" || discountValue <= 0) {
+      return errorResponse("discountValue must be a positive number", 400);
+    }
+    if (discountType === "PERCENTAGE" && discountValue > 100) {
+      return errorResponse("Percentage discount cannot exceed 100", 400);
+    }
+  }
+  if (capHours !== undefined && capHours !== null) {
+    if (typeof capHours !== "number" || capHours <= 0) {
+      return errorResponse("capHours must be a positive number", 400);
+    }
   }
 
   try {
@@ -60,6 +81,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       pricingMode: pricingMode || "HOURLY",
       hourlyRate: hourlyRate ? String(hourlyRate) : null,
       fixedFee: fixedFee ? String(fixedFee) : null,
+      capHours: (pricingMode === "FIXED" ? null : capHours) ? String(capHours) : null,
+      discountType: discountType || null,
+      discountValue: discountValue ? String(discountValue) : null,
       updatedAt: now,
     }).returning({
       id: serviceDescriptionTopics.id,
@@ -68,6 +92,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       pricingMode: serviceDescriptionTopics.pricingMode,
       hourlyRate: serviceDescriptionTopics.hourlyRate,
       fixedFee: serviceDescriptionTopics.fixedFee,
+      capHours: serviceDescriptionTopics.capHours,
+      discountType: serviceDescriptionTopics.discountType,
+      discountValue: serviceDescriptionTopics.discountValue,
     });
 
     return NextResponse.json({
@@ -77,6 +104,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       pricingMode: topic.pricingMode,
       hourlyRate: serializeDecimal(topic.hourlyRate),
       fixedFee: serializeDecimal(topic.fixedFee),
+      capHours: serializeDecimal(topic.capHours),
+      discountType: topic.discountType,
+      discountValue: serializeDecimal(topic.discountValue),
       lineItems: [],
     });
   } catch (error) {

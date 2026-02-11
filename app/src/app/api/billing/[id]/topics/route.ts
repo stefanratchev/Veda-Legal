@@ -82,7 +82,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       pricingMode: pricingMode || "HOURLY",
       hourlyRate: hourlyRate ? String(hourlyRate) : null,
       fixedFee: fixedFee ? String(fixedFee) : null,
-      capHours: (pricingMode === "FIXED" ? null : capHours) ? String(capHours) : null,
+      capHours: pricingMode === "FIXED" ? null : (capHours != null ? String(capHours) : null),
       discountType: discountType || null,
       discountValue: discountValue ? String(discountValue) : null,
       updatedAt: now,

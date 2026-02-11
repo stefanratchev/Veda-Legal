@@ -12,8 +12,10 @@ import {
 import {
   requireAuth,
   requireAdmin,
+  serializeDecimal,
   errorResponse,
 } from "@/lib/api-utils";
+import { calculateGrandTotal } from "@/lib/billing-pdf";
 import { BILLING_START_DATE } from "@/lib/billing-config";
 
 // GET /api/billing - List all service descriptions
@@ -58,43 +60,27 @@ export async function GET(request: NextRequest) {
       orderBy: [desc(serviceDescriptions.updatedAt)],
     });
 
-    // Calculate total amount for each service description
+    // Calculate total amount for each service description using canonical functions
     const result = allServiceDescriptions.map((sd) => {
-      let subtotal = 0;
-      for (const topic of sd.topics) {
-        let baseTotal: number;
-        if (topic.pricingMode === "FIXED" && topic.fixedFee) {
-          baseTotal = Number(topic.fixedFee);
-        } else if (topic.pricingMode === "HOURLY") {
-          const rawHours = topic.lineItems.reduce(
-            (sum, item) => sum + (item.hours ? Number(item.hours) : 0),
-            0
-          );
-          const capHours = topic.capHours ? Number(topic.capHours) : null;
-          const billedHours = capHours ? Math.min(rawHours, capHours) : rawHours;
-          baseTotal = billedHours * (topic.hourlyRate ? Number(topic.hourlyRate) : 0);
-          baseTotal += topic.lineItems.reduce(
-            (sum, item) => sum + (item.fixedAmount ? Number(item.fixedAmount) : 0),
-            0
-          );
-        } else {
-          baseTotal = 0;
-        }
-        // Apply topic discount
-        if (topic.discountType === "PERCENTAGE" && topic.discountValue) {
-          baseTotal = baseTotal * (1 - Number(topic.discountValue) / 100);
-        } else if (topic.discountType === "AMOUNT" && topic.discountValue) {
-          baseTotal = baseTotal - Number(topic.discountValue);
-        }
-        subtotal += Math.max(baseTotal, 0);
-      }
-      // Apply overall discount
-      if (sd.discountType === "PERCENTAGE" && sd.discountValue) {
-        subtotal = subtotal * (1 - Number(sd.discountValue) / 100);
-      } else if (sd.discountType === "AMOUNT" && sd.discountValue) {
-        subtotal = subtotal - Number(sd.discountValue);
-      }
-      const totalAmount = Math.max(Math.round(subtotal * 100) / 100, 0);
+      const topics = sd.topics.map((t) => ({
+        id: "", topicName: "", displayOrder: 0,
+        pricingMode: t.pricingMode as "HOURLY" | "FIXED",
+        hourlyRate: serializeDecimal(t.hourlyRate),
+        fixedFee: serializeDecimal(t.fixedFee),
+        capHours: serializeDecimal(t.capHours),
+        discountType: (t.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
+        discountValue: serializeDecimal(t.discountValue),
+        lineItems: t.lineItems.map((li) => ({
+          id: "", timeEntryId: null, date: null, description: "", displayOrder: 0,
+          hours: serializeDecimal(li.hours),
+          fixedAmount: serializeDecimal(li.fixedAmount),
+        })),
+      }));
+      const totalAmount = Math.round(calculateGrandTotal(
+        topics,
+        (sd.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
+        serializeDecimal(sd.discountValue),
+      ) * 100) / 100;
 
       return {
         id: sd.id,

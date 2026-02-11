@@ -47,7 +47,7 @@ function serializeServiceDescription(sd: {
       hours: string | null;
       fixedAmount: string | null;
       displayOrder: number;
-      timeEntry: { description: string; hours: string } | null;
+      timeEntry: { description: string; hours: string; user: { name: string | null } | null } | null;
     }>;
   }>;
   createdAt: string;
@@ -89,6 +89,7 @@ function serializeServiceDescription(sd: {
         displayOrder: item.displayOrder,
         originalDescription: item.timeEntry?.description,
         originalHours: item.timeEntry ? serializeDecimal(item.timeEntry.hours) : undefined,
+        employeeName: item.timeEntry?.user?.name ?? undefined,
       })),
     })),
     createdAt: sd.createdAt,
@@ -158,6 +159,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               with: {
                 timeEntry: {
                   columns: { description: true, hours: true },
+                  with: {
+                    user: {
+                      columns: { name: true },
+                    },
+                  },
                 },
               },
             },

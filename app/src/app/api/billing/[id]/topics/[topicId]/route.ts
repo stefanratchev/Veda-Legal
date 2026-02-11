@@ -37,6 +37,45 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Cannot modify finalized service description", 400);
     }
 
+    // Fetch existing topic to validate against current DB state
+    const existing = await db.query.serviceDescriptionTopics.findFirst({
+      where: eq(serviceDescriptionTopics.id, topicId),
+      columns: { discountType: true, discountValue: true },
+    });
+
+    if (!existing) {
+      return errorResponse("Topic not found", 404);
+    }
+
+    // Validate discount fields
+    if (body.discountType !== undefined || body.discountValue !== undefined) {
+      // Merge sent fields with existing DB state
+      const resultType = body.discountType !== undefined ? (body.discountType || null) : existing.discountType;
+      const resultValue = body.discountValue !== undefined ? body.discountValue : (existing.discountValue ? Number(existing.discountValue) : null);
+
+      if (resultType && !["PERCENTAGE", "AMOUNT"].includes(resultType)) {
+        return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
+      }
+      if (resultValue != null) {
+        if (typeof resultValue !== "number" || resultValue <= 0) {
+          return errorResponse("discountValue must be a positive number", 400);
+        }
+        if (resultType === "PERCENTAGE" && resultValue > 100) {
+          return errorResponse("Percentage discount cannot exceed 100", 400);
+        }
+      }
+      // discountType without discountValue is allowed (user sets type first, then value)
+      // discountValue without discountType is not allowed
+      if (!resultType && resultValue != null) {
+        return errorResponse("discountValue requires a discountType", 400);
+      }
+    }
+    if (body.capHours !== undefined && body.capHours !== null) {
+      if (typeof body.capHours !== "number" || body.capHours <= 0) {
+        return errorResponse("capHours must be a positive number", 400);
+      }
+    }
+
     const updateData: Record<string, unknown> = {
       updatedAt: new Date().toISOString(),
     };
@@ -57,36 +96,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updateData.displayOrder = body.displayOrder;
     }
     if (body.capHours !== undefined) {
-      updateData.capHours = body.capHours ? String(body.capHours) : null;
+      updateData.capHours = body.capHours != null ? String(body.capHours) : null;
     }
     if (body.discountType !== undefined) {
       updateData.discountType = body.discountType || null;
     }
     if (body.discountValue !== undefined) {
-      updateData.discountValue = body.discountValue ? String(body.discountValue) : null;
-    }
-
-    // Validate discount pair
-    const effectiveDiscountType = body.discountType !== undefined ? body.discountType : undefined;
-    const effectiveDiscountValue = body.discountValue !== undefined ? body.discountValue : undefined;
-    if (effectiveDiscountType !== undefined || effectiveDiscountValue !== undefined) {
-      if ((effectiveDiscountType && !effectiveDiscountValue) || (!effectiveDiscountType && effectiveDiscountValue)) {
-        return errorResponse("discountType and discountValue must both be set or both be null", 400);
-      }
-      if (effectiveDiscountType && !["PERCENTAGE", "AMOUNT"].includes(effectiveDiscountType)) {
-        return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
-      }
-      if (effectiveDiscountValue && (typeof effectiveDiscountValue !== "number" || effectiveDiscountValue <= 0)) {
-        return errorResponse("discountValue must be a positive number", 400);
-      }
-      if (effectiveDiscountType === "PERCENTAGE" && effectiveDiscountValue > 100) {
-        return errorResponse("Percentage discount cannot exceed 100", 400);
-      }
-    }
-    if (body.capHours !== undefined && body.capHours !== null) {
-      if (typeof body.capHours !== "number" || body.capHours <= 0) {
-        return errorResponse("capHours must be a positive number", 400);
-      }
+      updateData.discountValue = body.discountValue != null ? String(body.discountValue) : null;
     }
 
     if (body.pricingMode === "FIXED") {

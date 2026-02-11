@@ -206,31 +206,37 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const existing = await db.query.serviceDescriptions.findFirst({
       where: eq(serviceDescriptions.id, id),
-      columns: { status: true },
+      columns: { status: true, discountType: true, discountValue: true },
     });
 
     if (!existing) {
       return errorResponse("Service description not found", 404);
     }
 
-    // Validate discount fields
+    // Validate discount fields against resulting DB state
     if (bodyDiscountType !== undefined || bodyDiscountValue !== undefined) {
       if (existing.status === "FINALIZED") {
         return errorResponse("Cannot modify finalized service description", 400);
       }
-      if ((bodyDiscountType && !bodyDiscountValue) || (!bodyDiscountType && bodyDiscountValue)) {
-        return errorResponse("discountType and discountValue must both be set or both be null", 400);
-      }
-      if (bodyDiscountType && !["PERCENTAGE", "AMOUNT"].includes(bodyDiscountType)) {
+      // Merge sent fields with existing DB state
+      const resultType = bodyDiscountType !== undefined ? (bodyDiscountType || null) : existing.discountType;
+      const resultValue = bodyDiscountValue !== undefined ? bodyDiscountValue : (existing.discountValue ? Number(existing.discountValue) : null);
+
+      if (resultType && !["PERCENTAGE", "AMOUNT"].includes(resultType)) {
         return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
       }
-      if (bodyDiscountValue !== undefined && bodyDiscountValue !== null) {
-        if (typeof bodyDiscountValue !== "number" || bodyDiscountValue <= 0) {
+      if (resultValue != null) {
+        if (typeof resultValue !== "number" || resultValue <= 0) {
           return errorResponse("discountValue must be a positive number", 400);
         }
-        if (bodyDiscountType === "PERCENTAGE" && bodyDiscountValue > 100) {
+        if (resultType === "PERCENTAGE" && resultValue > 100) {
           return errorResponse("Percentage discount cannot exceed 100", 400);
         }
+      }
+      // discountType without discountValue is allowed (user sets type first, then value)
+      // discountValue without discountType is not allowed
+      if (!resultType && resultValue != null) {
+        return errorResponse("discountValue requires a discountType", 400);
       }
     }
 
@@ -253,7 +259,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (bodyDiscountType !== undefined || bodyDiscountValue !== undefined) {
       updateData.discountType = bodyDiscountType || null;
-      updateData.discountValue = bodyDiscountValue ? String(bodyDiscountValue) : null;
+      updateData.discountValue = bodyDiscountValue != null ? String(bodyDiscountValue) : null;
     }
 
     const [updated] = await db.update(serviceDescriptions)

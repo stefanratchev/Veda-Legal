@@ -30,19 +30,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   // Validate discount fields
-  if ((discountType && !discountValue) || (!discountType && discountValue)) {
-    return errorResponse("discountType and discountValue must both be set or both be null", 400);
-  }
   if (discountType && !["PERCENTAGE", "AMOUNT"].includes(discountType)) {
     return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
   }
-  if (discountValue !== undefined && discountValue !== null) {
+  if (discountValue != null) {
     if (typeof discountValue !== "number" || discountValue <= 0) {
       return errorResponse("discountValue must be a positive number", 400);
     }
     if (discountType === "PERCENTAGE" && discountValue > 100) {
       return errorResponse("Percentage discount cannot exceed 100", 400);
     }
+  }
+  // discountValue without discountType is not allowed
+  if (!discountType && discountValue != null) {
+    return errorResponse("discountValue requires a discountType", 400);
   }
   if (capHours !== undefined && capHours !== null) {
     if (typeof capHours !== "number" || capHours <= 0) {

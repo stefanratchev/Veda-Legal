@@ -123,11 +123,12 @@ export function TopicSection({
       try {
         if (!type) {
           await onUpdateTopic(topic.id, { discountType: null, discountValue: null });
+        } else if (topic.discountValue) {
+          // Has an existing value — just change the type
+          await onUpdateTopic(topic.id, { discountType: type, discountValue: topic.discountValue });
         } else {
-          await onUpdateTopic(topic.id, {
-            discountType: type,
-            discountValue: topic.discountValue || 0,
-          });
+          // No value yet — set type only, value will be sent when user enters one
+          await onUpdateTopic(topic.id, { discountType: type, discountValue: null });
         }
       } catch {
         // Error handled by parent

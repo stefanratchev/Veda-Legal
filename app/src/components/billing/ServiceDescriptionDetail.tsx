@@ -54,19 +54,19 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     async (type: "PERCENTAGE" | "AMOUNT" | null) => {
       setIsUpdatingDiscount(true);
       try {
+        const payload = type
+          ? { discountType: type, discountValue: data.discountValue || null }
+          : { discountType: null, discountValue: null };
         const response = await fetch(`/api/billing/${data.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            discountType: type,
-            discountValue: type ? (data.discountValue || 0) : null,
-          }),
+          body: JSON.stringify(payload),
         });
         if (response.ok) {
           setData((prev) => ({
             ...prev,
             discountType: type,
-            discountValue: type ? (prev.discountValue || 0) : null,
+            discountValue: type ? prev.discountValue : null,
           }));
         }
       } catch (error) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { ServiceDescriptionTopic, PricingMode } from "@/types";
 import { LineItemRow } from "./LineItemRow";
 import { AddLineItemModal } from "./AddLineItemModal";
@@ -41,6 +41,17 @@ export function TopicSection({
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [addItemError, setAddItemError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Local state for numeric inputs (only fire API on blur)
+  const [localRate, setLocalRate] = useState<string>(topic.hourlyRate != null ? String(topic.hourlyRate) : "");
+  const [localFee, setLocalFee] = useState<string>(topic.fixedFee != null ? String(topic.fixedFee) : "");
+  const [localCap, setLocalCap] = useState<string>(topic.capHours != null ? String(topic.capHours) : "");
+  const [localDiscount, setLocalDiscount] = useState<string>(topic.discountValue != null ? String(topic.discountValue) : "");
+
+  useEffect(() => { setLocalRate(topic.hourlyRate != null ? String(topic.hourlyRate) : ""); }, [topic.hourlyRate]);
+  useEffect(() => { setLocalFee(topic.fixedFee != null ? String(topic.fixedFee) : ""); }, [topic.fixedFee]);
+  useEffect(() => { setLocalCap(topic.capHours != null ? String(topic.capHours) : ""); }, [topic.capHours]);
+  useEffect(() => { setLocalDiscount(topic.discountValue != null ? String(topic.discountValue) : ""); }, [topic.discountValue]);
 
   // Calculate totals
   const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
@@ -272,7 +283,7 @@ export function TopicSection({
         <div className="border-t border-[var(--border-subtle)]">
           {/* Pricing controls */}
           <div className="p-4 border-b border-[var(--border-subtle)] bg-[var(--bg-deep)]">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Left column: Pricing */}
               <div className="border border-[var(--border-subtle)] rounded-lg p-3 space-y-3">
                 <h4 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">Pricing</h4>
@@ -312,8 +323,8 @@ export function TopicSection({
                     <label className="text-sm text-[var(--text-secondary)] w-16 shrink-0">Rate</label>
                     <input
                       type="number"
-                      value={topic.hourlyRate ?? ""}
-                      onChange={(e) => handleHourlyRateChange(e.target.value)}
+                      value={localRate}
+                      onChange={(e) => setLocalRate(e.target.value)}
                       onBlur={(e) => handleHourlyRateChange(e.target.value)}
                       disabled={!isEditable}
                       placeholder={clientHourlyRate ? String(clientHourlyRate) : "0"}
@@ -328,8 +339,8 @@ export function TopicSection({
                     <label className="text-sm text-[var(--text-secondary)] w-16 shrink-0">Fee</label>
                     <input
                       type="number"
-                      value={topic.fixedFee ?? ""}
-                      onChange={(e) => handleFixedFeeChange(e.target.value)}
+                      value={localFee}
+                      onChange={(e) => setLocalFee(e.target.value)}
                       onBlur={(e) => handleFixedFeeChange(e.target.value)}
                       disabled={!isEditable}
                       placeholder="0"
@@ -352,8 +363,9 @@ export function TopicSection({
                     <label className="text-sm text-[var(--text-secondary)] w-16 shrink-0">Cap</label>
                     <input
                       type="number"
-                      value={topic.capHours ?? ""}
-                      onChange={(e) => handleCapHoursChange(e.target.value)}
+                      value={localCap}
+                      onChange={(e) => setLocalCap(e.target.value)}
+                      onBlur={(e) => handleCapHoursChange(e.target.value)}
                       disabled={!isEditable}
                       placeholder="No cap"
                       className="w-24 px-2 py-1.5 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
@@ -394,8 +406,9 @@ export function TopicSection({
                   {topic.discountType && (
                     <input
                       type="number"
-                      value={topic.discountValue ?? ""}
-                      onChange={(e) => handleDiscountValueChange(e.target.value)}
+                      value={localDiscount}
+                      onChange={(e) => setLocalDiscount(e.target.value)}
+                      onBlur={(e) => handleDiscountValueChange(e.target.value)}
                       disabled={!isEditable}
                       placeholder="0"
                       className="w-20 px-2 py-1.5 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
@@ -452,7 +465,7 @@ export function TopicSection({
                 {isEditable && (
                   <tfoot>
                     <tr className="border-t border-[var(--border-subtle)]">
-                      <td colSpan={5}>
+                      <td colSpan={isEditable ? 5 : 4}>
                         <button
                           onClick={handleOpenAddItem}
                           className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors w-full"

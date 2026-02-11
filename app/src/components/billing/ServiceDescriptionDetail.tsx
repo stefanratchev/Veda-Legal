@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ServiceDescription, ServiceDescriptionTopic, PricingMode } from "@/types";
 import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
@@ -49,6 +49,8 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   }, [data.topics, data.discountType, data.discountValue]);
 
   const [isUpdatingDiscount, setIsUpdatingDiscount] = useState(false);
+  const [localOverallDiscount, setLocalOverallDiscount] = useState<string>(data.discountValue != null ? String(data.discountValue) : "");
+  useEffect(() => { setLocalOverallDiscount(data.discountValue != null ? String(data.discountValue) : ""); }, [data.discountValue]);
 
   const handleOverallDiscountTypeChange = useCallback(
     async (type: "PERCENTAGE" | "AMOUNT" | null) => {
@@ -463,8 +465,9 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
                     {data.discountType && (
                       <input
                         type="number"
-                        value={data.discountValue ?? ""}
-                        onChange={(e) => handleOverallDiscountValueChange(e.target.value)}
+                        value={localOverallDiscount}
+                        onChange={(e) => setLocalOverallDiscount(e.target.value)}
+                        onBlur={(e) => handleOverallDiscountValueChange(e.target.value)}
                         placeholder="0"
                         className="w-20 px-2 py-1 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
                         step="0.01"

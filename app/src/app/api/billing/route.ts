@@ -10,7 +10,6 @@ import {
   timeEntries,
 } from "@/lib/schema";
 import {
-  requireAuth,
   requireAdmin,
   serializeDecimal,
   errorResponse,
@@ -20,7 +19,7 @@ import { BILLING_START_DATE } from "@/lib/billing-config";
 
 // GET /api/billing - List all service descriptions
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

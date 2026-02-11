@@ -34,7 +34,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
   }
   if (discountValue != null) {
-    if (typeof discountValue !== "number" || discountValue <= 0) {
+    if (typeof discountValue !== "number" || !Number.isFinite(discountValue) || discountValue <= 0) {
       return errorResponse("discountValue must be a positive number", 400);
     }
     if (discountType === "PERCENTAGE" && discountValue > 100) {
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return errorResponse("discountValue requires a discountType", 400);
   }
   if (capHours !== undefined && capHours !== null) {
-    if (typeof capHours !== "number" || capHours <= 0) {
+    if (typeof capHours !== "number" || !Number.isFinite(capHours) || capHours <= 0) {
       return errorResponse("capHours must be a positive number", 400);
     }
   }

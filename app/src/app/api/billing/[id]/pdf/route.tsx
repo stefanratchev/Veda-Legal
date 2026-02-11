@@ -3,7 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { eq, asc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions } from "@/lib/schema";
-import { requireAuth, serializeDecimal, errorResponse } from "@/lib/api-utils";
+import { requireAdmin, serializeDecimal, errorResponse } from "@/lib/api-utils";
 import { ServiceDescriptionPDF } from "@/lib/billing-pdf";
 import { ServiceDescription } from "@/types";
 
@@ -92,7 +92,7 @@ function serializeForPDF(sd: {
 
 // GET /api/billing/[id]/pdf - Generate and download PDF
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

@@ -82,7 +82,8 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
 
   const handleOverallDiscountValueChange = useCallback(
     async (value: string) => {
-      const val = parseFloat(value) || null;
+      const parsed = parseFloat(value);
+      const val = !isNaN(parsed) ? parsed : null;
       setIsUpdatingDiscount(true);
       try {
         const response = await fetch(`/api/billing/${data.id}`, {
@@ -477,7 +478,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
                   </div>
                   {data.discountType && data.discountValue ? (
                     <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
-                      -{formatCurrency(data.discountType === "PERCENTAGE" ? subtotal * data.discountValue / 100 : data.discountValue)}
+                      -{formatCurrency(subtotal - grandTotal)}
                     </span>
                   ) : null}
                 </div>
@@ -490,7 +491,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
                     Overall Discount ({data.discountType === "PERCENTAGE" ? `${data.discountValue}%` : formatCurrency(data.discountValue)})
                   </span>
                   <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
-                    -{formatCurrency(data.discountType === "PERCENTAGE" ? subtotal * data.discountValue / 100 : data.discountValue)}
+                    -{formatCurrency(subtotal - grandTotal)}
                   </span>
                 </div>
               )}

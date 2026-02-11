@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
 import { requireAdmin, serializeDecimal, errorResponse } from "@/lib/api-utils";
@@ -39,7 +39,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // Fetch existing topic to validate against current DB state
     const existing = await db.query.serviceDescriptionTopics.findFirst({
-      where: eq(serviceDescriptionTopics.id, topicId),
+      where: and(eq(serviceDescriptionTopics.id, topicId), eq(serviceDescriptionTopics.serviceDescriptionId, id)),
       columns: { discountType: true, discountValue: true },
     });
 
@@ -57,7 +57,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
       }
       if (resultValue != null) {
-        if (typeof resultValue !== "number" || resultValue <= 0) {
+        if (typeof resultValue !== "number" || !Number.isFinite(resultValue) || resultValue <= 0) {
           return errorResponse("discountValue must be a positive number", 400);
         }
         if (resultType === "PERCENTAGE" && resultValue > 100) {
@@ -71,7 +71,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     }
     if (body.capHours !== undefined && body.capHours !== null) {
-      if (typeof body.capHours !== "number" || body.capHours <= 0) {
+      if (typeof body.capHours !== "number" || !Number.isFinite(body.capHours) || body.capHours <= 0) {
         return errorResponse("capHours must be a positive number", 400);
       }
     }
@@ -170,7 +170,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // Check if topic exists before deleting
     const existingTopic = await db.query.serviceDescriptionTopics.findFirst({
-      where: eq(serviceDescriptionTopics.id, topicId),
+      where: and(eq(serviceDescriptionTopics.id, topicId), eq(serviceDescriptionTopics.serviceDescriptionId, id)),
       columns: { id: true },
     });
 

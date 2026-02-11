@@ -32,7 +32,8 @@ function decimalToHoursMinutes(decimal: number | null): { hours: number; minutes
   const minutes = Math.round((decimal - hours) * 60);
   // Round to nearest 15-minute increment
   const roundedMinutes = Math.round(minutes / 15) * 15;
-  return { hours, minutes: roundedMinutes >= 60 ? 0 : roundedMinutes };
+  if (roundedMinutes >= 60) return { hours: hours + 1, minutes: 0 };
+  return { hours, minutes: roundedMinutes };
 }
 
 function hoursMinutesToDecimal(hours: number, minutes: number): number {

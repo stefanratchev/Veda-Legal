@@ -82,7 +82,8 @@ export function TopicSection({
   const handleHourlyRateChange = useCallback(
     async (value: string) => {
       if (!isEditable) return;
-      const rate = parseFloat(value) || null;
+      const parsed = parseFloat(value);
+      const rate = !isNaN(parsed) ? parsed : null;
       setIsUpdating(true);
       try {
         await onUpdateTopic(topic.id, { hourlyRate: rate });
@@ -98,7 +99,8 @@ export function TopicSection({
   const handleFixedFeeChange = useCallback(
     async (value: string) => {
       if (!isEditable) return;
-      const fee = parseFloat(value) || null;
+      const parsed = parseFloat(value);
+      const fee = !isNaN(parsed) ? parsed : null;
       setIsUpdating(true);
       try {
         await onUpdateTopic(topic.id, { fixedFee: fee });
@@ -114,7 +116,8 @@ export function TopicSection({
   const handleCapHoursChange = useCallback(
     async (value: string) => {
       if (!isEditable) return;
-      const cap = parseFloat(value) || null;
+      const parsed = parseFloat(value);
+      const cap = !isNaN(parsed) ? parsed : null;
       setIsUpdating(true);
       try {
         await onUpdateTopic(topic.id, { capHours: cap });
@@ -153,7 +156,8 @@ export function TopicSection({
   const handleDiscountValueChange = useCallback(
     async (value: string) => {
       if (!isEditable) return;
-      const val = parseFloat(value) || null;
+      const parsed = parseFloat(value);
+      const val = !isNaN(parsed) ? parsed : null;
       setIsUpdating(true);
       try {
         await onUpdateTopic(topic.id, { discountValue: val });
@@ -249,7 +253,7 @@ export function TopicSection({
               </div>
               <div className="text-xs text-[var(--text-muted)]">
                 Discount ({topic.discountType === "PERCENTAGE" ? `${topic.discountValue}%` : formatCurrency(topic.discountValue!)}): -{formatCurrency(
-                  topic.discountType === "PERCENTAGE" ? baseTotal * topic.discountValue! / 100 : topic.discountValue!
+                  baseTotal - topicTotal
                 )}
               </div>
               <div className="text-sm font-medium text-[var(--text-primary)]">

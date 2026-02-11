@@ -394,7 +394,7 @@ export function calculateTopicBaseTotal(topic: ServiceDescription["topics"][0]):
   const billedHours = topic.capHours ? Math.min(rawHours, topic.capHours) : rawHours;
   const hourlyTotal = billedHours * (topic.hourlyRate || 0);
   const fixedTotal = topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
-  return hourlyTotal + fixedTotal;
+  return Math.round((hourlyTotal + fixedTotal) * 100) / 100;
 }
 
 export function calculateTopicTotal(topic: ServiceDescription["topics"][0]): number {
@@ -406,7 +406,7 @@ export function calculateTopicTotal(topic: ServiceDescription["topics"][0]): num
     total = total - topic.discountValue;
   }
 
-  return Math.max(total, 0);
+  return Math.round(Math.max(total, 0) * 100) / 100;
 }
 
 export function calculateTopicHours(topic: ServiceDescription["topics"][0]): number {
@@ -426,7 +426,7 @@ export function calculateGrandTotal(
     subtotal = subtotal - discountValue;
   }
 
-  return Math.max(subtotal, 0);
+  return Math.round(Math.max(subtotal, 0) * 100) / 100;
 }
 
 interface ServiceDescriptionPDFProps {
@@ -507,11 +507,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
                     : formatCurrency(data.discountValue!)})
                 </Text>
                 <Text style={styles.summaryAmount}>
-                  -{formatCurrency(
-                    data.discountType === "PERCENTAGE"
-                      ? subtotal * data.discountValue! / 100
-                      : data.discountValue!
-                  )}
+                  -{formatCurrency(subtotal - grandTotal)}
                 </Text>
               </View>
             </>
@@ -606,11 +602,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
                               : formatCurrency(topic.discountValue!)}):
                           </Text>
                           <Text style={styles.topicFooterValue}>
-                            -{formatCurrency(
-                              topic.discountType === "PERCENTAGE"
-                                ? baseTopicTotal * topic.discountValue! / 100
-                                : topic.discountValue!
-                            )}
+                            -{formatCurrency(baseTopicTotal - topicTotal)}
                           </Text>
                         </View>
                         <View style={styles.topicFooterTotal}>
@@ -648,11 +640,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
                           : formatCurrency(topic.discountValue!)}):
                       </Text>
                       <Text style={styles.topicFooterValue}>
-                        -{formatCurrency(
-                          topic.discountType === "PERCENTAGE"
-                            ? baseTopicTotal * topic.discountValue! / 100
-                            : topic.discountValue!
-                        )}
+                        -{formatCurrency(baseTopicTotal - topicTotal)}
                       </Text>
                     </View>
                     <View style={styles.topicFooterTotal}>

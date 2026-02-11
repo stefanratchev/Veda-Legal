@@ -3,7 +3,6 @@ import { eq, asc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions } from "@/lib/schema";
 import {
-  requireAuth,
   requireAdmin,
   serializeDecimal,
   errorResponse,
@@ -99,7 +98,7 @@ function serializeServiceDescription(sd: {
 
 // GET /api/billing/[id] - Get service description with all details
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -232,7 +231,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
       }
       if (resultValue != null) {
-        if (typeof resultValue !== "number" || resultValue <= 0) {
+        if (typeof resultValue !== "number" || !Number.isFinite(resultValue) || resultValue <= 0) {
           return errorResponse("discountValue must be a positive number", 400);
         }
         if (resultType === "PERCENTAGE" && resultValue > 100) {
@@ -263,8 +262,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    if (bodyDiscountType !== undefined || bodyDiscountValue !== undefined) {
+    if (bodyDiscountType !== undefined) {
       updateData.discountType = bodyDiscountType || null;
+    }
+    if (bodyDiscountValue !== undefined) {
       updateData.discountValue = bodyDiscountValue != null ? String(bodyDiscountValue) : null;
     }
 

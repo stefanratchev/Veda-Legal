@@ -32,6 +32,11 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
             with: {
               timeEntry: {
                 columns: { description: true, hours: true },
+                with: {
+                  user: {
+                    columns: { name: true },
+                  },
+                },
               },
             },
           },
@@ -83,6 +88,7 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
         displayOrder: item.displayOrder,
         originalDescription: item.timeEntry?.description,
         originalHours: item.timeEntry ? serializeDecimal(item.timeEntry.hours) ?? undefined : undefined,
+        employeeName: item.timeEntry?.user?.name ?? undefined,
       })),
     })),
     createdAt: sd.createdAt,

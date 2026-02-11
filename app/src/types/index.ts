@@ -134,6 +134,8 @@ export interface ServiceDescriptionLineItem {
   // Original values from TimeEntry (for showing changes)
   originalDescription?: string;
   originalHours?: number;
+  // Lawyer who logged the time entry
+  employeeName?: string;
 }
 
 /**

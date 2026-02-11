@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import type { ServiceDescriptionTopic, PricingMode } from "@/types";
 import { LineItemRow } from "./LineItemRow";
 import { AddLineItemModal } from "./AddLineItemModal";
+import { calculateTopicTotal, calculateTopicBaseTotal, formatCurrency } from "@/lib/billing-pdf";
 
 interface TopicSectionProps {
   topic: ServiceDescriptionTopic;
@@ -15,10 +16,6 @@ interface TopicSectionProps {
   onAddLineItem: (topicId: string, data: { date?: string; description: string; hours?: number; fixedAmount?: number }) => Promise<void>;
   onUpdateLineItem: (topicId: string, itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
   onDeleteLineItem: (topicId: string, itemId: string) => Promise<void>;
-}
-
-function formatCurrency(amount: number): string {
-  return "€" + amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatHours(hours: number): string {
@@ -46,12 +43,11 @@ export function TopicSection({
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Calculate totals
-  const totalHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
-  const topicTotal =
-    topic.pricingMode === "FIXED"
-      ? topic.fixedFee || 0
-      : totalHours * (topic.hourlyRate || 0) +
-        topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
+  const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+  const billedHours = topic.capHours && topic.pricingMode === "HOURLY" ? Math.min(rawHours, topic.capHours) : rawHours;
+  const baseTotal = calculateTopicBaseTotal(topic);
+  const topicTotal = calculateTopicTotal(topic);
+  const hasDiscount = topic.discountType && topic.discountValue;
 
   const handleToggle = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -95,6 +91,60 @@ export function TopicSection({
       setIsUpdating(true);
       try {
         await onUpdateTopic(topic.id, { fixedFee: fee });
+      } catch {
+        // Error handled by parent
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+    [isEditable, topic.id, onUpdateTopic]
+  );
+
+  const handleCapHoursChange = useCallback(
+    async (value: string) => {
+      if (!isEditable) return;
+      const cap = parseFloat(value) || null;
+      setIsUpdating(true);
+      try {
+        await onUpdateTopic(topic.id, { capHours: cap });
+      } catch {
+        // Error handled by parent
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+    [isEditable, topic.id, onUpdateTopic]
+  );
+
+  const handleDiscountTypeChange = useCallback(
+    async (type: "PERCENTAGE" | "AMOUNT" | null) => {
+      if (!isEditable) return;
+      setIsUpdating(true);
+      try {
+        if (!type) {
+          await onUpdateTopic(topic.id, { discountType: null, discountValue: null });
+        } else {
+          await onUpdateTopic(topic.id, {
+            discountType: type,
+            discountValue: topic.discountValue || 0,
+          });
+        }
+      } catch {
+        // Error handled by parent
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+    [isEditable, topic.id, topic.discountValue, onUpdateTopic]
+  );
+
+  const handleDiscountValueChange = useCallback(
+    async (value: string) => {
+      if (!isEditable) return;
+      const val = parseFloat(value) || null;
+      setIsUpdating(true);
+      try {
+        await onUpdateTopic(topic.id, { discountValue: val });
       } catch {
         // Error handled by parent
       } finally {
@@ -169,13 +219,36 @@ export function TopicSection({
           </h3>
           <span className="text-xs text-[var(--text-muted)]">
             {topic.lineItems.length} item{topic.lineItems.length !== 1 ? "s" : ""}
-            {topic.pricingMode === "HOURLY" && totalHours > 0 && ` \u2022 ${formatHours(totalHours)}`}
+            {topic.pricingMode === "HOURLY" && rawHours > 0 && (
+              <>
+                {` \u2022 ${formatHours(billedHours)}`}
+                {topic.capHours && rawHours > topic.capHours && (
+                  <span className="text-[var(--warning)]"> (capped from {formatHours(rawHours)})</span>
+                )}
+              </>
+            )}
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-[var(--text-secondary)]">
-            {formatCurrency(topicTotal)}
-          </span>
+          {hasDiscount ? (
+            <div className="text-right">
+              <div className="text-xs text-[var(--text-muted)] line-through">
+                {formatCurrency(baseTotal)}
+              </div>
+              <div className="text-xs text-[var(--text-muted)]">
+                Discount ({topic.discountType === "PERCENTAGE" ? `${topic.discountValue}%` : formatCurrency(topic.discountValue!)}): -{formatCurrency(
+                  topic.discountType === "PERCENTAGE" ? baseTotal * topic.discountValue! / 100 : topic.discountValue!
+                )}
+              </div>
+              <div className="text-sm font-medium text-[var(--text-primary)]">
+                {formatCurrency(topicTotal)}
+              </div>
+            </div>
+          ) : (
+            <span className="text-sm font-medium text-[var(--text-secondary)]">
+              {formatCurrency(topicTotal)}
+            </span>
+          )}
           {isEditable && (
             <button
               onClick={(e) => {
@@ -268,6 +341,71 @@ export function TopicSection({
                   <span className="text-xs text-[var(--text-muted)]">EUR</span>
                 </div>
               )}
+
+              {/* Cap hours (HOURLY mode only) */}
+              {topic.pricingMode === "HOURLY" && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-[var(--text-muted)]">Cap:</label>
+                  <input
+                    type="number"
+                    value={topic.capHours ?? ""}
+                    onChange={(e) => handleCapHoursChange(e.target.value)}
+                    disabled={!isEditable}
+                    placeholder="No cap"
+                    className="w-20 px-2 py-1 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
+                    step="0.25"
+                    min="0"
+                  />
+                  <span className="text-xs text-[var(--text-muted)]">hrs</span>
+                </div>
+              )}
+
+              {/* Discount toggle + value */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[var(--text-muted)]">Discount:</span>
+                <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDiscountTypeChange(topic.discountType === "PERCENTAGE" ? null : "PERCENTAGE");
+                    }}
+                    disabled={!isEditable || isUpdating}
+                    className={`px-2 py-1 text-xs font-medium transition-colors ${
+                      topic.discountType === "PERCENTAGE"
+                        ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                        : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    } ${!isEditable ? "cursor-not-allowed opacity-60" : ""}`}
+                  >
+                    %
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDiscountTypeChange(topic.discountType === "AMOUNT" ? null : "AMOUNT");
+                    }}
+                    disabled={!isEditable || isUpdating}
+                    className={`px-2 py-1 text-xs font-medium transition-colors ${
+                      topic.discountType === "AMOUNT"
+                        ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                        : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    } ${!isEditable ? "cursor-not-allowed opacity-60" : ""}`}
+                  >
+                    EUR
+                  </button>
+                </div>
+                {topic.discountType && (
+                  <input
+                    type="number"
+                    value={topic.discountValue ?? ""}
+                    onChange={(e) => handleDiscountValueChange(e.target.value)}
+                    disabled={!isEditable}
+                    placeholder="0"
+                    className="w-20 px-2 py-1 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)] disabled:opacity-60 disabled:cursor-not-allowed"
+                    step="0.01"
+                    min="0"
+                  />
+                )}
+              </div>
             </div>
           </div>
 

@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
         periodStart: true,
         periodEnd: true,
         status: true,
+        discountType: true,
+        discountValue: true,
         updatedAt: true,
       },
       with: {
@@ -42,6 +44,9 @@ export async function GET(request: NextRequest) {
             pricingMode: true,
             hourlyRate: true,
             fixedFee: true,
+            capHours: true,
+            discountType: true,
+            discountValue: true,
           },
           with: {
             lineItems: {
@@ -55,23 +60,41 @@ export async function GET(request: NextRequest) {
 
     // Calculate total amount for each service description
     const result = allServiceDescriptions.map((sd) => {
-      let totalAmount = 0;
+      let subtotal = 0;
       for (const topic of sd.topics) {
+        let baseTotal: number;
         if (topic.pricingMode === "FIXED" && topic.fixedFee) {
-          totalAmount += Number(topic.fixedFee);
-        } else if (topic.pricingMode === "HOURLY" && topic.hourlyRate) {
-          const totalHours = topic.lineItems.reduce(
+          baseTotal = Number(topic.fixedFee);
+        } else if (topic.pricingMode === "HOURLY") {
+          const rawHours = topic.lineItems.reduce(
             (sum, item) => sum + (item.hours ? Number(item.hours) : 0),
             0
           );
-          totalAmount += totalHours * Number(topic.hourlyRate);
-          // Add fixed amounts from line items
-          totalAmount += topic.lineItems.reduce(
+          const capHours = topic.capHours ? Number(topic.capHours) : null;
+          const billedHours = capHours ? Math.min(rawHours, capHours) : rawHours;
+          baseTotal = billedHours * (topic.hourlyRate ? Number(topic.hourlyRate) : 0);
+          baseTotal += topic.lineItems.reduce(
             (sum, item) => sum + (item.fixedAmount ? Number(item.fixedAmount) : 0),
             0
           );
+        } else {
+          baseTotal = 0;
         }
+        // Apply topic discount
+        if (topic.discountType === "PERCENTAGE" && topic.discountValue) {
+          baseTotal = baseTotal * (1 - Number(topic.discountValue) / 100);
+        } else if (topic.discountType === "AMOUNT" && topic.discountValue) {
+          baseTotal = baseTotal - Number(topic.discountValue);
+        }
+        subtotal += Math.max(baseTotal, 0);
       }
+      // Apply overall discount
+      if (sd.discountType === "PERCENTAGE" && sd.discountValue) {
+        subtotal = subtotal * (1 - Number(sd.discountValue) / 100);
+      } else if (sd.discountType === "AMOUNT" && sd.discountValue) {
+        subtotal = subtotal - Number(sd.discountValue);
+      }
+      const totalAmount = Math.max(Math.round(subtotal * 100) / 100, 0);
 
       return {
         id: sd.id,
@@ -80,7 +103,7 @@ export async function GET(request: NextRequest) {
         periodStart: sd.periodStart,
         periodEnd: sd.periodEnd,
         status: sd.status,
-        totalAmount: Math.round(totalAmount * 100) / 100,
+        totalAmount,
         updatedAt: sd.updatedAt,
       };
     });

@@ -24,6 +24,8 @@ function serializeForPDF(sd: {
   periodEnd: string;
   status: "DRAFT" | "FINALIZED";
   finalizedAt: string | null;
+  discountType: "PERCENTAGE" | "AMOUNT" | null;
+  discountValue: string | null;
   topics: Array<{
     id: string;
     topicName: string;
@@ -31,6 +33,9 @@ function serializeForPDF(sd: {
     pricingMode: "HOURLY" | "FIXED";
     hourlyRate: string | null;
     fixedFee: string | null;
+    capHours: string | null;
+    discountType: "PERCENTAGE" | "AMOUNT" | null;
+    discountValue: string | null;
     lineItems: Array<{
       id: string;
       timeEntryId: string | null;
@@ -58,6 +63,8 @@ function serializeForPDF(sd: {
     periodEnd: sd.periodEnd,
     status: sd.status,
     finalizedAt: sd.finalizedAt || null,
+    discountType: sd.discountType,
+    discountValue: serializeDecimal(sd.discountValue),
     topics: sd.topics.map((topic) => ({
       id: topic.id,
       topicName: topic.topicName,
@@ -65,6 +72,9 @@ function serializeForPDF(sd: {
       pricingMode: topic.pricingMode,
       hourlyRate: serializeDecimal(topic.hourlyRate),
       fixedFee: serializeDecimal(topic.fixedFee),
+      capHours: serializeDecimal(topic.capHours),
+      discountType: topic.discountType,
+      discountValue: serializeDecimal(topic.discountValue),
       lineItems: topic.lineItems.map((item) => ({
         id: item.id,
         timeEntryId: item.timeEntryId,
@@ -99,6 +109,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         periodEnd: true,
         status: true,
         finalizedAt: true,
+        discountType: true,
+        discountValue: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -120,6 +132,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             pricingMode: true,
             hourlyRate: true,
             fixedFee: true,
+            capHours: true,
+            discountType: true,
+            discountValue: true,
           },
           orderBy: (topics) => [asc(topics.displayOrder)],
           with: {

@@ -27,6 +27,8 @@ function serializeServiceDescription(sd: {
   periodEnd: string;
   status: "DRAFT" | "FINALIZED";
   finalizedAt: string | null;
+  discountType: "PERCENTAGE" | "AMOUNT" | null;
+  discountValue: string | null;
   topics: Array<{
     id: string;
     topicName: string;
@@ -34,6 +36,9 @@ function serializeServiceDescription(sd: {
     pricingMode: "HOURLY" | "FIXED";
     hourlyRate: string | null;
     fixedFee: string | null;
+    capHours: string | null;
+    discountType: "PERCENTAGE" | "AMOUNT" | null;
+    discountValue: string | null;
     lineItems: Array<{
       id: string;
       timeEntryId: string | null;
@@ -62,6 +67,8 @@ function serializeServiceDescription(sd: {
     periodEnd: sd.periodEnd,
     status: sd.status,
     finalizedAt: sd.finalizedAt || null,
+    discountType: sd.discountType,
+    discountValue: serializeDecimal(sd.discountValue),
     topics: sd.topics.map((topic) => ({
       id: topic.id,
       topicName: topic.topicName,
@@ -69,6 +76,9 @@ function serializeServiceDescription(sd: {
       pricingMode: topic.pricingMode,
       hourlyRate: serializeDecimal(topic.hourlyRate),
       fixedFee: serializeDecimal(topic.fixedFee),
+      capHours: serializeDecimal(topic.capHours),
+      discountType: topic.discountType,
+      discountValue: serializeDecimal(topic.discountValue),
       lineItems: topic.lineItems.map((item) => ({
         id: item.id,
         timeEntryId: item.timeEntryId,
@@ -105,6 +115,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         periodEnd: true,
         status: true,
         finalizedAt: true,
+        discountType: true,
+        discountValue: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -126,6 +138,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             pricingMode: true,
             hourlyRate: true,
             fixedFee: true,
+            capHours: true,
+            discountType: true,
+            discountValue: true,
           },
           orderBy: (topics) => [asc(topics.displayOrder)],
           with: {
@@ -178,10 +193,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { status } = body;
+  const { status, discountType: bodyDiscountType, discountValue: bodyDiscountValue } = body;
 
-  if (!status || !["DRAFT", "FINALIZED"].includes(status)) {
+  if (status && !["DRAFT", "FINALIZED"].includes(status)) {
     return errorResponse("Invalid status", 400);
+  }
+
+  if (!status && bodyDiscountType === undefined && bodyDiscountValue === undefined) {
+    return errorResponse("No update fields provided", 400);
   }
 
   try {
@@ -194,19 +213,47 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Service description not found", 404);
     }
 
+    // Validate discount fields
+    if (bodyDiscountType !== undefined || bodyDiscountValue !== undefined) {
+      if (existing.status === "FINALIZED") {
+        return errorResponse("Cannot modify finalized service description", 400);
+      }
+      if ((bodyDiscountType && !bodyDiscountValue) || (!bodyDiscountType && bodyDiscountValue)) {
+        return errorResponse("discountType and discountValue must both be set or both be null", 400);
+      }
+      if (bodyDiscountType && !["PERCENTAGE", "AMOUNT"].includes(bodyDiscountType)) {
+        return errorResponse("discountType must be PERCENTAGE or AMOUNT", 400);
+      }
+      if (bodyDiscountValue !== undefined && bodyDiscountValue !== null) {
+        if (typeof bodyDiscountValue !== "number" || bodyDiscountValue <= 0) {
+          return errorResponse("discountValue must be a positive number", 400);
+        }
+        if (bodyDiscountType === "PERCENTAGE" && bodyDiscountValue > 100) {
+          return errorResponse("Percentage discount cannot exceed 100", 400);
+        }
+      }
+    }
+
     const updateData: Record<string, unknown> = {
-      status,
       updatedAt: new Date().toISOString(),
     };
 
-    if (status === "FINALIZED") {
-      const user = await getUserFromSession(auth.session.user?.email);
-      updateData.finalizedAt = new Date().toISOString();
-      updateData.finalizedById = user?.id || null;
-    } else {
-      // Unlocking - clear finalized info
-      updateData.finalizedAt = null;
-      updateData.finalizedById = null;
+    if (status) {
+      updateData.status = status;
+      if (status === "FINALIZED") {
+        const user = await getUserFromSession(auth.session.user?.email);
+        updateData.finalizedAt = new Date().toISOString();
+        updateData.finalizedById = user?.id || null;
+      } else {
+        // Unlocking - clear finalized info
+        updateData.finalizedAt = null;
+        updateData.finalizedById = null;
+      }
+    }
+
+    if (bodyDiscountType !== undefined || bodyDiscountValue !== undefined) {
+      updateData.discountType = bodyDiscountType || null;
+      updateData.discountValue = bodyDiscountValue ? String(bodyDiscountValue) : null;
     }
 
     const [updated] = await db.update(serviceDescriptions)

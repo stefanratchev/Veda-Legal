@@ -7,6 +7,7 @@ import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicke
 interface LineItemRowProps {
   item: ServiceDescriptionLineItem;
   isEditable: boolean;
+  isEvenRow: boolean;
   onUpdate: (itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
   onDelete: (itemId: string) => void;
 }
@@ -38,7 +39,7 @@ function hoursMinutesToDecimal(hours: number, minutes: number): number {
   return hours + minutes / 60;
 }
 
-export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRowProps) {
+export function LineItemRow({ item, isEditable, isEvenRow, onUpdate, onDelete }: LineItemRowProps) {
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editDescription, setEditDescription] = useState(item.description);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -113,14 +114,19 @@ export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRo
   }, [item.id, onDelete]);
 
   return (
-    <tr className={`border-t border-[var(--border-subtle)] hover:bg-[var(--bg-surface)] transition-colors ${isUpdating ? "opacity-50" : ""}`}>
+    <tr className={`border-t border-[var(--border-subtle)] hover:bg-[var(--bg-surface)] transition-colors ${isUpdating ? "opacity-50" : ""} ${isEvenRow ? "bg-[var(--bg-deep)]/50" : ""}`}>
       {/* Date */}
-      <td className="px-4 py-2 text-sm text-[var(--text-secondary)]">
+      <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">
         {formatDate(item.date)}
       </td>
 
+      {/* Lawyer */}
+      <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">
+        {item.employeeName || "\u2014"}
+      </td>
+
       {/* Description */}
-      <td className="px-4 py-2">
+      <td className="px-4 py-3">
         {isEditingDescription ? (
           <input
             ref={descriptionInputRef}
@@ -152,7 +158,7 @@ export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRo
       </td>
 
       {/* Hours */}
-      <td className="px-4 py-2 text-right">
+      <td className="px-4 py-3 text-right">
         {isEditable ? (
           <div
             className="inline-block"
@@ -176,7 +182,7 @@ export function LineItemRow({ item, isEditable, onUpdate, onDelete }: LineItemRo
 
       {/* Actions */}
       {isEditable && (
-        <td className="px-4 py-2 text-right">
+        <td className="px-4 py-3 text-right">
           <button
             onClick={handleDelete}
             className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-colors"

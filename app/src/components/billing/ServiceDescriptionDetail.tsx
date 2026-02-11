@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { ServiceDescription, ServiceDescriptionTopic, PricingMode } from "@/types";
+import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
 import { TopicSection } from "./TopicSection";
 import { AddTopicModal } from "./AddTopicModal";
 
@@ -17,21 +18,6 @@ function formatPeriod(start: string, end: string): string {
   const endMonth = endDate.toLocaleString("en-GB", { month: "long", year: "numeric" });
   if (startMonth === endMonth) return startMonth;
   return `${startMonth} - ${endMonth}`;
-}
-
-function formatCurrency(amount: number): string {
-  return "€" + amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function calculateTopicTotal(topic: ServiceDescriptionTopic): number {
-  if (topic.pricingMode === "FIXED") {
-    return topic.fixedFee || 0;
-  }
-  // Hourly: rate × total hours + fixed amounts
-  const totalHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
-  const hourlyTotal = totalHours * (topic.hourlyRate || 0);
-  const fixedTotal = topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
-  return hourlyTotal + fixedTotal;
 }
 
 export function ServiceDescriptionDetail({ serviceDescription: initialData }: ServiceDescriptionDetailProps) {
@@ -54,9 +40,68 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     }));
   }, [data.topics]);
 
-  const grandTotal = useMemo(() => {
+  const subtotal = useMemo(() => {
     return topicTotals.reduce((sum, t) => sum + t.total, 0);
   }, [topicTotals]);
+
+  const grandTotal = useMemo(() => {
+    return calculateGrandTotal(data.topics, data.discountType, data.discountValue);
+  }, [data.topics, data.discountType, data.discountValue]);
+
+  const [isUpdatingDiscount, setIsUpdatingDiscount] = useState(false);
+
+  const handleOverallDiscountTypeChange = useCallback(
+    async (type: "PERCENTAGE" | "AMOUNT" | null) => {
+      setIsUpdatingDiscount(true);
+      try {
+        const response = await fetch(`/api/billing/${data.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            discountType: type,
+            discountValue: type ? (data.discountValue || 0) : null,
+          }),
+        });
+        if (response.ok) {
+          setData((prev) => ({
+            ...prev,
+            discountType: type,
+            discountValue: type ? (prev.discountValue || 0) : null,
+          }));
+        }
+      } catch (error) {
+        console.error("Failed to update discount:", error);
+      } finally {
+        setIsUpdatingDiscount(false);
+      }
+    },
+    [data.id, data.discountValue]
+  );
+
+  const handleOverallDiscountValueChange = useCallback(
+    async (value: string) => {
+      const val = parseFloat(value) || null;
+      setIsUpdatingDiscount(true);
+      try {
+        const response = await fetch(`/api/billing/${data.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            discountType: data.discountType,
+            discountValue: val,
+          }),
+        });
+        if (response.ok) {
+          setData((prev) => ({ ...prev, discountValue: val }));
+        }
+      } catch (error) {
+        console.error("Failed to update discount value:", error);
+      } finally {
+        setIsUpdatingDiscount(false);
+      }
+    },
+    [data.id, data.discountType]
+  );
 
   // Navigate back
   const handleBack = useCallback(() => {
@@ -75,7 +120,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   }, []);
 
   const handleAddTopic = useCallback(
-    async (topicName: string, pricingMode: PricingMode, hourlyRate: number | null, fixedFee: number | null) => {
+    async (topicName: string, pricingMode: PricingMode, hourlyRate: number | null, fixedFee: number | null, capHours: number | null, discountType: "PERCENTAGE" | "AMOUNT" | null, discountValue: number | null) => {
       setIsAddingTopic(true);
       setAddTopicError(null);
 
@@ -83,7 +128,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
         const response = await fetch(`/api/billing/${data.id}/topics`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topicName, pricingMode, hourlyRate, fixedFee }),
+          body: JSON.stringify({ topicName, pricingMode, hourlyRate, fixedFee, capHours, discountType, discountValue }),
         });
 
         const result = await response.json();
@@ -378,11 +423,85 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
           {topicTotals.length === 0 && (
             <p className="text-sm text-[var(--text-muted)] italic">No topics yet</p>
           )}
-          {topicTotals.length > 0 && (
-            <div className="flex items-center justify-between text-sm font-medium pt-2 border-t border-[var(--border-subtle)]">
-              <span className="text-[var(--text-primary)]">Total</span>
-              <span className="text-[var(--text-primary)]">{formatCurrency(grandTotal)}</span>
+          {/* Overall discount controls (DRAFT only) */}
+          {isEditable && topicTotals.length > 0 && (
+            <div className="flex items-center justify-between text-sm pt-2 border-t border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2">
+                <span className="text-[var(--text-muted)]">Overall Discount:</span>
+                <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
+                  <button
+                    onClick={() => handleOverallDiscountTypeChange(data.discountType === "PERCENTAGE" ? null : "PERCENTAGE")}
+                    disabled={isUpdatingDiscount}
+                    className={`px-2 py-0.5 text-xs font-medium transition-colors ${
+                      data.discountType === "PERCENTAGE"
+                        ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                        : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+                    }`}
+                  >
+                    %
+                  </button>
+                  <button
+                    onClick={() => handleOverallDiscountTypeChange(data.discountType === "AMOUNT" ? null : "AMOUNT")}
+                    disabled={isUpdatingDiscount}
+                    className={`px-2 py-0.5 text-xs font-medium transition-colors ${
+                      data.discountType === "AMOUNT"
+                        ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                        : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+                    }`}
+                  >
+                    EUR
+                  </button>
+                </div>
+                {data.discountType && (
+                  <input
+                    type="number"
+                    value={data.discountValue ?? ""}
+                    onChange={(e) => handleOverallDiscountValueChange(e.target.value)}
+                    placeholder="0"
+                    className="w-20 px-2 py-0.5 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
+                    step="0.01"
+                    min="0"
+                  />
+                )}
+              </div>
+              {data.discountType && data.discountValue ? (
+                <span className="text-[var(--text-secondary)]">
+                  -{formatCurrency(data.discountType === "PERCENTAGE" ? subtotal * data.discountValue / 100 : data.discountValue)}
+                </span>
+              ) : null}
             </div>
+          )}
+          {/* Show discount info when finalized */}
+          {!isEditable && data.discountType && data.discountValue && (
+            <div className="flex items-center justify-between text-sm pt-2 border-t border-[var(--border-subtle)]">
+              <span className="text-[var(--text-muted)]">
+                Overall Discount ({data.discountType === "PERCENTAGE" ? `${data.discountValue}%` : formatCurrency(data.discountValue)})
+              </span>
+              <span className="text-[var(--text-secondary)]">
+                -{formatCurrency(data.discountType === "PERCENTAGE" ? subtotal * data.discountValue / 100 : data.discountValue)}
+              </span>
+            </div>
+          )}
+          {topicTotals.length > 0 && (
+            <>
+              {data.discountType && data.discountValue ? (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-[var(--text-secondary)]">Subtotal</span>
+                    <span className="text-[var(--text-secondary)]">{formatCurrency(subtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm font-medium pt-2 border-t border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-primary)]">Total</span>
+                    <span className="text-[var(--text-primary)]">{formatCurrency(grandTotal)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between text-sm font-medium pt-2 border-t border-[var(--border-subtle)]">
+                  <span className="text-[var(--text-primary)]">Total</span>
+                  <span className="text-[var(--text-primary)]">{formatCurrency(grandTotal)}</span>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

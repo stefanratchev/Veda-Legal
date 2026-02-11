@@ -116,6 +116,11 @@ export type ServiceDescriptionStatus = "DRAFT" | "FINALIZED";
 export type PricingMode = "HOURLY" | "FIXED";
 
 /**
+ * Discount type for topics and service descriptions.
+ */
+export type DiscountType = "PERCENTAGE" | "AMOUNT";
+
+/**
  * Line item in a service description topic.
  */
 export interface ServiceDescriptionLineItem {
@@ -141,6 +146,9 @@ export interface ServiceDescriptionTopic {
   pricingMode: PricingMode;
   hourlyRate: number | null;
   fixedFee: number | null;
+  capHours: number | null;
+  discountType: DiscountType | null;
+  discountValue: number | null;
   lineItems: ServiceDescriptionLineItem[];
 }
 
@@ -161,6 +169,8 @@ export interface ServiceDescription {
   periodEnd: string;
   status: ServiceDescriptionStatus;
   finalizedAt: string | null;
+  discountType: DiscountType | null;
+  discountValue: number | null;
   topics: ServiceDescriptionTopic[];
   createdAt: string;
   updatedAt: string;

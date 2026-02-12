@@ -73,12 +73,17 @@ app/src/
 ├── hooks/                 # Custom React hooks (useClickOutside)
 ├── lib/                   # Utilities
 │   ├── api-utils.ts       # Auth helpers, validation functions
-│   ├── date-utils.ts      # Date formatting utilities
+│   ├── auth-utils.ts      # Position-based access control (requireAuth, requireAdmin, requireWriteAccess)
+│   ├── billing-utils.ts   # Billing serialization and calculation helpers
+│   ├── billing-config.ts  # Billing constants (BILLING_START_DATE)
+│   ├── billing-pdf.tsx    # React PDF generation for service descriptions
+│   ├── date-utils.ts      # Date/time formatting (formatHours, parseHoursToComponents, toDecimalHours)
+│   ├── firm-details.ts    # Firm company info for invoices/PDFs
 │   ├── auth.ts            # NextAuth configuration
 │   ├── db.ts              # Drizzle client instance
 │   └── schema.ts          # Drizzle schema definitions
 ├── types/                 # Shared TypeScript types
-└── test/                  # Test setup
+└── test/                  # Test setup and helpers
 ```
 
 ## Architecture Patterns
@@ -122,6 +127,16 @@ ADMIN users can impersonate other users via the Team page to see the app from th
 Time entries can be edited by their owner via `PATCH /api/timesheets/[id]`. Editable fields: client, topic/subtopic, hours, description. Date cannot be changed.
 
 **Billing Lock:** Entries linked to a finalized service description cannot be edited. The `isLocked` field in the GET response indicates this state.
+
+### Billing / Service Descriptions
+Service descriptions are invoice-like documents managed in `components/billing/`. Key components:
+- `ServiceDescriptionDetail.tsx` - Main editor with DnD support for reordering topics and line items
+- `TopicSection.tsx` - Renders a topic section with its line items table
+- `LineItemRow.tsx` - Individual line item row with inline editing (description, hours via `DurationPicker`)
+
+**Drag-and-drop** uses `@dnd-kit/core` + `@dnd-kit/sortable`. Topics and line items use prefixed IDs (`topic:`, `item:`, `topic-drop:`, `topic-empty:`) to distinguish entity types within a single `DndContext`. Line items can be moved between topics.
+
+**Billing calculations** are centralized in `lib/billing-utils.ts` — use the canonical functions there rather than computing inline. PDF export uses `@react-pdf/renderer` in `lib/billing-pdf.tsx`.
 
 ### Timesheet Submissions
 Users submit timesheets daily via `POST /api/timesheets/submit`. Key behaviors:
@@ -186,9 +201,12 @@ npm run test -- --run     # Run all tests once (no watch)
 ```
 
 **Test utilities in `src/test/`:**
+- `helpers/api.ts` - `createMockRequest()` creates `NextRequest` objects for API route tests
 - `utils.tsx` - `renderWithProviders()` wraps components with required contexts
 - `mocks/auth.ts` - `createMockSession()`, `setupMockAuth()` for NextAuth mocking
 - `mocks/db.ts` - `createMockDb()` for Drizzle ORM mocking with chainable methods
+
+**API route test pattern:** Use `vi.hoisted()` for mock setup, `vi.mock()` for module mocking, then import the route handler after mocks. See `app/src/app/api/billing/[id]/topics/reorder/route.test.ts` for a reference example.
 
 ## Environment Variables
 
@@ -209,9 +227,10 @@ AZURE_AD_TENANT_ID=<from Azure Portal>
 - **Topic**: High-level work category (e.g., "Company Incorporation", "M&A Advisory")
 - **Subtopic**: Specific task type within a topic (e.g., "Client correspondence:", "Drafting documents:")
 - **isPrefix**: Subtopics ending with ":" are prefixes - user should add details after selecting
-- **ServiceDescription**: Invoice-like document grouping time entries for a client and period
-- **ServiceDescriptionTopic**: A topic section within a service description with pricing mode (hourly/fixed)
+- **ServiceDescription**: Invoice-like document grouping time entries for a client and period (status: DRAFT → FINALIZED)
+- **ServiceDescriptionTopic**: A topic section within a service description with pricing mode (HOURLY/FIXED), optional cap hours, optional discount
 - **LineItem**: Individual line within a service description topic (linked to a time entry or manual)
+- **DiscountType**: PERCENTAGE or AMOUNT — applies at both service description and topic level
 - **TimesheetSubmission**: Daily confirmation that a user's timesheet is complete
 - **ClientType**: REGULAR (billable), INTERNAL (non-billable firm work), MANAGEMENT (admin tasks)
 - **TopicType**: Mirrors ClientType - controls which topics appear for which client types

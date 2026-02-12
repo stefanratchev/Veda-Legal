@@ -5,9 +5,12 @@ import type { ServiceDescriptionTopic, PricingMode } from "@/types";
 import { LineItemRow } from "./LineItemRow";
 import { AddLineItemModal } from "./AddLineItemModal";
 import { calculateTopicTotal, calculateTopicBaseTotal, formatCurrency } from "@/lib/billing-pdf";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface TopicSectionProps {
   topic: ServiceDescriptionTopic;
+  sortableId?: string;
   serviceDescriptionId: string;
   isEditable: boolean;
   clientHourlyRate: number | null;
@@ -27,6 +30,7 @@ function formatHours(hours: number): string {
 
 export function TopicSection({
   topic,
+  sortableId,
   serviceDescriptionId,
   isEditable,
   clientHourlyRate,
@@ -52,6 +56,22 @@ export function TopicSection({
   useEffect(() => { setLocalFee(topic.fixedFee != null ? String(topic.fixedFee) : ""); }, [topic.fixedFee]);
   useEffect(() => { setLocalCap(topic.capHours != null ? String(topic.capHours) : ""); }, [topic.capHours]);
   useEffect(() => { setLocalDiscount(topic.discountValue != null ? String(topic.discountValue) : ""); }, [topic.discountValue]);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: sortableId || topic.id, disabled: !isEditable });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    opacity: isDragging ? 0.5 : undefined,
+  };
 
   // Calculate totals
   const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
@@ -215,13 +235,30 @@ export function TopicSection({
   );
 
   return (
-    <div className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+    <div ref={setNodeRef} style={style} className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border-subtle)] overflow-hidden">
       {/* Header */}
       <div
         className="flex items-center justify-between p-4 cursor-pointer hover:bg-[var(--bg-surface)] transition-colors"
         onClick={handleToggle}
       >
         <div className="flex items-center gap-3">
+          {isEditable && (
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1 -ml-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-grab active:cursor-grabbing touch-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <circle cx="9" cy="5" r="1.5" />
+                <circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" />
+                <circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" />
+                <circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+          )}
           <svg
             className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${isExpanded ? "rotate-90" : ""}`}
             fill="none"

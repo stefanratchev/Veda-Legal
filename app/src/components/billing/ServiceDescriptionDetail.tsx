@@ -6,6 +6,23 @@ import type { ServiceDescription, ServiceDescriptionTopic, PricingMode } from "@
 import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
 import { TopicSection } from "./TopicSection";
 import { AddTopicModal } from "./AddTopicModal";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 
 interface ServiceDescriptionDetailProps {
   serviceDescription: ServiceDescription;
@@ -30,6 +47,68 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
 
   const isFinalized = data.status === "FINALIZED";
   const isEditable = !isFinalized;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
+
+  const handleTopicDragStart = useCallback((event: DragStartEvent) => {
+    setActiveTopicId(String(event.active.id).replace("topic:", ""));
+  }, []);
+
+  const handleTopicDragEnd = useCallback(async (event: DragEndEvent) => {
+    setActiveTopicId(null);
+
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const activeId = String(active.id).replace("topic:", "");
+    const overId = String(over.id).replace("topic:", "");
+
+    const oldIndex = data.topics.findIndex((t) => t.id === activeId);
+    const newIndex = data.topics.findIndex((t) => t.id === overId);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(data.topics, oldIndex, newIndex);
+    const previousTopics = data.topics;
+
+    const updates: { id: string; displayOrder: number }[] = [];
+    reordered.forEach((topic, index) => {
+      if (topic.displayOrder !== index) {
+        updates.push({ id: topic.id, displayOrder: index });
+      }
+    });
+
+    if (updates.length === 0) return;
+
+    // Optimistic update
+    setData((prev) => ({
+      ...prev,
+      topics: reordered.map((t, i) => ({ ...t, displayOrder: i })),
+    }));
+
+    try {
+      const response = await fetch(`/api/billing/${data.id}/topics/reorder`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: updates }),
+      });
+
+      if (!response.ok) {
+        setData((prev) => ({ ...prev, topics: previousTopics }));
+      }
+    } catch {
+      setData((prev) => ({ ...prev, topics: previousTopics }));
+    }
+  }, [data]);
 
   // Calculate totals
   const topicTotals = useMemo(() => {
@@ -510,20 +589,43 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
 
       {/* Topic Sections */}
       <div className="space-y-4">
-        {data.topics.map((topic) => (
-          <TopicSection
-            key={topic.id}
-            topic={topic}
-            serviceDescriptionId={data.id}
-            isEditable={isEditable}
-            clientHourlyRate={data.client.hourlyRate}
-            onUpdateTopic={handleUpdateTopic}
-            onDeleteTopic={handleDeleteTopic}
-            onAddLineItem={handleAddLineItem}
-            onUpdateLineItem={handleUpdateLineItem}
-            onDeleteLineItem={handleDeleteLineItem}
-          />
-        ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleTopicDragStart}
+          onDragEnd={handleTopicDragEnd}
+        >
+          <SortableContext
+            items={data.topics.map((t) => `topic:${t.id}`)}
+            strategy={verticalListSortingStrategy}
+          >
+            {data.topics.map((topic) => (
+              <TopicSection
+                key={topic.id}
+                topic={topic}
+                sortableId={`topic:${topic.id}`}
+                serviceDescriptionId={data.id}
+                isEditable={isEditable}
+                clientHourlyRate={data.client.hourlyRate}
+                onUpdateTopic={handleUpdateTopic}
+                onDeleteTopic={handleDeleteTopic}
+                onAddLineItem={handleAddLineItem}
+                onUpdateLineItem={handleUpdateLineItem}
+                onDeleteLineItem={handleDeleteLineItem}
+              />
+            ))}
+          </SortableContext>
+
+          <DragOverlay>
+            {activeTopicId ? (
+              <div className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--accent-pink)] p-4 opacity-90 shadow-lg">
+                <span className="font-heading text-base font-semibold text-[var(--text-primary)]">
+                  {data.topics.find((t) => t.id === activeTopicId)?.topicName}
+                </span>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
 
         {/* Add Topic Button - dashed, inline with topics */}
         {isEditable && (

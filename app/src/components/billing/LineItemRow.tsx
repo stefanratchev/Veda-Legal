@@ -3,9 +3,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { ServiceDescriptionLineItem } from "@/types";
 import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicker";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface LineItemRowProps {
   item: ServiceDescriptionLineItem;
+  sortableId?: string;
   isEditable: boolean;
   isEvenRow: boolean;
   onUpdate: (itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
@@ -40,13 +43,28 @@ function hoursMinutesToDecimal(hours: number, minutes: number): number {
   return hours + minutes / 60;
 }
 
-export function LineItemRow({ item, isEditable, isEvenRow, onUpdate, onDelete }: LineItemRowProps) {
+export function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate, onDelete }: LineItemRowProps) {
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editDescription, setEditDescription] = useState(item.description);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const descriptionInputRef = useRef<HTMLInputElement>(null);
   const durationPickerRef = useRef<DurationPickerRef>(null);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: sortableId || item.id, disabled: !isEditable });
+
+  const rowStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  };
 
   // Check if values differ from original
   const hasDescriptionChange = item.originalDescription !== undefined && item.description !== item.originalDescription;
@@ -115,7 +133,26 @@ export function LineItemRow({ item, isEditable, isEvenRow, onUpdate, onDelete }:
   }, [item.id, onDelete]);
 
   return (
-    <tr className={`border-t border-[var(--border-subtle)] hover:bg-[var(--bg-surface)] transition-colors ${isUpdating ? "opacity-50" : ""} ${isEvenRow ? "bg-[var(--bg-deep)]/50" : ""}`}>
+    <tr ref={setNodeRef} style={rowStyle} className={`border-t border-[var(--border-subtle)] hover:bg-[var(--bg-surface)] transition-colors ${isUpdating ? "opacity-50" : ""} ${isEvenRow ? "bg-[var(--bg-deep)]/50" : ""}`}>
+      {/* Drag handle */}
+      {isEditable && (
+        <td className="px-2 py-3 w-8">
+          <button
+            {...attributes}
+            {...listeners}
+            className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-grab active:cursor-grabbing touch-none"
+          >
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <circle cx="9" cy="5" r="1.5" />
+              <circle cx="15" cy="5" r="1.5" />
+              <circle cx="9" cy="12" r="1.5" />
+              <circle cx="15" cy="12" r="1.5" />
+              <circle cx="9" cy="19" r="1.5" />
+              <circle cx="15" cy="19" r="1.5" />
+            </svg>
+          </button>
+        </td>
+      )}
       {/* Date */}
       <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">
         {formatDate(item.date)}

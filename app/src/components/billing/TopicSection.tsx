@@ -6,6 +6,8 @@ import { LineItemRow } from "./LineItemRow";
 import { AddLineItemModal } from "./AddLineItemModal";
 import { calculateTopicTotal, calculateTopicBaseTotal, formatCurrency } from "@/lib/billing-pdf";
 import { useSortable } from "@dnd-kit/sortable";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
 interface TopicSectionProps {
@@ -65,6 +67,16 @@ export function TopicSection({
     transition,
     isDragging,
   } = useSortable({ id: sortableId || topic.id, disabled: !isEditable });
+
+  const { setNodeRef: setDroppableRef, isOver: isDropTarget } = useDroppable({
+    id: `topic-drop:${topic.id}`,
+    disabled: !isEditable,
+  });
+
+  const { setNodeRef: setEmptyDropRef, isOver: isEmptyDropTarget } = useDroppable({
+    id: `topic-empty:${topic.id}`,
+    disabled: !isEditable || topic.lineItems.length > 0,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -238,7 +250,10 @@ export function TopicSection({
     <div ref={setNodeRef} style={style} className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border-subtle)] overflow-hidden">
       {/* Header */}
       <div
-        className="flex items-center justify-between p-4 cursor-pointer hover:bg-[var(--bg-surface)] transition-colors"
+        ref={setDroppableRef}
+        className={`flex items-center justify-between p-4 cursor-pointer hover:bg-[var(--bg-surface)] transition-colors ${
+          isDropTarget ? "bg-[var(--accent-pink-glow)] ring-1 ring-[var(--accent-pink)]" : ""
+        }`}
         onClick={handleToggle}
       >
         <div className="flex items-center gap-3">
@@ -466,15 +481,17 @@ export function TopicSection({
           {topic.lineItems.length === 0 ? (
             <div className="p-6">
               {isEditable ? (
-                <button
-                  onClick={handleOpenAddItem}
-                  className="w-full py-6 border-2 border-dashed border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] hover:bg-[var(--bg-surface)] transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Line Item
-                </button>
+                <div ref={setEmptyDropRef} className={isEmptyDropTarget ? "rounded-lg ring-1 ring-[var(--accent-pink)] bg-[var(--accent-pink-glow)]" : ""}>
+                  <button
+                    onClick={handleOpenAddItem}
+                    className="w-full py-6 border-2 border-dashed border-[var(--border-subtle)] rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] hover:bg-[var(--bg-surface)] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Line Item
+                  </button>
+                </div>
               ) : (
                 <p className="text-center text-sm text-[var(--text-muted)] italic">No line items</p>
               )}
@@ -484,6 +501,7 @@ export function TopicSection({
               <table className="w-full">
                 <thead>
                   <tr className="text-xs text-[var(--text-muted)] uppercase tracking-wide">
+                    {isEditable && <th className="px-2 py-2.5 w-8"></th>}
                     <th className="px-4 py-2.5 text-left font-medium w-24">Date</th>
                     <th className="px-4 py-2.5 text-left font-medium w-28">Lawyer</th>
                     <th className="px-4 py-2.5 text-left font-medium">Description</th>
@@ -491,22 +509,28 @@ export function TopicSection({
                     {isEditable && <th className="px-4 py-2.5 text-right font-medium w-10"></th>}
                   </tr>
                 </thead>
-                <tbody>
-                  {topic.lineItems.map((item, index) => (
-                    <LineItemRow
-                      key={item.id}
-                      item={item}
-                      isEditable={isEditable}
-                      isEvenRow={index % 2 === 0}
-                      onUpdate={handleUpdateItem}
-                      onDelete={handleDeleteItem}
-                    />
-                  ))}
-                </tbody>
+                <SortableContext
+                  items={topic.lineItems.map((item) => `item:${item.id}`)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <tbody>
+                    {topic.lineItems.map((item, index) => (
+                      <LineItemRow
+                        key={item.id}
+                        item={item}
+                        sortableId={`item:${item.id}`}
+                        isEditable={isEditable}
+                        isEvenRow={index % 2 === 0}
+                        onUpdate={handleUpdateItem}
+                        onDelete={handleDeleteItem}
+                      />
+                    ))}
+                  </tbody>
+                </SortableContext>
                 {isEditable && (
                   <tfoot>
                     <tr className="border-t border-[var(--border-subtle)]">
-                      <td colSpan={isEditable ? 5 : 4}>
+                      <td colSpan={isEditable ? 6 : 4}>
                         <button
                           onClick={handleOpenAddItem}
                           className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors w-full"

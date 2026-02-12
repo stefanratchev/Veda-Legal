@@ -5,6 +5,7 @@ import type { ServiceDescriptionTopic, PricingMode } from "@/types";
 import { LineItemRow } from "./LineItemRow";
 import { AddLineItemModal } from "./AddLineItemModal";
 import { calculateTopicTotal, calculateTopicBaseTotal, formatCurrency } from "@/lib/billing-pdf";
+import { formatHours } from "@/lib/date-utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
@@ -21,13 +22,6 @@ interface TopicSectionProps {
   onAddLineItem: (topicId: string, data: { date?: string; description: string; hours?: number; fixedAmount?: number }) => Promise<void>;
   onUpdateLineItem: (topicId: string, itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
   onDeleteLineItem: (topicId: string, itemId: string) => Promise<void>;
-}
-
-function formatHours(hours: number): string {
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
 }
 
 export function TopicSection({

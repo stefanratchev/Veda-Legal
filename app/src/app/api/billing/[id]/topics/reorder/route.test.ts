@@ -20,6 +20,7 @@ vi.mock("@/lib/db", () => ({
   serviceDescriptions: { id: "id", status: "status" },
   serviceDescriptionTopics: {
     id: "id",
+    serviceDescriptionId: "serviceDescriptionId",
     displayOrder: "displayOrder",
     updatedAt: "updatedAt",
   },

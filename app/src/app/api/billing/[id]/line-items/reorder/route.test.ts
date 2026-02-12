@@ -8,6 +8,7 @@ const { mockRequireAdmin, mockDb } = vi.hoisted(() => {
     mockDb: {
       query: {
         serviceDescriptions: { findFirst: vi.fn() },
+        serviceDescriptionTopics: { findMany: vi.fn() },
       },
       transaction: vi.fn(),
       update: vi.fn(),
@@ -18,6 +19,10 @@ const { mockRequireAdmin, mockDb } = vi.hoisted(() => {
 vi.mock("@/lib/db", () => ({
   db: mockDb,
   serviceDescriptions: { id: "id", status: "status" },
+  serviceDescriptionTopics: {
+    id: "id",
+    serviceDescriptionId: "serviceDescriptionId",
+  },
   serviceDescriptionLineItems: {
     id: "id",
     topicId: "topicId",
@@ -200,12 +205,47 @@ describe("PATCH /api/billing/[id]/line-items/reorder", () => {
     });
   });
 
+  describe("Topic Ownership Validation", () => {
+    beforeEach(() => {
+      setupAuthenticatedAdmin();
+      mockDb.query.serviceDescriptions.findFirst.mockResolvedValue({
+        status: "DRAFT",
+      });
+    });
+
+    it("returns 400 when topicId does not belong to the service description", async () => {
+      mockDb.query.serviceDescriptionTopics.findMany.mockResolvedValue([
+        { id: "topic-1" },
+      ]);
+
+      const request = createMockRequest({
+        method: "PATCH",
+        url: "/api/billing/sd-1/line-items/reorder",
+        body: {
+          items: [{ id: "item-1", topicId: "foreign-topic", displayOrder: 0 }],
+        },
+      });
+
+      const response = await PATCH(request, {
+        params: Promise.resolve({ id: "sd-1" }),
+      });
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toBe("Invalid topicId - does not belong to this service description");
+    });
+  });
+
   describe("Happy Path", () => {
     beforeEach(() => {
       setupAuthenticatedAdmin();
       mockDb.query.serviceDescriptions.findFirst.mockResolvedValue({
         status: "DRAFT",
       });
+      mockDb.query.serviceDescriptionTopics.findMany.mockResolvedValue([
+        { id: "topic-1" },
+        { id: "topic-2" },
+      ]);
       mockDb.transaction.mockImplementation(async (fn) => {
         await fn(mockDb);
       });
@@ -269,6 +309,9 @@ describe("PATCH /api/billing/[id]/line-items/reorder", () => {
       mockDb.query.serviceDescriptions.findFirst.mockResolvedValue({
         status: "DRAFT",
       });
+      mockDb.query.serviceDescriptionTopics.findMany.mockResolvedValue([
+        { id: "topic-1" },
+      ]);
       mockDb.transaction.mockRejectedValue(new Error("Database error"));
 
       const request = createMockRequest({

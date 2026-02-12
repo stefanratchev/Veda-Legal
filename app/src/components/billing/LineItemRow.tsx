@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { ServiceDescriptionLineItem } from "@/types";
 import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicker";
+import { formatHours as formatHoursUtil, parseHoursToComponents, toDecimalHours } from "@/lib/date-utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -21,26 +22,9 @@ function formatDate(dateStr: string | null): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-function formatHours(hours: number | null): string {
+function formatHoursDisplay(hours: number | null): string {
   if (hours === null || hours === 0) return "-";
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
-}
-
-function decimalToHoursMinutes(decimal: number | null): { hours: number; minutes: number } {
-  if (decimal === null || decimal === 0) return { hours: 0, minutes: 0 };
-  const hours = Math.floor(decimal);
-  const minutes = Math.round((decimal - hours) * 60);
-  // Round to nearest 15-minute increment
-  const roundedMinutes = Math.round(minutes / 15) * 15;
-  if (roundedMinutes >= 60) return { hours: hours + 1, minutes: 0 };
-  return { hours, minutes: roundedMinutes };
-}
-
-function hoursMinutesToDecimal(hours: number, minutes: number): number {
-  return hours + minutes / 60;
+  return formatHoursUtil(hours);
 }
 
 export function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate, onDelete }: LineItemRowProps) {
@@ -85,12 +69,12 @@ export function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate,
   }, [isEditable, item.description]);
 
   const handleDurationChange = useCallback(async (hours: number, minutes: number) => {
-    const newDecimal = hoursMinutesToDecimal(hours, minutes);
+    const newDecimal = toDecimalHours(hours, minutes);
     if (newDecimal === item.hours) return;
 
     setIsUpdating(true);
     try {
-      await onUpdate(item.id, { hours: newDecimal || undefined });
+      await onUpdate(item.id, { hours: newDecimal });
     } finally {
       setIsUpdating(false);
     }
@@ -200,12 +184,12 @@ export function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate,
         {isEditable ? (
           <div
             className="inline-block"
-            title={hasHoursChange ? `Original: ${formatHours(item.originalHours ?? null)}` : undefined}
+            title={hasHoursChange ? `Original: ${formatHoursDisplay(item.originalHours ?? null)}` : undefined}
           >
             <DurationPicker
               ref={durationPickerRef}
-              hours={decimalToHoursMinutes(item.hours).hours}
-              minutes={decimalToHoursMinutes(item.hours).minutes}
+              hours={parseHoursToComponents(item.hours ?? 0).hours}
+              minutes={parseHoursToComponents(item.hours ?? 0).minutes}
               onChange={handleDurationChange}
               align="right"
               className={hasHoursChange ? "[&_button]:border-b [&_button]:border-dashed [&_button]:border-[var(--warning)]" : ""}
@@ -213,7 +197,7 @@ export function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate,
           </div>
         ) : (
           <span className="text-sm text-[var(--text-secondary)]">
-            {formatHours(item.hours)}
+            {formatHoursDisplay(item.hours)}
           </span>
         )}
       </td>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { serviceDescriptions, serviceDescriptionLineItems } from "@/lib/schema";
+import { serviceDescriptions, serviceDescriptionLineItems, serviceDescriptionTopics } from "@/lib/schema";
 import { requireAdmin, errorResponse } from "@/lib/api-utils";
 
 interface ReorderItem {
@@ -59,6 +59,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Cannot modify finalized service description", 400);
     }
 
+    // Validate all target topicIds belong to this service description
+    const validTopics = await db.query.serviceDescriptionTopics.findMany({
+      where: eq(serviceDescriptionTopics.serviceDescriptionId, id),
+      columns: { id: true },
+    });
+    const validTopicIds = new Set(validTopics.map((t) => t.id));
+
+    for (const item of items as ReorderItem[]) {
+      if (!validTopicIds.has(item.topicId)) {
+        return errorResponse("Invalid topicId - does not belong to this service description", 400);
+      }
+    }
+
     const now = new Date().toISOString();
     await db.transaction(async (tx) => {
       for (const item of items as ReorderItem[]) {
@@ -68,7 +81,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             displayOrder: item.displayOrder,
             updatedAt: now,
           })
-          .where(eq(serviceDescriptionLineItems.id, item.id));
+          .where(and(
+            eq(serviceDescriptionLineItems.id, item.id),
+            inArray(serviceDescriptionLineItems.topicId, [...validTopicIds]),
+          ));
       }
     });
 

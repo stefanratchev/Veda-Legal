@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
 import { requireAdmin, errorResponse } from "@/lib/api-utils";
@@ -60,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       for (const item of items as ReorderItem[]) {
         await tx.update(serviceDescriptionTopics)
           .set({ displayOrder: item.displayOrder, updatedAt: now })
-          .where(eq(serviceDescriptionTopics.id, item.id));
+          .where(and(eq(serviceDescriptionTopics.id, item.id), eq(serviceDescriptionTopics.serviceDescriptionId, id)));
       }
     });
 

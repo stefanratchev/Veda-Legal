@@ -61,7 +61,7 @@ export function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate,
   } = useSortable({ id: sortableId || item.id, disabled: !isEditable });
 
   const rowStyle = {
-    transform: CSS.Transform.toString(transform),
+    transform: (transform?.x || transform?.y) ? CSS.Transform.toString(transform) : undefined,
     transition,
     opacity: isDragging ? 0.5 : undefined,
   };

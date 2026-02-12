@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, forwardRef, useImperativeHandle, useCallback, useEffect } from "react";
-import { useClickOutside } from "@/hooks/useClickOutside";
+import { createPortal } from "react-dom";
 
 interface DurationPickerProps {
   hours: number;
@@ -28,7 +28,9 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
   const [step, setStep] = useState<"hours" | "minutes">("hours");
   const [pendingHours, setPendingHours] = useState(hours);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelPos, setPanelPos] = useState<{ top: number; left?: number; right?: number }>({ top: 0 });
 
   // Hour options in grid order (for keyboard navigation)
   // Grid layout: [1,2,3], [4,5,6], [7,8,9], [_,0,_]
@@ -52,13 +54,52 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
     setHighlightedIndex(0);
   }, [step]);
 
-  // Close dropdown on outside click
-  const handleClickOutside = useCallback(() => {
+  // Compute dropdown position when opening
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      if (align === "right") {
+        setPanelPos({
+          top: rect.bottom + 4,
+          right: window.innerWidth - rect.right,
+        });
+      } else {
+        setPanelPos({
+          top: rect.bottom + 4,
+          left: rect.left,
+        });
+      }
+    }
+  }, [isOpen, align]);
+
+  // Focus panel when it opens (for keyboard navigation)
+  useEffect(() => {
+    if (isOpen && panelRef.current) {
+      panelRef.current.focus();
+    }
+  }, [isOpen, step]);
+
+  // Close on click outside (check both trigger and panel)
+  const closeDropdown = useCallback(() => {
     setIsOpen(false);
     setStep("hours");
     setHighlightedIndex(0);
   }, []);
-  useClickOutside(dropdownRef, handleClickOutside, isOpen);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        (!triggerRef.current || !triggerRef.current.contains(target)) &&
+        (!panelRef.current || !panelRef.current.contains(target))
+      ) {
+        closeDropdown();
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, closeDropdown]);
 
   // Handle toggle - reset state when opening
   const handleToggle = () => {
@@ -176,10 +217,112 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
     }
   };
 
+  const dropdownPanel = isOpen ? (
+    <div
+      ref={panelRef}
+      style={{ position: "fixed", top: panelPos.top, left: panelPos.left, right: panelPos.right, zIndex: 50, width: 200 }}
+      className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded shadow-xl overflow-hidden animate-fade-up"
+      onKeyDown={handleKeyDown}
+      tabIndex={-1}
+    >
+      {step === "hours" ? (
+        /* Step 1: Select Hours */
+        <div className="p-2">
+          <div className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2 px-1">
+            Select hours
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((h, idx) => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => handleSelectHours(h)}
+                onMouseEnter={() => setHighlightedIndex(idx)}
+                className={`
+                  py-2.5 min-h-[44px] rounded text-sm font-medium
+                  transition-all duration-150
+                  ${idx === highlightedIndex
+                    ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                    : h === hours
+                    ? "bg-[var(--bg-hover)] text-[var(--accent-pink)]"
+                    : "bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                  }
+                `}
+              >
+                {h}
+              </button>
+            ))}
+            {/* Zero centered below */}
+            <div />
+            <button
+              type="button"
+              onClick={() => handleSelectHours(0)}
+              onMouseEnter={() => setHighlightedIndex(9)}
+              className={`
+                py-2.5 min-h-[44px] rounded text-sm font-medium
+                transition-all duration-150
+                ${9 === highlightedIndex
+                  ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                  : 0 === hours
+                  ? "bg-[var(--bg-hover)] text-[var(--accent-pink)]"
+                  : "bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                }
+              `}
+            >
+              0
+            </button>
+            <div />
+          </div>
+        </div>
+      ) : (
+        /* Step 2: Select Minutes */
+        <div className="p-2">
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              type="button"
+              onClick={() => setStep("hours")}
+              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider">
+              {pendingHours}h — Select minutes
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {minuteOptions.map((m, idx) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => handleSelectMinutes(m)}
+                onMouseEnter={() => setHighlightedIndex(idx)}
+                className={`
+                  py-2.5 min-h-[44px] rounded text-sm font-medium
+                  transition-all duration-150
+                  ${idx === highlightedIndex
+                    ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                    : m === minutes
+                    ? "bg-[var(--bg-hover)] text-[var(--accent-pink)]"
+                    : "bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                  }
+                `}
+              >
+                {m.toString().padStart(2, "0")}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
-    <div ref={dropdownRef} className={`relative ${className}`}>
+    <div className={className}>
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={handleToggle}
         disabled={disabled}
@@ -204,106 +347,8 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
         </svg>
       </button>
 
-      {/* Dropdown Panel */}
-      {isOpen && (
-        <div
-          className={`absolute z-50 mt-1 w-[200px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded shadow-xl overflow-hidden animate-fade-up ${align === "right" ? "right-0" : "left-0"}`}
-          onKeyDown={handleKeyDown}
-          tabIndex={-1}
-          ref={(el) => el?.focus()}
-        >
-          {step === "hours" ? (
-            /* Step 1: Select Hours */
-            <div className="p-2">
-              <div className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2 px-1">
-                Select hours
-              </div>
-              <div className="grid grid-cols-3 gap-1">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((h, idx) => (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => handleSelectHours(h)}
-                    onMouseEnter={() => setHighlightedIndex(idx)}
-                    className={`
-                      py-2.5 min-h-[44px] rounded text-sm font-medium
-                      transition-all duration-150
-                      ${idx === highlightedIndex
-                        ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
-                        : h === hours
-                        ? "bg-[var(--bg-hover)] text-[var(--accent-pink)]"
-                        : "bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-                      }
-                    `}
-                  >
-                    {h}
-                  </button>
-                ))}
-                {/* Zero centered below */}
-                <div />
-                <button
-                  type="button"
-                  onClick={() => handleSelectHours(0)}
-                  onMouseEnter={() => setHighlightedIndex(9)}
-                  className={`
-                    py-2.5 min-h-[44px] rounded text-sm font-medium
-                    transition-all duration-150
-                    ${9 === highlightedIndex
-                      ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
-                      : 0 === hours
-                      ? "bg-[var(--bg-hover)] text-[var(--accent-pink)]"
-                      : "bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-                    }
-                  `}
-                >
-                  0
-                </button>
-                <div />
-              </div>
-            </div>
-          ) : (
-            /* Step 2: Select Minutes */
-            <div className="p-2">
-              <div className="flex items-center gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setStep("hours")}
-                  className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <div className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider">
-                  {pendingHours}h — Select minutes
-                </div>
-              </div>
-              <div className="grid grid-cols-4 gap-1">
-                {minuteOptions.map((m, idx) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => handleSelectMinutes(m)}
-                    onMouseEnter={() => setHighlightedIndex(idx)}
-                    className={`
-                      py-2.5 min-h-[44px] rounded text-sm font-medium
-                      transition-all duration-150
-                      ${idx === highlightedIndex
-                        ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
-                        : m === minutes
-                        ? "bg-[var(--bg-hover)] text-[var(--accent-pink)]"
-                        : "bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-                      }
-                    `}
-                  >
-                    {m.toString().padStart(2, "0")}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Dropdown Panel - rendered as portal to escape overflow clipping */}
+      {typeof document !== "undefined" && dropdownPanel && createPortal(dropdownPanel, document.body)}
     </div>
   );
 });

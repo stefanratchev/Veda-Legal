@@ -121,6 +121,11 @@ export type PricingMode = "HOURLY" | "FIXED";
 export type DiscountType = "PERCENTAGE" | "AMOUNT";
 
 /**
+ * Waive mode for line items (excluded from total or zero-rated).
+ */
+export type WaiveMode = "EXCLUDED" | "ZERO";
+
+/**
  * Line item in a service description topic.
  */
 export interface ServiceDescriptionLineItem {
@@ -131,6 +136,7 @@ export interface ServiceDescriptionLineItem {
   hours: number | null;
   fixedAmount: number | null;
   displayOrder: number;
+  waiveMode: WaiveMode | null;
   // Original values from TimeEntry (for showing changes)
   originalDescription?: string;
   originalHours?: number;

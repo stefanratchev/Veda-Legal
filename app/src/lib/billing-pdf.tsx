@@ -390,10 +390,17 @@ export function calculateTopicBaseTotal(topic: ServiceDescription["topics"][0]):
   if (topic.pricingMode === "FIXED") {
     return topic.fixedFee || 0;
   }
-  const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+  const billableItems = topic.lineItems.filter((item) => item.waiveMode !== "EXCLUDED");
+  const rawHours = billableItems.reduce(
+    (sum, item) => sum + (item.waiveMode === "ZERO" ? 0 : (item.hours || 0)),
+    0
+  );
   const billedHours = topic.capHours ? Math.min(rawHours, topic.capHours) : rawHours;
   const hourlyTotal = billedHours * (topic.hourlyRate || 0);
-  const fixedTotal = topic.lineItems.reduce((sum, item) => sum + (item.fixedAmount || 0), 0);
+  const fixedTotal = billableItems.reduce(
+    (sum, item) => sum + (item.waiveMode === "ZERO" ? 0 : (item.fixedAmount || 0)),
+    0
+  );
   return Math.round((hourlyTotal + fixedTotal) * 100) / 100;
 }
 
@@ -410,7 +417,14 @@ export function calculateTopicTotal(topic: ServiceDescription["topics"][0]): num
 }
 
 export function calculateTopicHours(topic: ServiceDescription["topics"][0]): number {
-  return topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+  return topic.lineItems.reduce(
+    (sum, item) => {
+      if (item.waiveMode === "EXCLUDED") return sum;
+      if (item.waiveMode === "ZERO") return sum;
+      return sum + (item.hours || 0);
+    },
+    0
+  );
 }
 
 export function calculateGrandTotal(
@@ -551,16 +565,20 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
               </View>
 
               {/* Line items with zebra striping */}
-              {topic.lineItems.map((item, index) => (
+              {topic.lineItems.filter((item) => item.waiveMode !== "EXCLUDED").map((item, index) => (
                 <View
                   key={item.id}
                   style={index % 2 === 0 ? styles.tableRow : styles.tableRowAlt}
                   wrap={false}
                 >
                   <Text style={styles.dateCol}>{formatDate(item.date)}</Text>
-                  <Text style={styles.serviceCol}>{item.description}</Text>
+                  <Text style={styles.serviceCol}>
+                    {item.description}{item.waiveMode === "ZERO" ? " (Waived)" : ""}
+                  </Text>
                   <Text style={styles.timeCol}>
-                    {item.hours ? formatHours(item.hours) : "—"}
+                    {item.waiveMode === "ZERO"
+                      ? `${formatHours(item.hours || 0)} (Waived)`
+                      : item.hours ? formatHours(item.hours) : "—"}
                   </Text>
                 </View>
               ))}

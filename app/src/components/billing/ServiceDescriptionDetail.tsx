@@ -539,6 +539,45 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     [data.id]
   );
 
+  // Waive / restore line item
+  const handleWaiveLineItem = useCallback(
+    async (itemId: string, waiveMode: "EXCLUDED" | "ZERO" | null) => {
+      const currentData = dataRef.current;
+      const topic = currentData.topics.find((t) =>
+        t.lineItems.some((li) => li.id === itemId)
+      );
+      if (!topic) return;
+
+      const response = await fetch(
+        `/api/billing/${currentData.id}/topics/${topic.id}/items/${itemId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ waiveMode }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to update waive status");
+
+      const result = await response.json();
+
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((t) =>
+          t.id === topic.id
+            ? {
+                ...t,
+                lineItems: t.lineItems.map((item) =>
+                  item.id === itemId ? { ...item, ...result } : item
+                ),
+              }
+            : t
+        ),
+      }));
+    },
+    []
+  );
+
   // Delete line item
   const handleDeleteLineItem = useCallback(
     async (topicId: string, itemId: string) => {
@@ -788,6 +827,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
                 onAddLineItem={handleAddLineItem}
                 onUpdateLineItem={handleUpdateLineItem}
                 onDeleteLineItem={handleDeleteLineItem}
+                onWaive={handleWaiveLineItem}
               />
             ))}
           </SortableContext>

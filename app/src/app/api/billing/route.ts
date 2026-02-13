@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
           },
           with: {
             lineItems: {
-              columns: { hours: true, fixedAmount: true },
+              columns: { hours: true, fixedAmount: true, waiveMode: true },
             },
           },
         },
@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
           id: "", timeEntryId: null, date: null, description: "", displayOrder: 0,
           hours: serializeDecimal(li.hours),
           fixedAmount: serializeDecimal(li.fixedAmount),
+          waiveMode: (li.waiveMode as "EXCLUDED" | "ZERO" | null) || null,
         })),
       }));
       const totalAmount = Math.round(calculateGrandTotal(
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
       },
       with: {
         billingLineItems: {
-          columns: { id: true },
+          columns: { id: true, waiveMode: true },
           with: {
             topic: {
               columns: { id: true },
@@ -195,7 +196,12 @@ export async function POST(request: NextRequest) {
       const hasFinalized = entry.billingLineItems.some(
         (li) => li.topic?.serviceDescription?.status === "FINALIZED"
       );
-      return !hasFinalized;
+      if (hasFinalized) return false;
+      // Exclude entries that are waived in any SD
+      const hasWaived = entry.billingLineItems.some(
+        (li) => li.waiveMode !== null
+      );
+      return !hasWaived;
     });
 
     // Group entries by topic

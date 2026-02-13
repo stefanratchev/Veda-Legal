@@ -12,6 +12,7 @@ export const userStatus = pgEnum("UserStatus", ['PENDING', 'ACTIVE', 'INACTIVE']
 export const clientType = pgEnum("ClientType", ['REGULAR', 'INTERNAL', 'MANAGEMENT'])
 export const topicType = pgEnum("TopicType", ['REGULAR', 'INTERNAL', 'MANAGEMENT'])
 export const discountTypeEnum = pgEnum("DiscountType", ['PERCENTAGE', 'AMOUNT'])
+export const waiveModeEnum = pgEnum("WaiveMode", ['EXCLUDED', 'ZERO'])
 
 
 export const serviceDescriptionTopics = pgTable("service_description_topics", {
@@ -72,6 +73,7 @@ export const serviceDescriptionLineItems = pgTable("service_description_line_ite
 	hours: numeric({ precision: 4, scale:  2 }),
 	fixedAmount: numeric({ precision: 10, scale:  2 }),
 	displayOrder: integer().default(0).notNull(),
+	waiveMode: waiveModeEnum(),
 	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ precision: 3, mode: 'string' }).notNull(),
 }, (table) => [

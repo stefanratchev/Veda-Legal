@@ -82,6 +82,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       hours: serializeDecimal(item.hours),
       fixedAmount: serializeDecimal(item.fixedAmount),
       displayOrder: item.displayOrder,
+      waiveMode: null,
     });
   } catch (error) {
     console.error("Database error creating line item:", error);

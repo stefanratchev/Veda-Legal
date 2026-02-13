@@ -66,6 +66,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body.displayOrder !== undefined) {
       updateData.displayOrder = body.displayOrder;
     }
+    if (body.waiveMode !== undefined) {
+      if (body.waiveMode !== null && body.waiveMode !== "EXCLUDED" && body.waiveMode !== "ZERO") {
+        return errorResponse("waiveMode must be EXCLUDED, ZERO, or null", 400);
+      }
+      updateData.waiveMode = body.waiveMode;
+    }
 
     const [updated] = await db.update(serviceDescriptionLineItems)
       .set(updateData)
@@ -78,6 +84,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         hours: serviceDescriptionLineItems.hours,
         fixedAmount: serviceDescriptionLineItems.fixedAmount,
         displayOrder: serviceDescriptionLineItems.displayOrder,
+        waiveMode: serviceDescriptionLineItems.waiveMode,
       });
 
     // Fetch the time entry for original values if linked
@@ -108,6 +115,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       hours: serializeDecimal(updated.hours),
       fixedAmount: serializeDecimal(updated.fixedAmount),
       displayOrder: updated.displayOrder,
+      waiveMode: updated.waiveMode || null,
       originalDescription,
       originalHours,
     });

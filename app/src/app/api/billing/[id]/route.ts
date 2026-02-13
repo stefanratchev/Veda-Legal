@@ -64,6 +64,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                 hours: true,
                 fixedAmount: true,
                 displayOrder: true,
+                waiveMode: true,
               },
               orderBy: (items) => [asc(items.displayOrder)],
               with: {

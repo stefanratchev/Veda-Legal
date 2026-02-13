@@ -108,8 +108,8 @@ describe("billing-pdf utilities", () => {
         discountType: null,
         discountValue: null,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
-          { id: "b", timeEntryId: null, date: "2026-02-02", description: "More work", hours: 3.5, fixedAmount: null, displayOrder: 2 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1, waiveMode: null },
+          { id: "b", timeEntryId: null, date: "2026-02-02", description: "More work", hours: 3.5, fixedAmount: null, displayOrder: 2, waiveMode: null },
         ],
       };
 
@@ -128,7 +128,7 @@ describe("billing-pdf utilities", () => {
         discountType: null,
         discountValue: null,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1, waiveMode: null },
         ],
       };
 
@@ -147,8 +147,8 @@ describe("billing-pdf utilities", () => {
         discountType: null,
         discountValue: null,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
-          { id: "b", timeEntryId: null, date: "2026-02-02", description: "Expense", hours: null, fixedAmount: 50, displayOrder: 2 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1, waiveMode: null },
+          { id: "b", timeEntryId: null, date: "2026-02-02", description: "Expense", hours: null, fixedAmount: 50, displayOrder: 2, waiveMode: null },
         ],
       };
 
@@ -184,7 +184,7 @@ describe("billing-pdf utilities", () => {
         discountType: null,
         discountValue: null,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 5, fixedAmount: null, displayOrder: 1 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 5, fixedAmount: null, displayOrder: 1, waiveMode: null },
         ],
       };
 
@@ -197,7 +197,7 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
         capHours: 20, discountType: null, discountValue: null,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 30, fixedAmount: null, displayOrder: 1 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 30, fixedAmount: null, displayOrder: 1, waiveMode: null },
         ],
       };
       expect(calculateTopicTotal(topic)).toBe(2000);
@@ -209,7 +209,7 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
         capHours: 50, discountType: null, discountValue: null,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1, waiveMode: null },
         ],
       };
       expect(calculateTopicTotal(topic)).toBe(1000);
@@ -221,7 +221,7 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
         capHours: null, discountType: "PERCENTAGE", discountValue: 10,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1, waiveMode: null },
         ],
       };
       expect(calculateTopicTotal(topic)).toBe(900);
@@ -233,7 +233,7 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
         capHours: null, discountType: "AMOUNT", discountValue: 250,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1, waiveMode: null },
         ],
       };
       expect(calculateTopicTotal(topic)).toBe(750);
@@ -245,7 +245,7 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
         capHours: 20, discountType: "PERCENTAGE", discountValue: 10,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 30, fixedAmount: null, displayOrder: 1 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 30, fixedAmount: null, displayOrder: 1, waiveMode: null },
         ],
       };
       expect(calculateTopicTotal(topic)).toBe(1800);
@@ -257,7 +257,7 @@ describe("billing-pdf utilities", () => {
         pricingMode: "FIXED", hourlyRate: null, fixedFee: 5000,
         capHours: null, discountType: "PERCENTAGE", discountValue: 20,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 10, fixedAmount: null, displayOrder: 1, waiveMode: null },
         ],
       };
       expect(calculateTopicTotal(topic)).toBe(4000);
@@ -279,7 +279,7 @@ describe("billing-pdf utilities", () => {
         pricingMode: "HOURLY", hourlyRate: 100, fixedFee: null,
         capHours: null, discountType: "AMOUNT", discountValue: 5000,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1, waiveMode: null },
         ],
       };
       expect(calculateTopicTotal(topic)).toBe(0);
@@ -299,8 +299,8 @@ describe("billing-pdf utilities", () => {
         discountType: null,
         discountValue: null,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
-          { id: "b", timeEntryId: null, date: "2026-02-02", description: "More work", hours: 3.5, fixedAmount: null, displayOrder: 2 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1, waiveMode: null },
+          { id: "b", timeEntryId: null, date: "2026-02-02", description: "More work", hours: 3.5, fixedAmount: null, displayOrder: 2, waiveMode: null },
         ],
       };
 
@@ -319,8 +319,8 @@ describe("billing-pdf utilities", () => {
         discountType: null,
         discountValue: null,
         lineItems: [
-          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1 },
-          { id: "b", timeEntryId: null, date: "2026-02-02", description: "Fixed item", hours: null, fixedAmount: 100, displayOrder: 2 },
+          { id: "a", timeEntryId: null, date: "2026-02-01", description: "Work", hours: 2, fixedAmount: null, displayOrder: 1, waiveMode: null },
+          { id: "b", timeEntryId: null, date: "2026-02-02", description: "Fixed item", hours: null, fixedAmount: 100, displayOrder: 2, waiveMode: null },
         ],
       };
 
@@ -356,22 +356,22 @@ describe("billing-pdf utilities", () => {
 
     it("sums topic totals with no overall discount", () => {
       const topics = [
-        makeTopic({ id: "1", lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1 }] }),
-        makeTopic({ id: "2", lineItems: [{ id: "b", timeEntryId: null, date: null, description: "W", hours: 5, fixedAmount: null, displayOrder: 1 }] }),
+        makeTopic({ id: "1", lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1, waiveMode: null }] }),
+        makeTopic({ id: "2", lineItems: [{ id: "b", timeEntryId: null, date: null, description: "W", hours: 5, fixedAmount: null, displayOrder: 1, waiveMode: null }] }),
       ];
       expect(calculateGrandTotal(topics, null, null)).toBe(1500);
     });
 
     it("applies overall percentage discount", () => {
       const topics = [
-        makeTopic({ lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1 }] }),
+        makeTopic({ lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1, waiveMode: null }] }),
       ];
       expect(calculateGrandTotal(topics, "PERCENTAGE", 10)).toBe(900);
     });
 
     it("applies overall amount discount", () => {
       const topics = [
-        makeTopic({ lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1 }] }),
+        makeTopic({ lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1, waiveMode: null }] }),
       ];
       expect(calculateGrandTotal(topics, "AMOUNT", 300)).toBe(700);
     });
@@ -380,7 +380,7 @@ describe("billing-pdf utilities", () => {
       const topics = [
         makeTopic({
           discountType: "PERCENTAGE", discountValue: 10,
-          lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1 }],
+          lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 10, fixedAmount: null, displayOrder: 1, waiveMode: null }],
         }),
       ];
       expect(calculateGrandTotal(topics, "PERCENTAGE", 5)).toBe(855);
@@ -388,7 +388,7 @@ describe("billing-pdf utilities", () => {
 
     it("floors overall discount at zero", () => {
       const topics = [
-        makeTopic({ lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 1, fixedAmount: null, displayOrder: 1 }] }),
+        makeTopic({ lineItems: [{ id: "a", timeEntryId: null, date: null, description: "W", hours: 1, fixedAmount: null, displayOrder: 1, waiveMode: null }] }),
       ];
       expect(calculateGrandTotal(topics, "AMOUNT", 5000)).toBe(0);
     });

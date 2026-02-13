@@ -40,6 +40,7 @@ interface RawServiceDescription {
       hours: string | null;
       fixedAmount: string | null;
       displayOrder: number;
+      waiveMode: string | null;
       timeEntry?: {
         description: string;
         hours: string;
@@ -93,6 +94,7 @@ export function serializeServiceDescription(sd: RawServiceDescription): ServiceD
         hours: serializeDecimal(item.hours),
         fixedAmount: serializeDecimal(item.fixedAmount),
         displayOrder: item.displayOrder,
+        waiveMode: (item.waiveMode as "EXCLUDED" | "ZERO" | null) || null,
         ...(item.timeEntry ? {
           originalDescription: item.timeEntry.description,
           originalHours: serializeDecimal(item.timeEntry.hours) ?? undefined,

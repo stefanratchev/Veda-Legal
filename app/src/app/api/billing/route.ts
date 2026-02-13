@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
           id: "", timeEntryId: null, date: null, description: "", displayOrder: 0,
           hours: serializeDecimal(li.hours),
           fixedAmount: serializeDecimal(li.fixedAmount),
+          waiveMode: null,
         })),
       }));
       const totalAmount = Math.round(calculateGrandTotal(

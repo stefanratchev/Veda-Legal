@@ -1,11 +1,29 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { ServiceDescription, ServiceDescriptionTopic, PricingMode } from "@/types";
 import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
 import { TopicSection } from "./TopicSection";
 import { AddTopicModal } from "./AddTopicModal";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  CollisionDetection,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 
 interface ServiceDescriptionDetailProps {
   serviceDescription: ServiceDescription;
@@ -30,6 +48,243 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
 
   const isFinalized = data.status === "FINALIZED";
   const isEditable = !isFinalized;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Ref to always read latest data in drag handlers (avoids stale closures)
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  // Custom collision detection: filter droppables by active drag type
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const activeId = String(args.active.id);
+    if (activeId.startsWith("topic:")) {
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          (c) => String(c.id).startsWith("topic:")
+        ),
+      });
+    }
+    // For items: consider item sortables + topic drop/empty zones, not topic sortables
+    return closestCenter({
+      ...args,
+      droppableContainers: args.droppableContainers.filter(
+        (c) => !String(c.id).startsWith("topic:")
+      ),
+    });
+  }, []);
+
+  const [activeDragType, setActiveDragType] = useState<"topic" | "item" | null>(null);
+  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
+  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const id = String(event.active.id);
+    if (id.startsWith("topic:")) {
+      setActiveDragType("topic");
+      setActiveTopicId(id.replace("topic:", ""));
+    } else if (id.startsWith("item:")) {
+      setActiveDragType("item");
+      setActiveItemId(id.replace("item:", ""));
+    }
+  }, []);
+
+  const handleTopicReorder = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const currentData = dataRef.current;
+    const activeId = String(active.id).replace("topic:", "");
+    const overId = String(over.id).replace("topic:", "");
+
+    const oldIndex = currentData.topics.findIndex((t) => t.id === activeId);
+    const newIndex = currentData.topics.findIndex((t) => t.id === overId);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(currentData.topics, oldIndex, newIndex);
+    const previousTopics = currentData.topics;
+
+    const updates: { id: string; displayOrder: number }[] = [];
+    reordered.forEach((topic, index) => {
+      if (topic.displayOrder !== index) {
+        updates.push({ id: topic.id, displayOrder: index });
+      }
+    });
+
+    if (updates.length === 0) return;
+
+    // Optimistic update
+    setData((prev) => ({
+      ...prev,
+      topics: reordered.map((t, i) => ({ ...t, displayOrder: i })),
+    }));
+
+    try {
+      const response = await fetch(`/api/billing/${currentData.id}/topics/reorder`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: updates }),
+      });
+
+      if (!response.ok) {
+        setData((prev) => ({ ...prev, topics: previousTopics }));
+        alert("Failed to reorder topics. Changes have been reverted.");
+      }
+    } catch {
+      setData((prev) => ({ ...prev, topics: previousTopics }));
+      alert("Failed to reorder topics. Changes have been reverted.");
+    }
+  }, []);
+
+  const handleLineItemDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const currentData = dataRef.current;
+    const activeId = String(active.id).replace("item:", "");
+    const overId = String(over.id);
+
+    // Find source topic containing the dragged item
+    const sourceTopic = currentData.topics.find((t) =>
+      t.lineItems.some((item) => item.id === activeId)
+    );
+    if (!sourceTopic) return;
+
+    let targetTopicId: string;
+    let insertIndex: number | null = null;
+
+    if (overId.startsWith("topic-drop:")) {
+      // Dropped on a topic header — append to that topic
+      targetTopicId = overId.replace("topic-drop:", "");
+    } else if (overId.startsWith("topic-empty:")) {
+      // Dropped on an empty topic area — append to that topic
+      targetTopicId = overId.replace("topic-empty:", "");
+    } else if (overId.startsWith("item:")) {
+      // Dropped on a line item — find which topic it's in
+      const overItemId = overId.replace("item:", "");
+      const targetTopic = currentData.topics.find((t) =>
+        t.lineItems.some((item) => item.id === overItemId)
+      );
+      if (!targetTopic) return;
+      targetTopicId = targetTopic.id;
+      insertIndex = targetTopic.lineItems.findIndex((item) => item.id === overItemId);
+    } else {
+      return;
+    }
+
+    if (active.id === over.id) return;
+
+    const previousTopics = currentData.topics;
+
+    const revertWithError = () => {
+      setData((prev) => ({ ...prev, topics: previousTopics }));
+      alert("Failed to reorder line items. Changes have been reverted.");
+    };
+
+    if (sourceTopic.id === targetTopicId) {
+      // Within same topic — reorder
+      if (insertIndex === null) return; // dropped on own header, no-op
+      const items = [...sourceTopic.lineItems];
+      const oldIndex = items.findIndex((item) => item.id === activeId);
+      if (oldIndex === -1 || oldIndex === insertIndex) return;
+
+      const reordered = arrayMove(items, oldIndex, insertIndex);
+      const updates = reordered.map((item, i) => ({
+        id: item.id,
+        topicId: sourceTopic.id,
+        displayOrder: i,
+      }));
+
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((t) =>
+          t.id === sourceTopic.id
+            ? { ...t, lineItems: reordered.map((item, i) => ({ ...item, displayOrder: i })) }
+            : t
+        ),
+      }));
+
+      try {
+        const response = await fetch(`/api/billing/${currentData.id}/line-items/reorder`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: updates }),
+        });
+        if (!response.ok) revertWithError();
+      } catch {
+        revertWithError();
+      }
+    } else {
+      // Cross-topic move
+      const movedItem = sourceTopic.lineItems.find((item) => item.id === activeId);
+      if (!movedItem) return;
+
+      const targetTopic = currentData.topics.find((t) => t.id === targetTopicId);
+      if (!targetTopic) return;
+
+      const newSourceItems = sourceTopic.lineItems.filter((item) => item.id !== activeId);
+      const newTargetItems = [...targetTopic.lineItems];
+      if (insertIndex !== null) {
+        newTargetItems.splice(insertIndex, 0, movedItem);
+      } else {
+        newTargetItems.push(movedItem);
+      }
+
+      const updates: { id: string; topicId: string; displayOrder: number }[] = [];
+      newSourceItems.forEach((item, i) => {
+        updates.push({ id: item.id, topicId: sourceTopic.id, displayOrder: i });
+      });
+      newTargetItems.forEach((item, i) => {
+        updates.push({ id: item.id, topicId: targetTopicId, displayOrder: i });
+      });
+
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((t) => {
+          if (t.id === sourceTopic.id) {
+            return { ...t, lineItems: newSourceItems.map((item, i) => ({ ...item, displayOrder: i })) };
+          }
+          if (t.id === targetTopicId) {
+            return { ...t, lineItems: newTargetItems.map((item, i) => ({ ...item, displayOrder: i })) };
+          }
+          return t;
+        }),
+      }));
+
+      try {
+        const response = await fetch(`/api/billing/${currentData.id}/line-items/reorder`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: updates }),
+        });
+        if (!response.ok) revertWithError();
+      } catch {
+        revertWithError();
+      }
+    }
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const dragType = activeDragType;
+    setActiveDragType(null);
+    setActiveTopicId(null);
+    setActiveItemId(null);
+
+    if (dragType === "topic") {
+      handleTopicReorder(event);
+    } else if (dragType === "item") {
+      handleLineItemDragEnd(event);
+    }
+  }, [activeDragType, handleTopicReorder, handleLineItemDragEnd]);
 
   // Calculate totals
   const topicTotals = useMemo(() => {
@@ -510,20 +765,56 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
 
       {/* Topic Sections */}
       <div className="space-y-4">
-        {data.topics.map((topic) => (
-          <TopicSection
-            key={topic.id}
-            topic={topic}
-            serviceDescriptionId={data.id}
-            isEditable={isEditable}
-            clientHourlyRate={data.client.hourlyRate}
-            onUpdateTopic={handleUpdateTopic}
-            onDeleteTopic={handleDeleteTopic}
-            onAddLineItem={handleAddLineItem}
-            onUpdateLineItem={handleUpdateLineItem}
-            onDeleteLineItem={handleDeleteLineItem}
-          />
-        ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collisionDetection}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={data.topics.map((t) => `topic:${t.id}`)}
+            strategy={verticalListSortingStrategy}
+          >
+            {data.topics.map((topic) => (
+              <TopicSection
+                key={topic.id}
+                topic={topic}
+                sortableId={`topic:${topic.id}`}
+                serviceDescriptionId={data.id}
+                isEditable={isEditable}
+                clientHourlyRate={data.client.hourlyRate}
+                onUpdateTopic={handleUpdateTopic}
+                onDeleteTopic={handleDeleteTopic}
+                onAddLineItem={handleAddLineItem}
+                onUpdateLineItem={handleUpdateLineItem}
+                onDeleteLineItem={handleDeleteLineItem}
+              />
+            ))}
+          </SortableContext>
+
+          <DragOverlay>
+            {activeTopicId ? (
+              <div className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--accent-pink)] p-4 opacity-90 shadow-lg">
+                <span className="font-heading text-base font-semibold text-[var(--text-primary)]">
+                  {data.topics.find((t) => t.id === activeTopicId)?.topicName}
+                </span>
+              </div>
+            ) : activeItemId ? (() => {
+              const item = data.topics.flatMap((t) => t.lineItems).find((i) => i.id === activeItemId);
+              if (!item) return null;
+              return (
+                <div className="bg-[var(--bg-elevated)] border border-[var(--accent-pink)] rounded px-4 py-2 shadow-lg opacity-90">
+                  <span className="text-sm text-[var(--text-primary)]">{item.description}</span>
+                  {item.hours != null && item.hours > 0 && (
+                    <span className="text-sm text-[var(--text-muted)] ml-2">
+                      {Math.floor(item.hours)}h {Math.round((item.hours - Math.floor(item.hours)) * 60)}m
+                    </span>
+                  )}
+                </div>
+              );
+            })() : null}
+          </DragOverlay>
+        </DndContext>
 
         {/* Add Topic Button - dashed, inline with topics */}
         {isEditable && (

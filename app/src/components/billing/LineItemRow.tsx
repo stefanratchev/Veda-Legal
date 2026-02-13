@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, memo } from "react";
 import type { ServiceDescriptionLineItem } from "@/types";
 import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicker";
+import { formatHours as formatHoursUtil, parseHoursToComponents, toDecimalHours } from "@/lib/date-utils";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface LineItemRowProps {
   item: ServiceDescriptionLineItem;
+  sortableId?: string;
   isEditable: boolean;
   isEvenRow: boolean;
   onUpdate: (itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
@@ -18,35 +22,33 @@ function formatDate(dateStr: string | null): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-function formatHours(hours: number | null): string {
+function formatHoursDisplay(hours: number | null): string {
   if (hours === null || hours === 0) return "-";
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
+  return formatHoursUtil(hours);
 }
 
-function decimalToHoursMinutes(decimal: number | null): { hours: number; minutes: number } {
-  if (decimal === null || decimal === 0) return { hours: 0, minutes: 0 };
-  const hours = Math.floor(decimal);
-  const minutes = Math.round((decimal - hours) * 60);
-  // Round to nearest 15-minute increment
-  const roundedMinutes = Math.round(minutes / 15) * 15;
-  if (roundedMinutes >= 60) return { hours: hours + 1, minutes: 0 };
-  return { hours, minutes: roundedMinutes };
-}
-
-function hoursMinutesToDecimal(hours: number, minutes: number): number {
-  return hours + minutes / 60;
-}
-
-export function LineItemRow({ item, isEditable, isEvenRow, onUpdate, onDelete }: LineItemRowProps) {
+export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate, onDelete }: LineItemRowProps) {
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editDescription, setEditDescription] = useState(item.description);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const descriptionInputRef = useRef<HTMLInputElement>(null);
   const durationPickerRef = useRef<DurationPickerRef>(null);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: sortableId || item.id, disabled: !isEditable });
+
+  const rowStyle = {
+    transform: (transform?.x || transform?.y) ? CSS.Transform.toString(transform) : undefined,
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  };
 
   // Check if values differ from original
   const hasDescriptionChange = item.originalDescription !== undefined && item.description !== item.originalDescription;
@@ -67,12 +69,12 @@ export function LineItemRow({ item, isEditable, isEvenRow, onUpdate, onDelete }:
   }, [isEditable, item.description]);
 
   const handleDurationChange = useCallback(async (hours: number, minutes: number) => {
-    const newDecimal = hoursMinutesToDecimal(hours, minutes);
+    const newDecimal = toDecimalHours(hours, minutes);
     if (newDecimal === item.hours) return;
 
     setIsUpdating(true);
     try {
-      await onUpdate(item.id, { hours: newDecimal || undefined });
+      await onUpdate(item.id, { hours: newDecimal });
     } finally {
       setIsUpdating(false);
     }
@@ -115,7 +117,26 @@ export function LineItemRow({ item, isEditable, isEvenRow, onUpdate, onDelete }:
   }, [item.id, onDelete]);
 
   return (
-    <tr className={`border-t border-[var(--border-subtle)] hover:bg-[var(--bg-surface)] transition-colors ${isUpdating ? "opacity-50" : ""} ${isEvenRow ? "bg-[var(--bg-deep)]/50" : ""}`}>
+    <tr ref={setNodeRef} style={rowStyle} className={`border-t border-[var(--border-subtle)] hover:bg-[var(--bg-surface)] transition-colors ${isUpdating ? "opacity-50" : ""} ${isEvenRow ? "bg-[var(--bg-deep)]/50" : ""}`}>
+      {/* Drag handle */}
+      {isEditable && (
+        <td className="px-2 py-3 w-8">
+          <button
+            {...attributes}
+            {...listeners}
+            className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-grab active:cursor-grabbing touch-none"
+          >
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <circle cx="9" cy="5" r="1.5" />
+              <circle cx="15" cy="5" r="1.5" />
+              <circle cx="9" cy="12" r="1.5" />
+              <circle cx="15" cy="12" r="1.5" />
+              <circle cx="9" cy="19" r="1.5" />
+              <circle cx="15" cy="19" r="1.5" />
+            </svg>
+          </button>
+        </td>
+      )}
       {/* Date */}
       <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">
         {formatDate(item.date)}
@@ -163,12 +184,11 @@ export function LineItemRow({ item, isEditable, isEvenRow, onUpdate, onDelete }:
         {isEditable ? (
           <div
             className="inline-block"
-            title={hasHoursChange ? `Original: ${formatHours(item.originalHours ?? null)}` : undefined}
+            title={hasHoursChange ? `Original: ${formatHoursDisplay(item.originalHours ?? null)}` : undefined}
           >
             <DurationPicker
               ref={durationPickerRef}
-              hours={decimalToHoursMinutes(item.hours).hours}
-              minutes={decimalToHoursMinutes(item.hours).minutes}
+              {...parseHoursToComponents(item.hours ?? 0)}
               onChange={handleDurationChange}
               align="right"
               className={hasHoursChange ? "[&_button]:border-b [&_button]:border-dashed [&_button]:border-[var(--warning)]" : ""}
@@ -176,7 +196,7 @@ export function LineItemRow({ item, isEditable, isEvenRow, onUpdate, onDelete }:
           </div>
         ) : (
           <span className="text-sm text-[var(--text-secondary)]">
-            {formatHours(item.hours)}
+            {formatHoursDisplay(item.hours)}
           </span>
         )}
       </td>
@@ -197,4 +217,4 @@ export function LineItemRow({ item, isEditable, isEvenRow, onUpdate, onDelete }:
       )}
     </tr>
   );
-}
+});

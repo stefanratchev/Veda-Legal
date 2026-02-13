@@ -6,6 +6,7 @@ import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicke
 import { formatHours as formatHoursUtil, parseHoursToComponents, toDecimalHours } from "@/lib/date-utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useClickOutside } from "@/hooks/useClickOutside";
 
 interface LineItemRowProps {
   item: ServiceDescriptionLineItem;
@@ -14,6 +15,7 @@ interface LineItemRowProps {
   isEvenRow: boolean;
   onUpdate: (itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
   onDelete: (itemId: string) => void;
+  onWaive: (itemId: string, waiveMode: "EXCLUDED" | "ZERO" | null) => Promise<void>;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -27,13 +29,21 @@ function formatHoursDisplay(hours: number | null): string {
   return formatHoursUtil(hours);
 }
 
-export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate, onDelete }: LineItemRowProps) {
+export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate, onDelete, onWaive }: LineItemRowProps) {
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editDescription, setEditDescription] = useState(item.description);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showWaiveMenu, setShowWaiveMenu] = useState(false);
 
   const descriptionInputRef = useRef<HTMLInputElement>(null);
   const durationPickerRef = useRef<DurationPickerRef>(null);
+  const waiveMenuRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside(waiveMenuRef, () => setShowWaiveMenu(false), showWaiveMenu);
+
+  const isWaived = item.waiveMode !== null;
+  const isExcluded = item.waiveMode === "EXCLUDED";
+  const isZero = item.waiveMode === "ZERO";
 
   const {
     attributes,
@@ -63,10 +73,10 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
   }, [isEditingDescription]);
 
   const handleDescriptionClick = useCallback(() => {
-    if (!isEditable) return;
+    if (!isEditable || isWaived) return;
     setEditDescription(item.description);
     setIsEditingDescription(true);
-  }, [isEditable, item.description]);
+  }, [isEditable, isWaived, item.description]);
 
   const handleDurationChange = useCallback(async (hours: number, minutes: number) => {
     const newDecimal = toDecimalHours(hours, minutes);
@@ -116,8 +126,18 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
     }
   }, [item.id, onDelete]);
 
+  const handleWaive = useCallback(async (waiveMode: "EXCLUDED" | "ZERO" | null) => {
+    setShowWaiveMenu(false);
+    setIsUpdating(true);
+    try {
+      await onWaive(item.id, waiveMode);
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [item.id, onWaive]);
+
   return (
-    <tr ref={setNodeRef} style={rowStyle} className={`border-t border-[var(--border-subtle)] hover:bg-[var(--bg-surface)] transition-colors ${isUpdating ? "opacity-50" : ""} ${isEvenRow ? "bg-[var(--bg-deep)]/50" : ""}`}>
+    <tr ref={setNodeRef} style={rowStyle} className={`border-t border-[var(--border-subtle)] hover:bg-[var(--bg-surface)] transition-colors ${isUpdating ? "opacity-50" : ""} ${isEvenRow ? "bg-[var(--bg-deep)]/50" : ""} ${isExcluded ? "opacity-40" : ""}`}>
       {/* Drag handle */}
       {isEditable && (
         <td className="px-2 py-3 w-8">
@@ -163,13 +183,16 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
           <div
             onClick={handleDescriptionClick}
             className={`text-sm text-[var(--text-primary)] ${
-              isEditable ? "cursor-pointer hover:bg-[var(--bg-surface)] px-2 py-1 -mx-2 -my-1 rounded" : ""
+              isEditable && !isWaived ? "cursor-pointer hover:bg-[var(--bg-surface)] px-2 py-1 -mx-2 -my-1 rounded" : ""
             }`}
             title={hasDescriptionChange ? `Original: ${item.originalDescription}` : undefined}
           >
-            <span className={hasDescriptionChange ? "border-b border-dashed border-[var(--warning)]" : ""}>
+            <span className={`${hasDescriptionChange ? "border-b border-dashed border-[var(--warning)]" : ""} ${isExcluded ? "line-through" : ""}`}>
               {item.description}
             </span>
+            {isZero && (
+              <span className="ml-2 text-xs bg-[var(--warning-bg)] text-[var(--warning)] px-1.5 py-0.5 rounded">Waived</span>
+            )}
             {item.fixedAmount !== null && item.fixedAmount > 0 && (
               <span className="ml-2 text-xs text-[var(--text-muted)]">
                 (+€{item.fixedAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })})
@@ -181,7 +204,11 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
 
       {/* Hours */}
       <td className="px-4 py-3 text-right">
-        {isEditable ? (
+        {isExcluded ? (
+          <span className="text-sm text-[var(--text-muted)]">
+            {formatHoursDisplay(item.hours)}
+          </span>
+        ) : isEditable && !isWaived ? (
           <div
             className="inline-block"
             title={hasHoursChange ? `Original: ${formatHoursDisplay(item.originalHours ?? null)}` : undefined}
@@ -195,7 +222,7 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
             />
           </div>
         ) : (
-          <span className="text-sm text-[var(--text-secondary)]">
+          <span className={`text-sm text-[var(--text-secondary)] ${isZero ? "line-through" : ""}`}>
             {formatHoursDisplay(item.hours)}
           </span>
         )}
@@ -204,15 +231,60 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
       {/* Actions */}
       {isEditable && (
         <td className="px-4 py-3 text-right">
-          <button
-            onClick={handleDelete}
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-colors"
-            title="Delete line item"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
+          <div className="flex items-center justify-end gap-1">
+            {/* Waive / Restore */}
+            {isWaived ? (
+              <button
+                onClick={() => handleWaive(null)}
+                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--success)] hover:bg-[var(--success-bg)] transition-colors"
+                title="Restore line item"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 10h10a5 5 0 010 10H9m4-10l-4-4m4 4l-4 4" />
+                </svg>
+              </button>
+            ) : (
+              <div className="relative" ref={waiveMenuRef}>
+                <button
+                  onClick={() => setShowWaiveMenu((prev) => !prev)}
+                  className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--warning)] hover:bg-[var(--warning-bg)] transition-colors"
+                  title="Waive line item"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                </button>
+                {showWaiveMenu && (
+                  <div className="absolute right-0 top-full mt-1 z-20 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg shadow-lg py-1 min-w-[170px] animate-fade-up">
+                    <button
+                      onClick={() => handleWaive("EXCLUDED")}
+                      className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                    >
+                      Exclude from billing
+                    </button>
+                    <button
+                      onClick={() => handleWaive("ZERO")}
+                      className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                    >
+                      Include at $0
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Delete - hidden for excluded rows */}
+            {!isExcluded && (
+              <button
+                onClick={handleDelete}
+                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)] transition-colors"
+                title="Delete line item"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
+          </div>
         </td>
       )}
     </tr>

@@ -22,6 +22,7 @@ interface TopicSectionProps {
   onAddLineItem: (topicId: string, data: { date?: string; description: string; hours?: number; fixedAmount?: number }) => Promise<void>;
   onUpdateLineItem: (topicId: string, itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
   onDeleteLineItem: (topicId: string, itemId: string) => Promise<void>;
+  onWaive: (itemId: string, waiveMode: "EXCLUDED" | "ZERO" | null) => Promise<void>;
 }
 
 export const TopicSection = memo(function TopicSection({
@@ -35,6 +36,7 @@ export const TopicSection = memo(function TopicSection({
   onAddLineItem,
   onUpdateLineItem,
   onDeleteLineItem,
+  onWaive,
 }: TopicSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
@@ -80,7 +82,14 @@ export const TopicSection = memo(function TopicSection({
   };
 
   // Calculate totals
-  const rawHours = topic.lineItems.reduce((sum, item) => sum + (item.hours || 0), 0);
+  const rawHours = topic.lineItems
+    .filter((item) => item.waiveMode !== "EXCLUDED")
+    .reduce((sum, item) => sum + (item.waiveMode === "ZERO" ? 0 : (item.hours || 0)), 0);
+  const waivedHours = topic.lineItems.reduce((sum, item) => {
+    if (item.waiveMode === "EXCLUDED") return sum + (item.hours || 0);
+    if (item.waiveMode === "ZERO") return sum + (item.hours || 0);
+    return sum;
+  }, 0);
   const billedHours = topic.capHours && topic.pricingMode === "HOURLY" ? Math.min(rawHours, topic.capHours) : rawHours;
   const baseTotal = calculateTopicBaseTotal(topic);
   const topicTotal = calculateTopicTotal(topic);
@@ -288,6 +297,11 @@ export const TopicSection = memo(function TopicSection({
                   <span className="text-[var(--warning)]"> (capped from {formatHours(rawHours)})</span>
                 )}
               </>
+            )}
+            {waivedHours > 0 && (
+              <span className="text-xs text-[var(--text-muted)] ml-1">
+                ({formatHours(waivedHours)} waived)
+              </span>
             )}
           </span>
         </div>
@@ -517,6 +531,7 @@ export const TopicSection = memo(function TopicSection({
                         isEvenRow={index % 2 === 0}
                         onUpdate={handleUpdateItem}
                         onDelete={handleDeleteItem}
+                        onWaive={onWaive}
                       />
                     ))}
                   </tbody>

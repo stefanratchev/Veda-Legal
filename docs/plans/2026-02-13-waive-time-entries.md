@@ -86,6 +86,8 @@ git commit -m "feat(billing): add WaiveMode type to shared types"
 
 **Files:**
 - Modify: `app/src/lib/billing-utils.ts:35-49` (RawServiceDescription type), `app/src/lib/billing-utils.ts:88-101` (serializer)
+- Modify: `app/src/app/api/billing/[id]/route.ts:59-67` (GET query column list)
+- Modify: `app/src/app/api/billing/[id]/pdf/route.tsx:60-69` (PDF query column list)
 
 **Step 1: Update RawServiceDescription type**
 
@@ -103,10 +105,28 @@ In `serializeServiceDescription`, in the `lineItems.map` callback (around line 8
 waiveMode: (item.waiveMode as "EXCLUDED" | "ZERO" | null) || null,
 ```
 
-**Step 3: Commit**
+**Step 3: Add `waiveMode` to Drizzle query column lists**
+
+Two API routes explicitly list which line item columns to fetch. Without adding `waiveMode`, the serializer would receive `undefined` for it.
+
+In `app/src/app/api/billing/[id]/route.ts`, in the `lineItems` columns object (around line 59-67), add:
+
+```typescript
+waiveMode: true,
+```
+
+In `app/src/app/api/billing/[id]/pdf/route.tsx`, in the `lineItems` columns object (around line 60-69), add:
+
+```typescript
+waiveMode: true,
+```
+
+**Note:** The server component at `app/src/app/(authenticated)/(admin)/billing/[id]/page.tsx` does NOT specify columns (fetches all), so it picks up `waiveMode` automatically. No change needed there.
+
+**Step 4: Commit**
 
 ```bash
-git add app/src/lib/billing-utils.ts
+git add app/src/lib/billing-utils.ts app/src/app/api/billing/[id]/route.ts app/src/app/api/billing/[id]/pdf/route.tsx
 git commit -m "feat(billing): serialize waiveMode in service descriptions"
 ```
 
@@ -201,6 +221,20 @@ describe("calculateTopicBaseTotal with waived items", () => {
         makeItem(3, null),
       ],
     });
+    expect(calculateTopicBaseTotal(topic)).toBe(500);
+  });
+
+  it("applies capHours only to non-waived hours", () => {
+    const topic = makeTopic({
+      capHours: 5,
+      lineItems: [
+        makeItem(3, null),
+        makeItem(4, "EXCLUDED"),
+        makeItem(2, null),
+      ],
+    });
+    // Non-waived: 3 + 2 = 5 hours, cap is 5, so 5 * $100 = $500
+    // The EXCLUDED 4hrs should not inflate the total past the cap
     expect(calculateTopicBaseTotal(topic)).toBe(500);
   });
 
@@ -479,10 +513,14 @@ cd app && npm run test -- "items/\\[itemId\\]/route.test" --run
 
 Expected: All tests PASS.
 
-**Step 5: Commit**
+**Step 5: Verify POST endpoint returns `waiveMode`**
+
+Check `app/src/app/api/billing/[id]/topics/[topicId]/items/route.ts` (the POST endpoint for creating manual line items). If its response explicitly lists returned fields, add `waiveMode: null` to the response object. If it returns whatever Drizzle gives back, no change needed — new items default to `waiveMode: null` in the schema.
+
+**Step 6: Commit**
 
 ```bash
-git add app/src/app/api/billing/[id]/topics/[topicId]/items/[itemId]/
+git add app/src/app/api/billing/[id]/topics/[topicId]/items/
 git commit -m "feat(billing): support waiveMode in line item PATCH endpoint"
 ```
 
@@ -662,8 +700,9 @@ In the Actions `<td>` (line 205-217), before the delete button, add a waive drop
 
 **Step 3: Add visual treatment for waived rows**
 
-- **EXCLUDED rows:** Add `opacity-40 line-through` to the `<tr>` className. Keep the row compact.
-- **ZERO rows:** Add a "Waived" badge `<span>` next to the description text with styling `text-xs bg-[var(--warning-bg)] text-[var(--warning)] px-1.5 py-0.5 rounded`.
+- **EXCLUDED rows:** Add `opacity-40` to the `<tr>` className and `line-through` to the description text. Hide the DurationPicker and action buttons — show only date, lawyer, description (struck through), and a compact "Restore" link. This collapses the row visually to signal it's excluded.
+- **ZERO rows:** Add a "Waived" badge `<span>` next to the description text with styling `text-xs bg-[var(--warning-bg)] text-[var(--warning)] px-1.5 py-0.5 rounded`. Hours display stays normal, amount shows strikethrough.
+- **Drag-and-drop:** EXCLUDED rows should still be draggable (no functional harm, admin may want to reorder before restoring).
 
 **Step 4: Commit**
 

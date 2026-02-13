@@ -565,16 +565,20 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
               </View>
 
               {/* Line items with zebra striping */}
-              {topic.lineItems.map((item, index) => (
+              {topic.lineItems.filter((item) => item.waiveMode !== "EXCLUDED").map((item, index) => (
                 <View
                   key={item.id}
                   style={index % 2 === 0 ? styles.tableRow : styles.tableRowAlt}
                   wrap={false}
                 >
                   <Text style={styles.dateCol}>{formatDate(item.date)}</Text>
-                  <Text style={styles.serviceCol}>{item.description}</Text>
+                  <Text style={styles.serviceCol}>
+                    {item.description}{item.waiveMode === "ZERO" ? " (Waived)" : ""}
+                  </Text>
                   <Text style={styles.timeCol}>
-                    {item.hours ? formatHours(item.hours) : "—"}
+                    {item.waiveMode === "ZERO"
+                      ? `${formatHours(item.hours || 0)} (Waived)`
+                      : item.hours ? formatHours(item.hours) : "—"}
                   </Text>
                 </View>
               ))}

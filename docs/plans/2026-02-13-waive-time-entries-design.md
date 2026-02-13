@@ -24,17 +24,18 @@ Add a waive mechanism to line items within service descriptions. Two waive modes
 
 ## Schema Changes
 
-Add two columns to `service_description_line_items`:
+Add one column to `service_description_line_items`:
 
 | Column | Type | Default | Nullable |
 |--------|------|---------|----------|
-| `isWaived` | boolean | false | NOT NULL |
-| `waiveMode` | enum (`EXCLUDED`, `ZERO`) | — | YES (null when not waived) |
+| `waiveMode` | enum (`EXCLUDED`, `ZERO`) | — | YES (null = not waived) |
 
 States:
-- `isWaived=false, waiveMode=null` → Normal line item
-- `isWaived=true, waiveMode='EXCLUDED'` → Hidden from output, still linked to time entry
-- `isWaived=true, waiveMode='ZERO'` → Visible with "Waived" label, 0 in totals
+- `waiveMode=null` → Normal line item (not waived)
+- `waiveMode='EXCLUDED'` → Hidden from output, still linked to time entry
+- `waiveMode='ZERO'` → Visible with "Waived" label, 0 in totals
+
+A single nullable column is sufficient — `waiveMode IS NOT NULL` implies "waived", eliminating the need for a separate `isWaived` boolean and avoiding invalid state combinations.
 
 ## API Changes
 
@@ -43,25 +44,26 @@ States:
 Extended to accept:
 
 ```json
-{ "isWaived": true, "waiveMode": "EXCLUDED" }
-{ "isWaived": true, "waiveMode": "ZERO" }
-{ "isWaived": false }
+{ "waiveMode": "EXCLUDED" }
+{ "waiveMode": "ZERO" }
+{ "waiveMode": null }
 ```
 
 Validation:
 - SD must be DRAFT (already enforced)
-- If `isWaived=true`, `waiveMode` is required and must be `EXCLUDED` or `ZERO`
-- If `isWaived=false`, `waiveMode` is ignored/cleared to null
+- `waiveMode` must be `EXCLUDED`, `ZERO`, or `null` (to un-waive)
 
 ### Unbilled Queries
 
 `POST /api/billing` (SD creation) and `GET /api/billing/unbilled-summary` currently filter out entries linked to FINALIZED SDs.
 
-Change: also filter out entries where `isWaived=true` in any SD (DRAFT or FINALIZED), so waived-but-excluded entries don't show up as unbilled while the draft is open.
+Change: also filter out entries where `waiveMode IS NOT NULL` in any SD (DRAFT or FINALIZED), so waived-but-excluded entries don't show up as unbilled while the draft is open.
+
+**Note:** If a DRAFT SD is deleted, cascade deletes remove its line items, and previously waived entries correctly become "unbilled" again.
 
 ### Serialization
 
-`serializeServiceDescription` in `billing-utils.ts` passes through `isWaived` and `waiveMode` on each line item.
+`serializeServiceDescription` in `billing-utils.ts` passes through `waiveMode` on each line item.
 
 ## Billing Calculations
 
@@ -71,6 +73,8 @@ All calculation functions in `billing-pdf.tsx`:
 - **`calculateTopicTotal`** — Same (calls `calculateTopicBaseTotal`).
 - **`calculateTopicHours`** — EXCLUDED items skipped. ZERO items contribute 0.
 - **`calculateGrandTotal`** — Same (calls `calculateTopicTotal`).
+
+Also update the independent `rawHours` calculation in `TopicSection.tsx` to filter consistently.
 
 ## PDF Generation
 
@@ -84,7 +88,7 @@ All calculation functions in `billing-pdf.tsx`:
 - New action in row context menu: **"Waive"** with submenu — "Exclude from billing" / "Include at $0"
 - **EXCLUDED rows:** Dimmed/faded with strikethrough text, collapsed to compact single line. Visible to admin for un-waiving.
 - **ZERO rows:** Fully visible with a "Waived" badge next to description. Hours shown normally, strikethrough on the amount.
-- **"Restore"** action in menu to un-waive (`isWaived=false`)
+- **"Restore"** action in menu to un-waive (`waiveMode=null`)
 - All waive actions disabled when SD is FINALIZED
 
 ### TopicSection Hours Summary
@@ -102,7 +106,6 @@ export type WaiveMode = "EXCLUDED" | "ZERO";
 
 export interface ServiceDescriptionLineItem {
   // ... existing fields ...
-  isWaived: boolean;
   waiveMode: WaiveMode | null;
 }
 ```

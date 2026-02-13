@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, memo } from "react";
 import type { ServiceDescriptionLineItem } from "@/types";
 import { DurationPicker, DurationPickerRef } from "@/components/ui/DurationPicker";
 import { formatHours as formatHoursUtil, parseHoursToComponents, toDecimalHours } from "@/lib/date-utils";
@@ -27,7 +27,7 @@ function formatHoursDisplay(hours: number | null): string {
   return formatHoursUtil(hours);
 }
 
-export function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate, onDelete }: LineItemRowProps) {
+export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate, onDelete }: LineItemRowProps) {
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editDescription, setEditDescription] = useState(item.description);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -188,8 +188,7 @@ export function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate,
           >
             <DurationPicker
               ref={durationPickerRef}
-              hours={parseHoursToComponents(item.hours ?? 0).hours}
-              minutes={parseHoursToComponents(item.hours ?? 0).minutes}
+              {...parseHoursToComponents(item.hours ?? 0)}
               onChange={handleDurationChange}
               align="right"
               className={hasHoursChange ? "[&_button]:border-b [&_button]:border-dashed [&_button]:border-[var(--warning)]" : ""}
@@ -218,4 +217,4 @@ export function LineItemRow({ item, sortableId, isEditable, isEvenRow, onUpdate,
       )}
     </tr>
   );
-}
+});

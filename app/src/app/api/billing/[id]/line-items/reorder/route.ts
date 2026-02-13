@@ -73,9 +73,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const now = new Date().toISOString();
+    const validTopicIdArray = [...validTopicIds];
     await db.transaction(async (tx) => {
-      for (const item of items as ReorderItem[]) {
-        await tx.update(serviceDescriptionLineItems)
+      await Promise.all((items as ReorderItem[]).map((item) =>
+        tx.update(serviceDescriptionLineItems)
           .set({
             topicId: item.topicId,
             displayOrder: item.displayOrder,
@@ -83,9 +84,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           })
           .where(and(
             eq(serviceDescriptionLineItems.id, item.id),
-            inArray(serviceDescriptionLineItems.topicId, [...validTopicIds]),
-          ));
-      }
+            inArray(serviceDescriptionLineItems.topicId, validTopicIdArray),
+          ))
+      ));
     });
 
     return NextResponse.json({ success: true });

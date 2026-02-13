@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { ServiceDescription, ServiceDescriptionTopic, PricingMode } from "@/types";
 import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
@@ -16,6 +16,7 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
+  CollisionDetection,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -57,6 +58,30 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     })
   );
 
+  // Ref to always read latest data in drag handlers (avoids stale closures)
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  // Custom collision detection: filter droppables by active drag type
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const activeId = String(args.active.id);
+    if (activeId.startsWith("topic:")) {
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          (c) => String(c.id).startsWith("topic:")
+        ),
+      });
+    }
+    // For items: consider item sortables + topic drop/empty zones, not topic sortables
+    return closestCenter({
+      ...args,
+      droppableContainers: args.droppableContainers.filter(
+        (c) => !String(c.id).startsWith("topic:")
+      ),
+    });
+  }, []);
+
   const [activeDragType, setActiveDragType] = useState<"topic" | "item" | null>(null);
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
@@ -76,16 +101,17 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
+    const currentData = dataRef.current;
     const activeId = String(active.id).replace("topic:", "");
     const overId = String(over.id).replace("topic:", "");
 
-    const oldIndex = data.topics.findIndex((t) => t.id === activeId);
-    const newIndex = data.topics.findIndex((t) => t.id === overId);
+    const oldIndex = currentData.topics.findIndex((t) => t.id === activeId);
+    const newIndex = currentData.topics.findIndex((t) => t.id === overId);
 
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const reordered = arrayMove(data.topics, oldIndex, newIndex);
-    const previousTopics = data.topics;
+    const reordered = arrayMove(currentData.topics, oldIndex, newIndex);
+    const previousTopics = currentData.topics;
 
     const updates: { id: string; displayOrder: number }[] = [];
     reordered.forEach((topic, index) => {
@@ -103,7 +129,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     }));
 
     try {
-      const response = await fetch(`/api/billing/${data.id}/topics/reorder`, {
+      const response = await fetch(`/api/billing/${currentData.id}/topics/reorder`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: updates }),
@@ -111,21 +137,24 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
 
       if (!response.ok) {
         setData((prev) => ({ ...prev, topics: previousTopics }));
+        alert("Failed to reorder topics. Changes have been reverted.");
       }
     } catch {
       setData((prev) => ({ ...prev, topics: previousTopics }));
+      alert("Failed to reorder topics. Changes have been reverted.");
     }
-  }, [data]);
+  }, []);
 
   const handleLineItemDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
 
+    const currentData = dataRef.current;
     const activeId = String(active.id).replace("item:", "");
     const overId = String(over.id);
 
     // Find source topic containing the dragged item
-    const sourceTopic = data.topics.find((t) =>
+    const sourceTopic = currentData.topics.find((t) =>
       t.lineItems.some((item) => item.id === activeId)
     );
     if (!sourceTopic) return;
@@ -142,7 +171,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     } else if (overId.startsWith("item:")) {
       // Dropped on a line item — find which topic it's in
       const overItemId = overId.replace("item:", "");
-      const targetTopic = data.topics.find((t) =>
+      const targetTopic = currentData.topics.find((t) =>
         t.lineItems.some((item) => item.id === overItemId)
       );
       if (!targetTopic) return;
@@ -154,7 +183,12 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
 
     if (active.id === over.id) return;
 
-    const previousTopics = data.topics;
+    const previousTopics = currentData.topics;
+
+    const revertWithError = () => {
+      setData((prev) => ({ ...prev, topics: previousTopics }));
+      alert("Failed to reorder line items. Changes have been reverted.");
+    };
 
     if (sourceTopic.id === targetTopicId) {
       // Within same topic — reorder
@@ -180,21 +214,21 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
       }));
 
       try {
-        const response = await fetch(`/api/billing/${data.id}/line-items/reorder`, {
+        const response = await fetch(`/api/billing/${currentData.id}/line-items/reorder`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ items: updates }),
         });
-        if (!response.ok) setData((prev) => ({ ...prev, topics: previousTopics }));
+        if (!response.ok) revertWithError();
       } catch {
-        setData((prev) => ({ ...prev, topics: previousTopics }));
+        revertWithError();
       }
     } else {
       // Cross-topic move
       const movedItem = sourceTopic.lineItems.find((item) => item.id === activeId);
       if (!movedItem) return;
 
-      const targetTopic = data.topics.find((t) => t.id === targetTopicId);
+      const targetTopic = currentData.topics.find((t) => t.id === targetTopicId);
       if (!targetTopic) return;
 
       const newSourceItems = sourceTopic.lineItems.filter((item) => item.id !== activeId);
@@ -227,28 +261,28 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
       }));
 
       try {
-        const response = await fetch(`/api/billing/${data.id}/line-items/reorder`, {
+        const response = await fetch(`/api/billing/${currentData.id}/line-items/reorder`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ items: updates }),
         });
-        if (!response.ok) setData((prev) => ({ ...prev, topics: previousTopics }));
+        if (!response.ok) revertWithError();
       } catch {
-        setData((prev) => ({ ...prev, topics: previousTopics }));
+        revertWithError();
       }
     }
-  }, [data]);
+  }, []);
 
-  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     const dragType = activeDragType;
     setActiveDragType(null);
     setActiveTopicId(null);
     setActiveItemId(null);
 
     if (dragType === "topic") {
-      await handleTopicReorder(event);
+      handleTopicReorder(event);
     } else if (dragType === "item") {
-      await handleLineItemDragEnd(event);
+      handleLineItemDragEnd(event);
     }
   }, [activeDragType, handleTopicReorder, handleLineItemDragEnd]);
 
@@ -733,7 +767,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
       <div className="space-y-4">
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={collisionDetection}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >

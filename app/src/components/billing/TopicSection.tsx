@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, memo } from "react";
 import type { ServiceDescriptionTopic, PricingMode } from "@/types";
 import { LineItemRow } from "./LineItemRow";
 import { AddLineItemModal } from "./AddLineItemModal";
@@ -24,7 +24,7 @@ interface TopicSectionProps {
   onDeleteLineItem: (topicId: string, itemId: string) => Promise<void>;
 }
 
-export function TopicSection({
+export const TopicSection = memo(function TopicSection({
   topic,
   sortableId,
   serviceDescriptionId,
@@ -241,7 +241,7 @@ export function TopicSection({
   );
 
   return (
-    <div ref={setNodeRef} style={style} className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+    <div ref={setNodeRef} style={style} className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border-subtle)]">
       {/* Header */}
       <div
         ref={setDroppableRef}
@@ -555,4 +555,4 @@ export function TopicSection({
       )}
     </div>
   );
-}
+});

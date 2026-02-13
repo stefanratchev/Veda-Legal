@@ -57,11 +57,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const now = new Date().toISOString();
     await db.transaction(async (tx) => {
-      for (const item of items as ReorderItem[]) {
-        await tx.update(serviceDescriptionTopics)
+      await Promise.all((items as ReorderItem[]).map((item) =>
+        tx.update(serviceDescriptionTopics)
           .set({ displayOrder: item.displayOrder, updatedAt: now })
-          .where(and(eq(serviceDescriptionTopics.id, item.id), eq(serviceDescriptionTopics.serviceDescriptionId, id)));
-      }
+          .where(and(eq(serviceDescriptionTopics.id, item.id), eq(serviceDescriptionTopics.serviceDescriptionId, id)))
+      ));
     });
 
     return NextResponse.json({ success: true });

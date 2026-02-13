@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
           },
           with: {
             lineItems: {
-              columns: { hours: true, fixedAmount: true },
+              columns: { hours: true, fixedAmount: true, waiveMode: true },
             },
           },
         },
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
           id: "", timeEntryId: null, date: null, description: "", displayOrder: 0,
           hours: serializeDecimal(li.hours),
           fixedAmount: serializeDecimal(li.fixedAmount),
-          waiveMode: null,
+          waiveMode: (li.waiveMode as "EXCLUDED" | "ZERO" | null) || null,
         })),
       }));
       const totalAmount = Math.round(calculateGrandTotal(

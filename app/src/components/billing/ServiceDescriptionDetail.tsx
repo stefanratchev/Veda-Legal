@@ -542,13 +542,14 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   // Waive / restore line item
   const handleWaiveLineItem = useCallback(
     async (itemId: string, waiveMode: "EXCLUDED" | "ZERO" | null) => {
-      const topic = data.topics.find((t) =>
+      const currentData = dataRef.current;
+      const topic = currentData.topics.find((t) =>
         t.lineItems.some((li) => li.id === itemId)
       );
       if (!topic) return;
 
       const response = await fetch(
-        `/api/billing/${data.id}/topics/${topic.id}/items/${itemId}`,
+        `/api/billing/${currentData.id}/topics/${topic.id}/items/${itemId}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -574,7 +575,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
         ),
       }));
     },
-    [data.id, data.topics]
+    []
   );
 
   // Delete line item

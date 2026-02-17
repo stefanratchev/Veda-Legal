@@ -48,6 +48,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [topicToDelete, setTopicToDelete] = useState<string | null>(null);
+  const [lineItemToDelete, setLineItemToDelete] = useState<{ topicId: string; itemId: string } | null>(null);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
 
   const isFinalized = data.status === "FINALIZED";
@@ -586,29 +587,34 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   );
 
   // Delete line item
-  const handleDeleteLineItem = useCallback(
-    async (topicId: string, itemId: string) => {
-      try {
-        const response = await fetch(`/api/billing/${data.id}/topics/${topicId}/items/${itemId}`, {
-          method: "DELETE",
-        });
+  const handleDeleteLineItem = useCallback((topicId: string, itemId: string) => {
+    setLineItemToDelete({ topicId, itemId });
+  }, []);
 
-        if (response.ok) {
-          setData((prev) => ({
-            ...prev,
-            topics: prev.topics.map((t) =>
-              t.id === topicId
-                ? { ...t, lineItems: t.lineItems.filter((item) => item.id !== itemId) }
-                : t
-            ),
-          }));
-        }
-      } catch (error) {
-        console.error("Failed to delete line item:", error);
+  const handleConfirmDeleteLineItem = useCallback(async () => {
+    if (!lineItemToDelete) return;
+    const { topicId, itemId } = lineItemToDelete;
+    setLineItemToDelete(null);
+
+    try {
+      const response = await fetch(`/api/billing/${data.id}/topics/${topicId}/items/${itemId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setData((prev) => ({
+          ...prev,
+          topics: prev.topics.map((t) =>
+            t.id === topicId
+              ? { ...t, lineItems: t.lineItems.filter((item) => item.id !== itemId) }
+              : t
+          ),
+        }));
       }
-    },
-    [data.id]
-  );
+    } catch (error) {
+      console.error("Failed to delete line item:", error);
+    }
+  }, [data.id, lineItemToDelete]);
 
   // Finalize / Unlock
   const performToggleStatus = useCallback(async () => {
@@ -970,6 +976,18 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
           isDestructive
           onConfirm={handleConfirmDeleteTopic}
           onCancel={() => setTopicToDelete(null)}
+        />
+      )}
+
+      {/* Delete Line Item Confirmation */}
+      {lineItemToDelete && (
+        <ConfirmModal
+          title="Delete Line Item"
+          message="Delete this line item? This action cannot be undone."
+          confirmLabel="Delete"
+          isDestructive
+          onConfirm={handleConfirmDeleteLineItem}
+          onCancel={() => setLineItemToDelete(null)}
         />
       )}
 

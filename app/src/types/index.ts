@@ -126,6 +126,12 @@ export type DiscountType = "PERCENTAGE" | "AMOUNT";
 export type WaiveMode = "EXCLUDED" | "ZERO";
 
 /**
+ * Write-off action for line items.
+ * VISIBLE = waived at $0, shown to client; HIDDEN = excluded, hidden from client.
+ */
+export type WriteOffAction = "VISIBLE" | "HIDDEN";
+
+/**
  * Line item in a service description topic.
  */
 export interface ServiceDescriptionLineItem {

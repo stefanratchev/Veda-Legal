@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and, isNotNull, notInArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { serviceDescriptions } from "@/lib/schema";
+import { serviceDescriptions, serviceDescriptionLineItems, serviceDescriptionTopics, timeEntries } from "@/lib/schema";
 import { requireAdmin, errorResponse, getUserFromSession } from "@/lib/api-utils";
 import { serializeServiceDescription, resolveDiscountFields, validateDiscountFields } from "@/lib/billing-utils";
 
@@ -211,7 +211,42 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Cannot delete finalized service description", 400);
     }
 
-    await db.delete(serviceDescriptions).where(eq(serviceDescriptions.id, id));
+    await db.transaction(async (tx) => {
+      // Find written-off time entries in this SD before cascade delete
+      const writtenOffItems = await tx.query.serviceDescriptionTopics.findMany({
+        where: eq(serviceDescriptionTopics.serviceDescriptionId, id),
+        columns: { id: true },
+        with: {
+          lineItems: {
+            where: isNotNull(serviceDescriptionLineItems.waiveMode),
+            columns: { timeEntryId: true },
+          },
+        },
+      });
+
+      const timeEntryIds = writtenOffItems
+        .flatMap((t) => t.lineItems.map((li) => li.timeEntryId))
+        .filter((id): id is string => id !== null);
+
+      // Delete the SD (cascades to topics and line items)
+      await tx.delete(serviceDescriptions).where(eq(serviceDescriptions.id, id));
+
+      // Clear isWrittenOff on orphaned time entries (no remaining waived references)
+      for (const teId of [...new Set(timeEntryIds)]) {
+        const stillWaived = await tx.query.serviceDescriptionLineItems.findFirst({
+          where: and(
+            eq(serviceDescriptionLineItems.timeEntryId, teId),
+            isNotNull(serviceDescriptionLineItems.waiveMode)
+          ),
+          columns: { id: true },
+        });
+        if (!stillWaived) {
+          await tx.update(timeEntries)
+            .set({ isWrittenOff: false })
+            .where(eq(timeEntries.id, teId));
+        }
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

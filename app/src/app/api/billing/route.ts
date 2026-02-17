@@ -165,10 +165,11 @@ export async function POST(request: NextRequest) {
         hours: true,
         description: true,
         topicName: true,
+        isWrittenOff: true,
       },
       with: {
         billingLineItems: {
-          columns: { id: true, waiveMode: true },
+          columns: { id: true },
           with: {
             topic: {
               columns: { id: true },
@@ -184,7 +185,7 @@ export async function POST(request: NextRequest) {
       orderBy: [asc(timeEntries.topicName), asc(timeEntries.date)],
     });
 
-    // Filter entries: include only those in date range and not in FINALIZED service descriptions
+    // Filter entries: include only those in date range, not finalized, and not written off
     const filteredEntries = unbilledEntries.filter((entry) => {
       // Check date range (with billing start date as floor)
       const effectiveStartDate =
@@ -192,16 +193,13 @@ export async function POST(request: NextRequest) {
       if (entry.date < effectiveStartDate || entry.date > endDateStr) {
         return false;
       }
+      // Exclude written-off entries
+      if (entry.isWrittenOff) return false;
       // Check if any billing line item is in a FINALIZED service description
       const hasFinalized = entry.billingLineItems.some(
         (li) => li.topic?.serviceDescription?.status === "FINALIZED"
       );
-      if (hasFinalized) return false;
-      // Exclude entries that are waived in any SD
-      const hasWaived = entry.billingLineItems.some(
-        (li) => li.waiveMode !== null
-      );
-      return !hasWaived;
+      return !hasFinalized;
     });
 
     // Group entries by topic

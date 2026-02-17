@@ -162,6 +162,7 @@ export const timeEntries = pgTable("time_entries", {
 	subtopicId: text(),
 	topicName: text().default('').notNull(),
 	subtopicName: text().default('').notNull(),
+	isWrittenOff: boolean().default(false).notNull(),
 	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ precision: 3, mode: 'string' }).notNull(),
 }, (table) => [

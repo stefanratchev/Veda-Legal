@@ -166,15 +166,16 @@ Users submit timesheets daily via `POST /api/timesheets/submit`. Key behaviors:
 # Start PostgreSQL
 brew services start postgresql@17
 
-# After schema changes
-npm run db:push        # Quick push for development
-# OR
-npm run db:generate && npm run db:migrate  # Generate and apply migration
+# After schema changes — ALWAYS generate a migration file
+npm run db:generate    # Creates migration SQL in drizzle/
+npm run db:migrate     # Applies migration to local database
 ```
+
+**Migration requirement:** Every schema change in `schema.ts` MUST have a corresponding migration file committed alongside it. CI will reject PRs where schema and migrations are out of sync. Never use `db:push` to apply schema changes — it bypasses migration generation and the changes won't be reproducible in production.
 
 **Troubleshooting:**
 - "Can't reach database" → Check `brew services list | grep postgresql`
-- Schema out of sync → Run `npm run db:push` to sync schema with database
+- Schema out of sync → Run `npm run db:generate && npm run db:migrate`
 
 ## Git Worktrees
 

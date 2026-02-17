@@ -57,6 +57,13 @@
       "when": 1771327744232,
       "tag": "0007_wooden_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1771340801009,
+      "tag": "0008_parched_thundra",
+      "breakpoints": true
     }
   ]
 }

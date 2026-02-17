@@ -121,9 +121,7 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
   );
 
   const handleDelete = useCallback(() => {
-    if (confirm("Delete this line item?")) {
-      onDelete(item.id);
-    }
+    onDelete(item.id);
   }, [item.id, onDelete]);
 
   const handleWaive = useCallback(async (waiveMode: "EXCLUDED" | "ZERO" | null) => {

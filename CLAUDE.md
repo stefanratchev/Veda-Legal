@@ -100,6 +100,15 @@ app/src/
 - **Types:** Import from `@/types` for Client, TimeEntry, FormData interfaces
 - **Hooks:** `useClickOutside` for dropdown/modal close behavior
 - **Validation:** Use `isValidEmail`, `isValidHours`, `isValidDescription` from api-utils
+- **Validation constants** in `api-utils.ts`: `MAX_HOURS_PER_ENTRY = 12`, `MIN_DESCRIPTION_LENGTH = 10`, `MAX_DESCRIPTION_LENGTH = 1000`
+
+### Middleware
+NextAuth middleware (`src/middleware.ts`) protects all routes except `/login`, `/api/auth`, and static assets. Admin routes have two-layer protection: the `(admin)` route group layout redirects non-admins at the UI level, and API routes use `requireAdmin()` independently.
+
+### Context Providers
+- **ImpersonationContext** — Admin impersonation state; API at `/api/admin/impersonate`
+- **SidebarContext** — Persists sidebar collapsed state to localStorage
+- **MobileNavContext** — Mobile navigation drawer state
 
 ### Position-Based Access
 The schema uses a `Position` enum with five levels. Access is controlled via position groups in `api-utils.ts`:
@@ -136,11 +145,13 @@ Service descriptions are invoice-like documents managed in `components/billing/`
 
 **Drag-and-drop** uses `@dnd-kit/core` + `@dnd-kit/sortable`. Topics and line items use prefixed IDs (`topic:`, `item:`, `topic-drop:`, `topic-empty:`) to distinguish entity types within a single `DndContext`. Line items can be moved between topics.
 
-**Billing calculations** are centralized in `lib/billing-utils.ts` — use the canonical functions there rather than computing inline. PDF export uses `@react-pdf/renderer` in `lib/billing-pdf.tsx`.
+**Waive mode:** Line items can be waived with two modes — `EXCLUDED` (removed from bill entirely) or `ZERO` (shown but zero-rated with "(Waived)" in PDFs). Affects totals calculations and PDF rendering.
+
+**Billing calculations** are centralized in `lib/billing-utils.ts` — use the canonical functions there rather than computing inline. PDF export uses `@react-pdf/renderer` in `lib/billing-pdf.tsx`. Key PDF helpers in `billing-pdf.tsx`: `formatCurrency()`, `calculateTopicTotal()`, `calculateGrandTotal()`.
 
 ### Timesheet Submissions
 Users submit timesheets daily via `POST /api/timesheets/submit`. Key behaviors:
-- Requires minimum 6 hours logged (see `MIN_SUBMISSION_HOURS` in `lib/submission-utils.ts`)
+- Requires minimum 8 hours logged (see `MIN_SUBMISSION_HOURS` in `lib/submission-utils.ts`)
 - Cannot submit future dates
 - Uses Eastern European Time (EET/EEST) for deadline calculations
 - Submissions can be revoked (DELETE) to allow modifications
@@ -206,7 +217,11 @@ npm run test -- --run     # Run all tests once (no watch)
 - `mocks/auth.ts` - `createMockSession()`, `setupMockAuth()` for NextAuth mocking
 - `mocks/db.ts` - `createMockDb()` for Drizzle ORM mocking with chainable methods
 
+**Mock factories** in `src/test/mocks/factories.ts`: `createMockUser()`, `createMockClient()`, `createMockTimeEntry()`, `createMockSubtopic()` — use these for consistent test data.
+
 **API route test pattern:** Use `vi.hoisted()` for mock setup, `vi.mock()` for module mocking, then import the route handler after mocks. See `app/src/app/api/billing/[id]/topics/reorder/route.test.ts` for a reference example.
+
+**Note:** `@testing-library/user-event` is not installed. Use `fireEvent` from `@testing-library/react` for interaction tests.
 
 ## Environment Variables
 
@@ -257,7 +272,7 @@ DATABASE_URL="<prod-url>" npm run db:seed-topics          # Production
 
 **Pre-deployment requirement:** Always run tests before deploying to production. Deployment must fail if tests don't pass—never skip this step, even if not explicitly requested.
 
-**Deployment method:** Push to `master` branch triggers GitHub Actions workflow (`.github/workflows/deploy-prod.yml`)
+**Deployment method:** Push to `main` branch triggers GitHub Actions workflow (`.github/workflows/deploy-prod.yml`)
 
 **Running migrations on production:**
 ```bash
@@ -265,3 +280,10 @@ DATABASE_URL="<prod-url>" npm run db:seed-topics          # Production
 ```
 
 **Production environment:** Azure Web App with Azure PostgreSQL Flexible Server. Credentials stored in `app/.env.prod` (not committed).
+
+**Build:** `next.config.ts` uses `output: "standalone"` for Azure deployment. Includes security headers (CSP, HSTS, X-Frame-Options). CSP allows Microsoft login domains and `unsafe-inline`/`unsafe-eval` (required by Next.js).
+
+### NextAuth Session Extension
+Custom session fields via type augmentation (`src/types/next-auth.d.ts`):
+- `session.accessToken` — Microsoft Graph API token (used for M365 activity sync)
+- `session.error` — Token refresh error state

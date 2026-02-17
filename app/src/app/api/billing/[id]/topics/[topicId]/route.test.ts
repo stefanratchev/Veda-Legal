@@ -9,9 +9,11 @@ const { mockRequireAdmin, mockDb } = vi.hoisted(() => {
       query: {
         serviceDescriptions: { findFirst: vi.fn() },
         serviceDescriptionTopics: { findFirst: vi.fn() },
+        serviceDescriptionLineItems: { findMany: vi.fn(), findFirst: vi.fn() },
       },
       update: vi.fn(),
       delete: vi.fn(),
+      transaction: vi.fn(),
     },
   };
 });
@@ -803,6 +805,14 @@ describe("DELETE /api/billing/[id]/topics/[topicId]", () => {
       mockDb.query.serviceDescriptionTopics.findFirst.mockResolvedValue({
         id: "topic-1",
       });
+
+      // Setup transaction mock — tx is the mockDb itself
+      mockDb.transaction.mockImplementation(
+        async (cb: (tx: typeof mockDb) => Promise<unknown>) => cb(mockDb)
+      );
+
+      // No written-off line items in this topic
+      mockDb.query.serviceDescriptionLineItems.findMany.mockResolvedValue([]);
       mockDb.delete.mockReturnValue(createDeleteChain());
 
       const request = createMockRequest({

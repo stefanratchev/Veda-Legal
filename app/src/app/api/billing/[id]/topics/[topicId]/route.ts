@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { serviceDescriptions, serviceDescriptionTopics } from "@/lib/schema";
+import { serviceDescriptions, serviceDescriptionTopics, serviceDescriptionLineItems, timeEntries } from "@/lib/schema";
 import { requireAdmin, serializeDecimal, errorResponse } from "@/lib/api-utils";
 import { resolveDiscountFields, validateDiscountFields, validateCapHours } from "@/lib/billing-utils";
 
@@ -162,7 +162,39 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return errorResponse("Topic not found", 404);
     }
 
-    await db.delete(serviceDescriptionTopics).where(eq(serviceDescriptionTopics.id, topicId));
+    await db.transaction(async (tx) => {
+      // Find written-off time entries in this topic before cascade delete
+      const writtenOffItems = await tx.query.serviceDescriptionLineItems.findMany({
+        where: and(
+          eq(serviceDescriptionLineItems.topicId, topicId),
+          isNotNull(serviceDescriptionLineItems.waiveMode)
+        ),
+        columns: { timeEntryId: true },
+      });
+
+      const timeEntryIds = writtenOffItems
+        .map((li) => li.timeEntryId)
+        .filter((id): id is string => id !== null);
+
+      // Delete the topic (cascades to line items)
+      await tx.delete(serviceDescriptionTopics).where(eq(serviceDescriptionTopics.id, topicId));
+
+      // Clear isWrittenOff on orphaned time entries (no remaining waived references)
+      for (const teId of [...new Set(timeEntryIds)]) {
+        const stillWaived = await tx.query.serviceDescriptionLineItems.findFirst({
+          where: and(
+            eq(serviceDescriptionLineItems.timeEntryId, teId),
+            isNotNull(serviceDescriptionLineItems.waiveMode)
+          ),
+          columns: { id: true },
+        });
+        if (!stillWaived) {
+          await tx.update(timeEntries)
+            .set({ isWrittenOff: false })
+            .where(eq(timeEntries.id, teId));
+        }
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

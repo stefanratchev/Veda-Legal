@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and, ne, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { serviceDescriptionLineItems } from "@/lib/schema";
+import { serviceDescriptionLineItems, timeEntries } from "@/lib/schema";
 import { requireAdmin, serializeDecimal, errorResponse } from "@/lib/api-utils";
 
 type RouteParams = { params: Promise<{ id: string; topicId: string; itemId: string }> };
@@ -66,26 +66,62 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body.displayOrder !== undefined) {
       updateData.displayOrder = body.displayOrder;
     }
-    if (body.waiveMode !== undefined) {
-      if (body.waiveMode !== null && body.waiveMode !== "EXCLUDED" && body.waiveMode !== "ZERO") {
-        return errorResponse("waiveMode must be EXCLUDED, ZERO, or null", 400);
+    if (body.writeOff !== undefined) {
+      if (body.writeOff !== null && body.writeOff !== "VISIBLE" && body.writeOff !== "HIDDEN") {
+        return errorResponse("writeOff must be VISIBLE, HIDDEN, or null", 400);
       }
-      updateData.waiveMode = body.waiveMode;
+      // Map writeOff action to waiveMode
+      if (body.writeOff === "VISIBLE") {
+        updateData.waiveMode = "ZERO";
+      } else if (body.writeOff === "HIDDEN") {
+        updateData.waiveMode = "EXCLUDED";
+      } else {
+        updateData.waiveMode = null;
+      }
     }
 
-    const [updated] = await db.update(serviceDescriptionLineItems)
-      .set(updateData)
-      .where(eq(serviceDescriptionLineItems.id, itemId))
-      .returning({
-        id: serviceDescriptionLineItems.id,
-        timeEntryId: serviceDescriptionLineItems.timeEntryId,
-        date: serviceDescriptionLineItems.date,
-        description: serviceDescriptionLineItems.description,
-        hours: serviceDescriptionLineItems.hours,
-        fixedAmount: serviceDescriptionLineItems.fixedAmount,
-        displayOrder: serviceDescriptionLineItems.displayOrder,
-        waiveMode: serviceDescriptionLineItems.waiveMode,
-      });
+    const updated = await db.transaction(async (tx) => {
+      const [lineItem] = await tx.update(serviceDescriptionLineItems)
+        .set(updateData)
+        .where(eq(serviceDescriptionLineItems.id, itemId))
+        .returning({
+          id: serviceDescriptionLineItems.id,
+          timeEntryId: serviceDescriptionLineItems.timeEntryId,
+          date: serviceDescriptionLineItems.date,
+          description: serviceDescriptionLineItems.description,
+          hours: serviceDescriptionLineItems.hours,
+          fixedAmount: serviceDescriptionLineItems.fixedAmount,
+          displayOrder: serviceDescriptionLineItems.displayOrder,
+          waiveMode: serviceDescriptionLineItems.waiveMode,
+        });
+
+      // Update time entry's isWrittenOff when writeOff action is used
+      if (body.writeOff !== undefined && lineItem.timeEntryId) {
+        if (body.writeOff !== null) {
+          // Writing off — set isWrittenOff = true
+          await tx.update(timeEntries)
+            .set({ isWrittenOff: true })
+            .where(eq(timeEntries.id, lineItem.timeEntryId));
+        } else {
+          // Restoring — only clear isWrittenOff if no other line items still have waiveMode set
+          const otherWaived = await tx.query.serviceDescriptionLineItems.findFirst({
+            where: and(
+              eq(serviceDescriptionLineItems.timeEntryId, lineItem.timeEntryId),
+              ne(serviceDescriptionLineItems.id, itemId),
+              isNotNull(serviceDescriptionLineItems.waiveMode)
+            ),
+            columns: { id: true },
+          });
+          if (!otherWaived) {
+            await tx.update(timeEntries)
+              .set({ isWrittenOff: false })
+              .where(eq(timeEntries.id, lineItem.timeEntryId));
+          }
+        }
+      }
+
+      return lineItem;
+    });
 
     // Fetch the time entry for original values if linked
     let originalDescription: string | undefined;

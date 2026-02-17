@@ -68,12 +68,8 @@ export async function GET(request: NextRequest) {
           gte(timeEntries.date, BILLING_START_DATE),
           // Exclude entries that are in a FINALIZED service description
           isNull(serviceDescriptions.id),
-          // Exclude entries that are waived in any SD
-          sql`NOT EXISTS (
-            SELECT 1 FROM service_description_line_items sli
-            WHERE sli."timeEntryId" = ${timeEntries.id}
-            AND sli."waiveMode" IS NOT NULL
-          )`
+          // Exclude written-off entries
+          eq(timeEntries.isWrittenOff, false)
         )
       )
       .groupBy(clients.id, clients.name, clients.hourlyRate)

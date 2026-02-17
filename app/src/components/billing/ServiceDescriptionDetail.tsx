@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { ServiceDescription, ServiceDescriptionTopic, PricingMode } from "@/types";
+import type { ServiceDescription, ServiceDescriptionTopic, PricingMode, WriteOffAction } from "@/types";
 import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
 import { TopicSection } from "./TopicSection";
 import { AddTopicModal } from "./AddTopicModal";
@@ -547,9 +547,9 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     [data.id]
   );
 
-  // Waive / restore line item
-  const handleWaiveLineItem = useCallback(
-    async (itemId: string, waiveMode: "EXCLUDED" | "ZERO" | null) => {
+  // Write off / restore line item
+  const handleWriteOffLineItem = useCallback(
+    async (itemId: string, writeOff: WriteOffAction | null) => {
       const currentData = dataRef.current;
       const topic = currentData.topics.find((t) =>
         t.lineItems.some((li) => li.id === itemId)
@@ -561,11 +561,11 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ waiveMode }),
+          body: JSON.stringify({ writeOff }),
         }
       );
 
-      if (!response.ok) throw new Error("Failed to update waive status");
+      if (!response.ok) throw new Error("Failed to update write-off status");
 
       const result = await response.json();
 
@@ -586,7 +586,29 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     []
   );
 
-  // Delete line item
+  // Remove line item from invoice (no confirmation — already confirmed via modal)
+  const handleRemoveLineItem = useCallback(async (topicId: string, itemId: string) => {
+    try {
+      const response = await fetch(`/api/billing/${data.id}/topics/${topicId}/items/${itemId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setData((prev) => ({
+          ...prev,
+          topics: prev.topics.map((t) =>
+            t.id === topicId
+              ? { ...t, lineItems: t.lineItems.filter((item) => item.id !== itemId) }
+              : t
+          ),
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to remove line item:", error);
+    }
+  }, [data.id]);
+
+  // Delete line item (with confirmation — for manual items)
   const handleDeleteLineItem = useCallback((topicId: string, itemId: string) => {
     setLineItemToDelete({ topicId, itemId });
   }, []);
@@ -872,8 +894,9 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
                 onDeleteTopic={handleDeleteTopic}
                 onAddLineItem={handleAddLineItem}
                 onUpdateLineItem={handleUpdateLineItem}
+                onRemoveLineItem={handleRemoveLineItem}
                 onDeleteLineItem={handleDeleteLineItem}
-                onWaive={handleWaiveLineItem}
+                onWriteOff={handleWriteOffLineItem}
               />
             ))}
           </SortableContext>

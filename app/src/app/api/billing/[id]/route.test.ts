@@ -8,9 +8,12 @@ const { mockRequireAdmin, mockGetUserFromSession, mockDb } = vi.hoisted(() => {
     mockDb: {
       query: {
         serviceDescriptions: { findFirst: vi.fn() },
+        serviceDescriptionTopics: { findMany: vi.fn() },
+        serviceDescriptionLineItems: { findFirst: vi.fn() },
       },
       update: vi.fn(),
       delete: vi.fn(),
+      transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(null)),
     },
   };
 });
@@ -500,7 +503,26 @@ describe("DELETE /api/billing/[id]", () => {
     const mockDelete = vi.fn().mockReturnValue({
       where: vi.fn().mockResolvedValue(undefined),
     });
-    mockDb.delete = mockDelete;
+    const mockUpdate = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+
+    // Transaction mock: pass a tx with query, delete, and update methods
+    mockDb.transaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        query: {
+          serviceDescriptionTopics: {
+            findMany: vi.fn().mockResolvedValue([]),  // No written-off items
+          },
+          serviceDescriptionLineItems: { findFirst: vi.fn() },
+        },
+        delete: mockDelete,
+        update: mockUpdate,
+      };
+      return cb(tx);
+    });
 
     const request = createMockRequest({ method: "DELETE", url: "/api/billing/sd-1" });
     const response = await DELETE(request, { params: Promise.resolve({ id: "sd-1" }) });

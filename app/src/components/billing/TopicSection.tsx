@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, memo } from "react";
-import type { ServiceDescriptionTopic, PricingMode } from "@/types";
+import type { ServiceDescriptionTopic, PricingMode, WriteOffAction } from "@/types";
 import { LineItemRow } from "./LineItemRow";
 import { AddLineItemModal } from "./AddLineItemModal";
 import { calculateTopicTotal, calculateTopicBaseTotal, formatCurrency } from "@/lib/billing-pdf";
@@ -21,8 +21,9 @@ interface TopicSectionProps {
   onDeleteTopic: (topicId: string) => void;
   onAddLineItem: (topicId: string, data: { date?: string; description: string; hours?: number; fixedAmount?: number }) => Promise<void>;
   onUpdateLineItem: (topicId: string, itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
+  onRemoveLineItem: (topicId: string, itemId: string) => void;
   onDeleteLineItem: (topicId: string, itemId: string) => void;
-  onWaive: (itemId: string, waiveMode: "EXCLUDED" | "ZERO" | null) => Promise<void>;
+  onWriteOff: (itemId: string, action: WriteOffAction | null) => Promise<void>;
 }
 
 export const TopicSection = memo(function TopicSection({
@@ -35,8 +36,9 @@ export const TopicSection = memo(function TopicSection({
   onDeleteTopic,
   onAddLineItem,
   onUpdateLineItem,
+  onRemoveLineItem,
   onDeleteLineItem,
-  onWaive,
+  onWriteOff,
 }: TopicSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
@@ -85,7 +87,7 @@ export const TopicSection = memo(function TopicSection({
   const rawHours = topic.lineItems
     .filter((item) => item.waiveMode !== "EXCLUDED")
     .reduce((sum, item) => sum + (item.waiveMode === "ZERO" ? 0 : (item.hours || 0)), 0);
-  const waivedHours = topic.lineItems.reduce((sum, item) => {
+  const writtenOffHours = topic.lineItems.reduce((sum, item) => {
     if (item.waiveMode === "EXCLUDED") return sum + (item.hours || 0);
     if (item.waiveMode === "ZERO") return sum + (item.hours || 0);
     return sum;
@@ -242,6 +244,13 @@ export const TopicSection = memo(function TopicSection({
     [topic.id, onUpdateLineItem]
   );
 
+  const handleRemoveItem = useCallback(
+    (itemId: string) => {
+      onRemoveLineItem(topic.id, itemId);
+    },
+    [topic.id, onRemoveLineItem]
+  );
+
   const handleDeleteItem = useCallback(
     (itemId: string) => {
       onDeleteLineItem(topic.id, itemId);
@@ -298,9 +307,9 @@ export const TopicSection = memo(function TopicSection({
                 )}
               </>
             )}
-            {waivedHours > 0 && (
+            {writtenOffHours > 0 && (
               <span className="text-xs text-[var(--text-muted)] ml-1">
-                ({formatHours(waivedHours)} waived)
+                ({formatHours(writtenOffHours)} written off)
               </span>
             )}
           </span>
@@ -530,8 +539,9 @@ export const TopicSection = memo(function TopicSection({
                         isEditable={isEditable}
                         isEvenRow={index % 2 === 0}
                         onUpdate={handleUpdateItem}
+                        onRemove={handleRemoveItem}
                         onDelete={handleDeleteItem}
-                        onWaive={onWaive}
+                        onWriteOff={onWriteOff}
                       />
                     ))}
                   </tbody>

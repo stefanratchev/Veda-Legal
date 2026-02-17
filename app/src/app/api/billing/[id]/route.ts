@@ -39,6 +39,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             invoicedName: true,
             invoiceAttn: true,
             hourlyRate: true,
+            notes: true,
           },
         },
         topics: {

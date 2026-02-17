@@ -70,6 +70,7 @@ describe("GET /api/billing/[id]", () => {
         invoicedName: null,
         invoiceAttn: null,
         hourlyRate: "150.00",
+        notes: "Billing preference: summarize by topic",
       },
       periodStart: "2024-01-01",
       periodEnd: "2024-01-31",
@@ -120,6 +121,7 @@ describe("GET /api/billing/[id]", () => {
     expect(json.id).toBe("sd-1");
     expect(json.client.name).toBe("Test Client");
     expect(json.client.hourlyRate).toBe(150);
+    expect(json.client.notes).toBe("Billing preference: summarize by topic");
     expect(json.discountType).toBe("PERCENTAGE");
     expect(json.discountValue).toBe(10);
     expect(json.topics).toHaveLength(1);

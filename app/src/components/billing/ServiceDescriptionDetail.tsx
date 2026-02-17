@@ -6,6 +6,7 @@ import type { ServiceDescription, ServiceDescriptionTopic, PricingMode } from "@
 import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
 import { TopicSection } from "./TopicSection";
 import { AddTopicModal } from "./AddTopicModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
   DndContext,
   closestCenter,
@@ -46,6 +47,8 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   const [addTopicError, setAddTopicError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
+  const [topicToDelete, setTopicToDelete] = useState<string | null>(null);
+  const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
 
   const isFinalized = data.status === "FINALIZED";
   const isEditable = !isFinalized;
@@ -447,27 +450,30 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   );
 
   // Delete topic
-  const handleDeleteTopic = useCallback(
-    async (topicId: string) => {
-      if (!confirm("Delete this topic and all its line items?")) return;
+  const handleDeleteTopic = useCallback((topicId: string) => {
+    setTopicToDelete(topicId);
+  }, []);
 
-      try {
-        const response = await fetch(`/api/billing/${data.id}/topics/${topicId}`, {
-          method: "DELETE",
-        });
+  const handleConfirmDeleteTopic = useCallback(async () => {
+    if (!topicToDelete) return;
+    const topicId = topicToDelete;
+    setTopicToDelete(null);
 
-        if (response.ok) {
-          setData((prev) => ({
-            ...prev,
-            topics: prev.topics.filter((t) => t.id !== topicId),
-          }));
-        }
-      } catch (error) {
-        console.error("Failed to delete topic:", error);
+    try {
+      const response = await fetch(`/api/billing/${data.id}/topics/${topicId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setData((prev) => ({
+          ...prev,
+          topics: prev.topics.filter((t) => t.id !== topicId),
+        }));
       }
-    },
-    [data.id]
-  );
+    } catch (error) {
+      console.error("Failed to delete topic:", error);
+    }
+  }, [data.id, topicToDelete]);
 
   // Add line item
   const handleAddLineItem = useCallback(
@@ -605,13 +611,10 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   );
 
   // Finalize / Unlock
-  const handleToggleStatus = useCallback(async () => {
+  const performToggleStatus = useCallback(async () => {
+    setShowFinalizeConfirm(false);
     const newStatus = isFinalized ? "DRAFT" : "FINALIZED";
     const action = isFinalized ? "unlock" : "finalize";
-
-    if (!isFinalized && !confirm("Finalize this service description? It will become read-only until unlocked.")) {
-      return;
-    }
 
     setIsUpdatingStatus(true);
 
@@ -639,6 +642,14 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
       setIsUpdatingStatus(false);
     }
   }, [data.id, isFinalized]);
+
+  const handleToggleStatus = useCallback(() => {
+    if (!isFinalized) {
+      setShowFinalizeConfirm(true);
+      return;
+    }
+    performToggleStatus();
+  }, [isFinalized, performToggleStatus]);
 
   // Export PDF
   const handleExportPDF = useCallback(async () => {
@@ -947,6 +958,29 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
           defaultHourlyRate={data.client.hourlyRate}
           onSubmit={handleAddTopic}
           onClose={handleCloseAddTopic}
+        />
+      )}
+
+      {/* Delete Topic Confirmation */}
+      {topicToDelete && (
+        <ConfirmModal
+          title="Delete Topic"
+          message="Delete this topic and all its line items? This action cannot be undone."
+          confirmLabel="Delete"
+          isDestructive
+          onConfirm={handleConfirmDeleteTopic}
+          onCancel={() => setTopicToDelete(null)}
+        />
+      )}
+
+      {/* Finalize Confirmation */}
+      {showFinalizeConfirm && (
+        <ConfirmModal
+          title="Finalize Service Description"
+          message="Finalize this service description? It will become read-only until unlocked."
+          confirmLabel="Finalize"
+          onConfirm={performToggleStatus}
+          onCancel={() => setShowFinalizeConfirm(false)}
         />
       )}
     </div>

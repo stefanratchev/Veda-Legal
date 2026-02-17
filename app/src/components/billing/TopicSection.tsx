@@ -18,7 +18,7 @@ interface TopicSectionProps {
   isEditable: boolean;
   clientHourlyRate: number | null;
   onUpdateTopic: (topicId: string, updates: Partial<ServiceDescriptionTopic>) => Promise<void>;
-  onDeleteTopic: (topicId: string) => Promise<void>;
+  onDeleteTopic: (topicId: string) => void;
   onAddLineItem: (topicId: string, data: { date?: string; description: string; hours?: number; fixedAmount?: number }) => Promise<void>;
   onUpdateLineItem: (topicId: string, itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
   onDeleteLineItem: (topicId: string, itemId: string) => Promise<void>;

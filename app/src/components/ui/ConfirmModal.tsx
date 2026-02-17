@@ -43,7 +43,7 @@ export function ConfirmModal({
       />
 
       {/* Modal Content */}
-      <div className="relative bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded w-full max-w-sm mx-2 md:mx-4 animate-fade-up">
+      <div className="relative bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded w-full max-w-sm mx-2 md:mx-4 animate-fade-up text-left">
         {/* Header */}
         <div className="px-4 py-3 md:px-5 md:py-4 border-b border-[var(--border-subtle)]">
           <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)]">

@@ -7,6 +7,7 @@ import { formatHours as formatHoursUtil, parseHoursToComponents, toDecimalHours 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 interface LineItemRowProps {
   item: ServiceDescriptionLineItem;
@@ -34,6 +35,7 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
   const [editDescription, setEditDescription] = useState(item.description);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showWaiveMenu, setShowWaiveMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const descriptionInputRef = useRef<HTMLInputElement>(null);
   const durationPickerRef = useRef<DurationPickerRef>(null);
@@ -121,9 +123,12 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
   );
 
   const handleDelete = useCallback(() => {
-    if (confirm("Delete this line item?")) {
-      onDelete(item.id);
-    }
+    setShowDeleteConfirm(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+    onDelete(item.id);
   }, [item.id, onDelete]);
 
   const handleWaive = useCallback(async (waiveMode: "EXCLUDED" | "ZERO" | null) => {
@@ -285,6 +290,16 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
               </button>
             )}
           </div>
+          {showDeleteConfirm && (
+            <ConfirmModal
+              title="Delete Line Item"
+              message="Delete this line item? This action cannot be undone."
+              confirmLabel="Delete"
+              isDestructive
+              onConfirm={handleConfirmDelete}
+              onCancel={() => setShowDeleteConfirm(false)}
+            />
+          )}
         </td>
       )}
     </tr>

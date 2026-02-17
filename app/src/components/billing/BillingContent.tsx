@@ -7,6 +7,7 @@ import { TableFilters } from "@/components/ui/TableFilters";
 import { ColumnDef } from "@/components/ui/table-types";
 import { CreateServiceDescriptionModal } from "./CreateServiceDescriptionModal";
 import { UnbilledClientsSection } from "./UnbilledClientsSection";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ServiceDescriptionStatus } from "@/types";
 
 interface ServiceDescriptionListItem {
@@ -50,6 +51,7 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [sdToDelete, setSdToDelete] = useState<ServiceDescriptionListItem | null>(null);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -103,9 +105,15 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
     router.push(`/billing/${sd.id}`);
   }, [router]);
 
-  const handleDelete = useCallback(async (sd: ServiceDescriptionListItem, e: React.MouseEvent) => {
+  const handleDelete = useCallback((sd: ServiceDescriptionListItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Delete service description for ${sd.clientName}?`)) return;
+    setSdToDelete(sd);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!sdToDelete) return;
+    const sd = sdToDelete;
+    setSdToDelete(null);
 
     try {
       const response = await fetch(`/api/billing/${sd.id}`, { method: "DELETE" });
@@ -115,7 +123,7 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
     } catch {
       alert("Failed to delete service description");
     }
-  }, []);
+  }, [sdToDelete]);
 
   const columns: ColumnDef<ServiceDescriptionListItem>[] = useMemo(
     () => [
@@ -251,6 +259,17 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
           error={createError}
           onSubmit={handleCreate}
           onClose={closeCreateModal}
+        />
+      )}
+
+      {sdToDelete && (
+        <ConfirmModal
+          title="Delete Service Description"
+          message={`Delete service description for ${sdToDelete.clientName}? This action cannot be undone.`}
+          confirmLabel="Delete"
+          isDestructive
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setSdToDelete(null)}
         />
       )}
     </div>

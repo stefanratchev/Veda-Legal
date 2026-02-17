@@ -172,6 +172,7 @@ export interface ServiceDescription {
     invoicedName: string | null;
     invoiceAttn: string | null;
     hourlyRate: number | null;
+    notes: string | null;
   };
   periodStart: string;
   periodEnd: string;

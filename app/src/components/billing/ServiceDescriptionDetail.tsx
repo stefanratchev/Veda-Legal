@@ -45,6 +45,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   const [isAddingTopic, setIsAddingTopic] = useState(false);
   const [addTopicError, setAddTopicError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [notesExpanded, setNotesExpanded] = useState(false);
 
   const isFinalized = data.status === "FINALIZED";
   const isEditable = !isFinalized;
@@ -697,6 +698,34 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Client Notes */}
+      <div className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+        <div
+          className="flex items-center gap-3 p-4 cursor-pointer hover:bg-[var(--bg-surface)] transition-colors"
+          onClick={() => setNotesExpanded((v) => !v)}
+        >
+          <svg
+            className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${notesExpanded ? "rotate-90" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <h2 className="text-sm font-medium text-[var(--text-secondary)]">Client Notes</h2>
+          <span className="text-xs text-[var(--text-muted)] italic">
+            {data.client.notes?.trim() ? "Notes available" : "None"}
+          </span>
+        </div>
+        {notesExpanded && (
+          <div className="border-t border-[var(--border-subtle)] px-4 py-3">
+            <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words">
+              {data.client.notes?.trim() ? data.client.notes : "No client notes"}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Summary Section */}

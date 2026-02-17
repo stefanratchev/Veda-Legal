@@ -15,6 +15,7 @@ interface RawServiceDescription {
     invoicedName: string | null;
     invoiceAttn: string | null;
     hourlyRate: string | null;
+    notes: string | null;
   };
   periodStart: string;
   periodEnd: string;
@@ -69,6 +70,7 @@ export function serializeServiceDescription(sd: RawServiceDescription): ServiceD
       invoicedName: sd.client.invoicedName,
       invoiceAttn: sd.client.invoiceAttn,
       hourlyRate: serializeDecimal(sd.client.hourlyRate),
+      notes: sd.client.notes,
     },
     periodStart: sd.periodStart,
     periodEnd: sd.periodEnd,

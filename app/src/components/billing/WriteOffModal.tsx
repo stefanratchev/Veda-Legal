@@ -56,7 +56,7 @@ export function WriteOffModal({ onAction, onCancel }: WriteOffModalProps) {
               Write off &mdash; show as waived
             </div>
             <div className="text-xs text-[var(--text-muted)] mt-0.5">
-              Permanently billed. Client sees it listed at $0
+              Permanently billed. Listed at zero on invoice
             </div>
           </button>
 

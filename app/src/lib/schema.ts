@@ -47,6 +47,9 @@ export const serviceDescriptions = pgTable("service_descriptions", {
 	finalizedById: text(),
 	discountType: discountTypeEnum(),
 	discountValue: numeric({ precision: 10, scale: 2 }),
+	retainerFee: numeric({ precision: 10, scale: 2 }),
+	retainerHours: numeric({ precision: 6, scale: 2 }),
+	retainerOverageRate: numeric({ precision: 10, scale: 2 }),
 	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ precision: 3, mode: 'string' }).notNull(),
 }, (table) => [
@@ -121,6 +124,8 @@ export const clients = pgTable("clients", {
 	updatedAt: timestamp({ precision: 3, mode: 'string' }).notNull(),
 	secondaryEmails: text(),
 	clientType: clientType().default('REGULAR').notNull(),
+	retainerFee: numeric({ precision: 10, scale: 2 }),
+	retainerHours: numeric({ precision: 6, scale: 2 }),
 });
 
 export const topics = pgTable("topics", {

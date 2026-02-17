@@ -29,9 +29,8 @@ npm run lint           # Run ESLint
 npm run test           # Run tests in watch mode
 npm run test -- file   # Run specific test file
 npm run test:coverage  # Run tests with coverage report
-npm run db:generate    # Generate Drizzle migrations
-npm run db:migrate     # Run database migrations
-npm run db:push        # Push schema changes (dev)
+npm run db:generate    # Generate Drizzle migration (REQUIRED for schema changes)
+npm run db:migrate     # Apply migrations to local database
 npm run db:studio      # Open Drizzle Studio
 npm run db:seed-internal-topics  # Seed internal/management topics
 ```
@@ -147,7 +146,11 @@ Service descriptions are invoice-like documents managed in `components/billing/`
 
 **Waive mode:** Line items can be waived with two modes — `EXCLUDED` (removed from bill entirely) or `ZERO` (shown but zero-rated with "(Waived)" in PDFs). Affects totals calculations and PDF rendering.
 
-**Billing calculations** are centralized in `lib/billing-utils.ts` — use the canonical functions there rather than computing inline. PDF export uses `@react-pdf/renderer` in `lib/billing-pdf.tsx`. Key PDF helpers in `billing-pdf.tsx`: `formatCurrency()`, `calculateTopicTotal()`, `calculateGrandTotal()`.
+**Currency:** The app uses Euros (EUR). `formatCurrency()` in `billing-pdf.tsx` formats values with `€` prefix.
+
+**Billing calculations** are centralized in `lib/billing-pdf.tsx` — use the canonical functions there rather than computing inline. Key functions: `calculateTopicTotal()`, `calculateGrandTotal()`, `calculateRetainerSummary()`, `calculateRetainerGrandTotal()`. PDF export uses `@react-pdf/renderer` in the same file.
+
+**Retainer billing:** Clients can have a retainer agreement (monthly fee for included hours). Fields are snapshotted from client onto the service description at creation time (`retainerFee`, `retainerHours`, `retainerOverageRate`). Retainer mode is detected by `retainerFee != null && retainerHours != null`. In retainer mode: HOURLY topic hours count against the retainer allowance, overage hours are billed at the overage rate, FIXED topics and `fixedAmount` line items are always billed separately on top. Topic-level caps/discounts are ignored; SD-level discount applies to the final total.
 
 ### Timesheet Submissions
 Users submit timesheets daily via `POST /api/timesheets/submit`. Key behaviors:
@@ -166,15 +169,16 @@ Users submit timesheets daily via `POST /api/timesheets/submit`. Key behaviors:
 # Start PostgreSQL
 brew services start postgresql@17
 
-# After schema changes
-npm run db:push        # Quick push for development
-# OR
-npm run db:generate && npm run db:migrate  # Generate and apply migration
+# After schema changes — ALWAYS generate a migration file
+npm run db:generate    # Creates migration SQL in drizzle/
+npm run db:migrate     # Applies migration to local database
 ```
+
+**Migration requirement:** Every schema change in `schema.ts` MUST have a corresponding migration file committed alongside it. CI will reject PRs where schema and migrations are out of sync. Never use `db:push` to apply schema changes — it bypasses migration generation and the changes won't be reproducible in production.
 
 **Troubleshooting:**
 - "Can't reach database" → Check `brew services list | grep postgresql`
-- Schema out of sync → Run `npm run db:push` to sync schema with database
+- Schema out of sync → Run `npm run db:generate && npm run db:migrate`
 
 ## Git Worktrees
 
@@ -269,6 +273,8 @@ DATABASE_URL="<prod-url>" npm run db:seed-topics          # Production
 ```
 
 ## Production Deployment
+
+**CI:** PRs to `main` run tests and verify migrations are in sync with schema (`.github/workflows/ci.yml`).
 
 **Pre-deployment requirement:** Always run tests before deploying to production. Deployment must fail if tests don't pass—never skip this step, even if not explicitly requested.
 

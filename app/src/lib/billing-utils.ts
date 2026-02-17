@@ -15,6 +15,8 @@ interface RawServiceDescription {
     invoicedName: string | null;
     invoiceAttn: string | null;
     hourlyRate: string | null;
+    retainerFee: string | null;
+    retainerHours: string | null;
     notes: string | null;
   };
   periodStart: string;
@@ -23,6 +25,9 @@ interface RawServiceDescription {
   finalizedAt: string | null;
   discountType: string | null;
   discountValue: string | null;
+  retainerFee: string | null;
+  retainerHours: string | null;
+  retainerOverageRate: string | null;
   topics: Array<{
     id: string;
     topicName: string;
@@ -70,6 +75,8 @@ export function serializeServiceDescription(sd: RawServiceDescription): ServiceD
       invoicedName: sd.client.invoicedName,
       invoiceAttn: sd.client.invoiceAttn,
       hourlyRate: serializeDecimal(sd.client.hourlyRate),
+      retainerFee: serializeDecimal(sd.client.retainerFee),
+      retainerHours: serializeDecimal(sd.client.retainerHours),
       notes: sd.client.notes,
     },
     periodStart: sd.periodStart,
@@ -78,6 +85,9 @@ export function serializeServiceDescription(sd: RawServiceDescription): ServiceD
     finalizedAt: sd.finalizedAt || null,
     discountType: (sd.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
     discountValue: serializeDecimal(sd.discountValue),
+    retainerFee: serializeDecimal(sd.retainerFee),
+    retainerHours: serializeDecimal(sd.retainerHours),
+    retainerOverageRate: serializeDecimal(sd.retainerOverageRate),
     topics: sd.topics.map((topic) => ({
       id: topic.id,
       topicName: topic.topicName,

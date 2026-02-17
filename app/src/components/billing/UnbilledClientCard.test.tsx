@@ -53,11 +53,10 @@ describe("UnbilledClientCard", () => {
       expect(screen.getByText("Oct 15 – Dec 20, 2024")).toBeInTheDocument();
     });
 
-    it("shows 'Rate not set' when hourlyRate is null", () => {
+    it("shows 'Rate not set' when estimatedValue is null", () => {
       render(
         <UnbilledClientCard
           {...defaultProps}
-          hourlyRate={null}
           estimatedValue={null}
         />
       );

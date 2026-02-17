@@ -8,6 +8,8 @@ import {
   calculateTopicTotal,
   calculateTopicHours,
   calculateGrandTotal,
+  calculateRetainerSummary,
+  calculateRetainerGrandTotal,
 } from "./billing-pdf";
 import { ServiceDescription, WaiveMode } from "@/types";
 
@@ -508,6 +510,160 @@ describe("billing-pdf utilities", () => {
         ],
       });
       expect(calculateTopicTotal(topic)).toBe(900);
+    });
+  });
+
+  describe("calculateRetainerSummary", () => {
+    it("returns retainer fee when hours are under the limit", () => {
+      const topics = [makeTopic({ lineItems: [makeItem(5)] })];
+      const result = calculateRetainerSummary(topics, 1000, 10, 200, null, null);
+
+      expect(result.totalHourlyHours).toBe(5);
+      expect(result.retainerHours).toBe(10);
+      expect(result.retainerFee).toBe(1000);
+      expect(result.overageHours).toBe(0);
+      expect(result.overageAmount).toBe(0);
+      expect(result.subtotal).toBe(1000);
+      expect(result.grandTotal).toBe(1000);
+    });
+
+    it("adds overage when hours exceed retainer", () => {
+      const topics = [makeTopic({ lineItems: [makeItem(12)] })];
+      const result = calculateRetainerSummary(topics, 1000, 10, 200, null, null);
+
+      expect(result.totalHourlyHours).toBe(12);
+      expect(result.overageHours).toBe(2);
+      expect(result.overageAmount).toBe(400); // 2h * 200
+      expect(result.subtotal).toBe(1400); // 1000 + 400
+      expect(result.grandTotal).toBe(1400);
+    });
+
+    it("aggregates hours from multiple HOURLY topics", () => {
+      const topics = [
+        makeTopic({ id: "t1", lineItems: [makeItem(4), makeItem(3)] }),
+        makeTopic({ id: "t2", lineItems: [makeItem(5)] }),
+      ];
+      const result = calculateRetainerSummary(topics, 1000, 10, 200, null, null);
+
+      expect(result.totalHourlyHours).toBe(12); // 4+3+5
+      expect(result.overageHours).toBe(2);
+    });
+
+    it("adds FIXED topic fees separately from retainer", () => {
+      const topics = [
+        makeTopic({ lineItems: [makeItem(5)] }),
+        makeTopic({ id: "2", pricingMode: "FIXED", fixedFee: 500, hourlyRate: null, lineItems: [] }),
+      ];
+      const result = calculateRetainerSummary(topics, 1000, 10, 200, null, null);
+
+      expect(result.fixedTopicFees).toBe(500);
+      expect(result.subtotal).toBe(1500); // 1000 + 500
+    });
+
+    it("adds fixedAmount line items in HOURLY topics separately", () => {
+      const topics = [
+        makeTopic({
+          lineItems: [
+            makeItem(3),
+            { ...makeItem(0), hours: null, fixedAmount: 250 },
+          ],
+        }),
+      ];
+      const result = calculateRetainerSummary(topics, 1000, 10, 200, null, null);
+
+      expect(result.totalHourlyHours).toBe(3);
+      expect(result.fixedLineItemFees).toBe(250);
+      expect(result.subtotal).toBe(1250); // 1000 + 250
+    });
+
+    it("excludes waived items (EXCLUDED) from retainer hours", () => {
+      const topics = [
+        makeTopic({
+          lineItems: [makeItem(5), { ...makeItem(3), waiveMode: "EXCLUDED" as const }],
+        }),
+      ];
+      const result = calculateRetainerSummary(topics, 1000, 10, 200, null, null);
+
+      expect(result.totalHourlyHours).toBe(5);
+      expect(result.overageHours).toBe(0);
+    });
+
+    it("excludes waived items (ZERO) from retainer hours", () => {
+      const topics = [
+        makeTopic({
+          lineItems: [makeItem(5), { ...makeItem(3), waiveMode: "ZERO" as const }],
+        }),
+      ];
+      const result = calculateRetainerSummary(topics, 1000, 10, 200, null, null);
+
+      expect(result.totalHourlyHours).toBe(5);
+    });
+
+    it("applies percentage discount to grand total", () => {
+      const topics = [makeTopic({ lineItems: [makeItem(5)] })];
+      const result = calculateRetainerSummary(topics, 1000, 10, 200, "PERCENTAGE", 10);
+
+      expect(result.subtotal).toBe(1000);
+      expect(result.grandTotal).toBe(900); // 1000 * 0.9
+    });
+
+    it("applies amount discount to grand total", () => {
+      const topics = [makeTopic({ lineItems: [makeItem(5)] })];
+      const result = calculateRetainerSummary(topics, 1000, 10, 200, "AMOUNT", 150);
+
+      expect(result.subtotal).toBe(1000);
+      expect(result.grandTotal).toBe(850); // 1000 - 150
+    });
+
+    it("grand total does not go below zero", () => {
+      const topics = [makeTopic({ lineItems: [makeItem(1)] })];
+      const result = calculateRetainerSummary(topics, 100, 10, 200, "AMOUNT", 500);
+
+      expect(result.grandTotal).toBe(0);
+    });
+
+    it("handles zero hours with no topics", () => {
+      const result = calculateRetainerSummary([], 1000, 10, 200, null, null);
+
+      expect(result.totalHourlyHours).toBe(0);
+      expect(result.overageHours).toBe(0);
+      expect(result.subtotal).toBe(1000);
+      expect(result.grandTotal).toBe(1000);
+    });
+
+    it("handles complex mixed scenario", () => {
+      const topics = [
+        makeTopic({
+          id: "t1",
+          lineItems: [
+            makeItem(8),
+            makeItem(4),
+            { ...makeItem(2), waiveMode: "EXCLUDED" as const }, // excluded
+            { ...makeItem(0), hours: null, fixedAmount: 100 },  // fixed item
+          ],
+        }),
+        makeTopic({ id: "t2", pricingMode: "FIXED", fixedFee: 300, hourlyRate: null, lineItems: [] }),
+      ];
+      const result = calculateRetainerSummary(topics, 1000, 10, 150, "PERCENTAGE", 5);
+
+      // HOURLY hours: 8 + 4 = 12 (excluded 2 not counted)
+      expect(result.totalHourlyHours).toBe(12);
+      expect(result.overageHours).toBe(2); // 12 - 10
+      expect(result.overageAmount).toBe(300); // 2 * 150
+      expect(result.fixedTopicFees).toBe(300);
+      expect(result.fixedLineItemFees).toBe(100);
+      // subtotal = 1000 + 300 (overage) + 300 (fixed topic) + 100 (fixed item) = 1700
+      expect(result.subtotal).toBe(1700);
+      // 5% discount: 1700 * 0.95 = 1615
+      expect(result.grandTotal).toBe(1615);
+    });
+  });
+
+  describe("calculateRetainerGrandTotal", () => {
+    it("returns the grandTotal from calculateRetainerSummary", () => {
+      const topics = [makeTopic({ lineItems: [makeItem(12)] })];
+      const gt = calculateRetainerGrandTotal(topics, 1000, 10, 200, null, null);
+      expect(gt).toBe(1400); // 1000 + 2h * 200
     });
   });
 });

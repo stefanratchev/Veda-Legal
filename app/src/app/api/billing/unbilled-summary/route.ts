@@ -41,6 +41,8 @@ export async function GET(request: NextRequest) {
         clientId: clients.id,
         clientName: clients.name,
         hourlyRate: clients.hourlyRate,
+        retainerFee: clients.retainerFee,
+        retainerHours: clients.retainerHours,
         totalUnbilledHours: sum(timeEntries.hours),
         oldestEntryDate: min(timeEntries.date),
         newestEntryDate: max(timeEntries.date),
@@ -72,7 +74,7 @@ export async function GET(request: NextRequest) {
           eq(timeEntries.isWrittenOff, false)
         )
       )
-      .groupBy(clients.id, clients.name, clients.hourlyRate)
+      .groupBy(clients.id, clients.name, clients.hourlyRate, clients.retainerFee, clients.retainerHours)
       .orderBy(
         sql`(${sum(timeEntries.hours)} * ${clients.hourlyRate}) DESC NULLS LAST`
       );
@@ -96,11 +98,21 @@ export async function GET(request: NextRequest) {
     // Transform and merge results
     const response = unbilledResults.map((row) => {
       const hourlyRate = serializeDecimal(row.hourlyRate);
+      const retainerFee = serializeDecimal(row.retainerFee);
+      const retainerHours = serializeDecimal(row.retainerHours);
       const totalUnbilledHours = serializeDecimal(row.totalUnbilledHours);
-      const estimatedValue =
-        hourlyRate !== null && totalUnbilledHours !== null
-          ? hourlyRate * totalUnbilledHours
-          : null;
+      const isRetainer = retainerFee != null && retainerHours != null;
+
+      let estimatedValue: number | null = null;
+      if (totalUnbilledHours !== null) {
+        if (isRetainer) {
+          // Retainer: fee + overage (if any)
+          const overageHours = Math.max(0, totalUnbilledHours - retainerHours!);
+          estimatedValue = retainerFee! + overageHours * (hourlyRate || 0);
+        } else if (hourlyRate !== null) {
+          estimatedValue = hourlyRate * totalUnbilledHours;
+        }
+      }
 
       // Look up draft for this client
       const draft = draftsByClient.get(row.clientId);
@@ -117,6 +129,8 @@ export async function GET(request: NextRequest) {
         existingDraftPeriod: draft
           ? `${draft.periodStart} - ${draft.periodEnd}`
           : null,
+        retainerFee,
+        retainerHours,
       };
     });
 

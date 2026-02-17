@@ -21,6 +21,8 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
           invoicedName: true,
           invoiceAttn: true,
           hourlyRate: true,
+          retainerFee: true,
+          retainerHours: true,
           notes: true,
         },
       },

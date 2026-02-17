@@ -443,16 +443,143 @@ export function calculateGrandTotal(
   return Math.round(Math.max(subtotal, 0) * 100) / 100;
 }
 
+/**
+ * Retainer billing summary. Returned by calculateRetainerSummary for use
+ * by both the UI summary panel and the PDF renderer.
+ */
+export interface RetainerSummary {
+  /** Sum of billable hours from all HOURLY topics (excl. waived) */
+  totalHourlyHours: number;
+  /** Hours included in the retainer */
+  retainerHours: number;
+  /** The flat retainer fee */
+  retainerFee: number;
+  /** Hours exceeding the retainer (0 if under) */
+  overageHours: number;
+  /** Rate used for overage calculation */
+  overageRate: number;
+  /** overageHours * overageRate */
+  overageAmount: number;
+  /** Sum of FIXED topic fees (billed separately from retainer) */
+  fixedTopicFees: number;
+  /** Sum of fixedAmount line items in HOURLY topics (billed separately) */
+  fixedLineItemFees: number;
+  /** retainerCharge + fixedTopicFees + fixedLineItemFees (before SD discount) */
+  subtotal: number;
+  /** Final total after SD-level discount */
+  grandTotal: number;
+}
+
+/**
+ * Calculates the full retainer billing breakdown for a service description.
+ *
+ * Rules:
+ * - HOURLY topic hours count against retainer included hours
+ * - FIXED topic fees are billed separately on top of retainer
+ * - fixedAmount line items (manual items in HOURLY topics) are billed separately
+ * - Waived items (EXCLUDED/ZERO) do NOT count toward retainer hours
+ * - Topic-level caps and discounts are ignored in retainer mode
+ * - SD-level discount applies to the final total
+ */
+export function calculateRetainerSummary(
+  topics: ServiceDescription["topics"],
+  retainerFee: number,
+  retainerHours: number,
+  overageRate: number,
+  discountType: "PERCENTAGE" | "AMOUNT" | null,
+  discountValue: number | null,
+): RetainerSummary {
+  let totalHourlyHours = 0;
+  let fixedTopicFees = 0;
+  let fixedLineItemFees = 0;
+
+  for (const topic of topics) {
+    if (topic.pricingMode === "FIXED") {
+      fixedTopicFees += topic.fixedFee || 0;
+      continue;
+    }
+
+    // HOURLY topic — count hours toward retainer, collect fixedAmount items
+    for (const item of topic.lineItems) {
+      if (item.waiveMode === "EXCLUDED") continue;
+      if (item.waiveMode === "ZERO") continue;
+      totalHourlyHours += item.hours || 0;
+      fixedLineItemFees += item.fixedAmount || 0;
+    }
+  }
+
+  const overageHours = Math.max(0, totalHourlyHours - retainerHours);
+  const overageAmount = Math.round(overageHours * overageRate * 100) / 100;
+  const retainerCharge = retainerFee + overageAmount;
+
+  fixedTopicFees = Math.round(fixedTopicFees * 100) / 100;
+  fixedLineItemFees = Math.round(fixedLineItemFees * 100) / 100;
+
+  let subtotal = retainerCharge + fixedTopicFees + fixedLineItemFees;
+  subtotal = Math.round(subtotal * 100) / 100;
+
+  let grandTotal = subtotal;
+  if (discountType === "PERCENTAGE" && discountValue) {
+    grandTotal = subtotal * (1 - discountValue / 100);
+  } else if (discountType === "AMOUNT" && discountValue) {
+    grandTotal = subtotal - discountValue;
+  }
+  grandTotal = Math.round(Math.max(grandTotal, 0) * 100) / 100;
+
+  return {
+    totalHourlyHours,
+    retainerHours,
+    retainerFee,
+    overageHours,
+    overageRate,
+    overageAmount,
+    fixedTopicFees,
+    fixedLineItemFees,
+    subtotal,
+    grandTotal,
+  };
+}
+
+/**
+ * Convenience function that returns just the grand total for retainer billing.
+ * Used by the billing list API to compute totalAmount per SD.
+ */
+export function calculateRetainerGrandTotal(
+  topics: ServiceDescription["topics"],
+  retainerFee: number,
+  retainerHours: number,
+  overageRate: number,
+  discountType: "PERCENTAGE" | "AMOUNT" | null,
+  discountValue: number | null,
+): number {
+  return calculateRetainerSummary(
+    topics, retainerFee, retainerHours, overageRate, discountType, discountValue,
+  ).grandTotal;
+}
+
 interface ServiceDescriptionPDFProps {
   data: ServiceDescription;
 }
 
 export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
-  const subtotal = data.topics.reduce(
-    (sum, topic) => sum + calculateTopicTotal(topic),
-    0
-  );
-  const grandTotal = calculateGrandTotal(data.topics, data.discountType, data.discountValue);
+  const isRetainer = data.retainerFee != null && data.retainerHours != null;
+  const retainerSummary = isRetainer
+    ? calculateRetainerSummary(
+        data.topics,
+        data.retainerFee!,
+        data.retainerHours!,
+        data.retainerOverageRate || 0,
+        data.discountType,
+        data.discountValue,
+      )
+    : null;
+
+  const subtotal = isRetainer
+    ? retainerSummary!.subtotal
+    : data.topics.reduce((sum, topic) => sum + calculateTopicTotal(topic), 0);
+  const grandTotal = isRetainer
+    ? retainerSummary!.grandTotal
+    : calculateGrandTotal(data.topics, data.discountType, data.discountValue);
   const hasOverallDiscount = data.discountType && data.discountValue;
   const reference = generateReference(data);
   const documentDate = formatDocumentDate();
@@ -498,32 +625,99 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
         {/* Summary section */}
         <Text style={styles.sectionTitle}>Summary of Fees</Text>
         <View style={styles.summaryContainer}>
-          {data.topics.map((topic) => (
-            <View key={topic.id} style={styles.summaryRow}>
-              <Text style={styles.summaryTopic}>{topic.topicName}</Text>
-              <Text style={styles.summaryAmount}>
-                {formatCurrency(calculateTopicTotal(topic))}
-              </Text>
-            </View>
-          ))}
-          {hasOverallDiscount && (
+          {isRetainer && retainerSummary ? (
             <>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryTopic}>Subtotal</Text>
+                <Text style={styles.summaryTopic}>
+                  Monthly Retainer ({formatHours(retainerSummary.retainerHours)} hrs included)
+                </Text>
                 <Text style={styles.summaryAmount}>
-                  {formatCurrency(subtotal)}
+                  {formatCurrency(retainerSummary.retainerFee)}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryTopic}>
-                  Overall Discount ({data.discountType === "PERCENTAGE"
-                    ? `${data.discountValue}%`
-                    : formatCurrency(data.discountValue!)})
+                  Hours Used: {formatHours(retainerSummary.totalHourlyHours)} of {formatHours(retainerSummary.retainerHours)}
                 </Text>
-                <Text style={styles.summaryAmount}>
-                  -{formatCurrency(subtotal - grandTotal)}
-                </Text>
+                <Text style={styles.summaryAmount} />
               </View>
+              {retainerSummary.overageHours > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryTopic}>
+                    Overage: {formatHours(retainerSummary.overageHours)} at {formatCurrency(retainerSummary.overageRate)}/hr
+                  </Text>
+                  <Text style={styles.summaryAmount}>
+                    {formatCurrency(retainerSummary.overageAmount)}
+                  </Text>
+                </View>
+              )}
+              {retainerSummary.fixedTopicFees > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryTopic}>Fixed Fees</Text>
+                  <Text style={styles.summaryAmount}>
+                    {formatCurrency(retainerSummary.fixedTopicFees)}
+                  </Text>
+                </View>
+              )}
+              {retainerSummary.fixedLineItemFees > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryTopic}>Additional Charges</Text>
+                  <Text style={styles.summaryAmount}>
+                    {formatCurrency(retainerSummary.fixedLineItemFees)}
+                  </Text>
+                </View>
+              )}
+              {hasOverallDiscount && (
+                <>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryTopic}>Subtotal</Text>
+                    <Text style={styles.summaryAmount}>
+                      {formatCurrency(retainerSummary.subtotal)}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryTopic}>
+                      Overall Discount ({data.discountType === "PERCENTAGE"
+                        ? `${data.discountValue}%`
+                        : formatCurrency(data.discountValue!)})
+                    </Text>
+                    <Text style={styles.summaryAmount}>
+                      -{formatCurrency(retainerSummary.subtotal - retainerSummary.grandTotal)}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {data.topics.map((topic) => (
+                <View key={topic.id} style={styles.summaryRow}>
+                  <Text style={styles.summaryTopic}>{topic.topicName}</Text>
+                  <Text style={styles.summaryAmount}>
+                    {formatCurrency(calculateTopicTotal(topic))}
+                  </Text>
+                </View>
+              ))}
+              {hasOverallDiscount && (
+                <>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryTopic}>Subtotal</Text>
+                    <Text style={styles.summaryAmount}>
+                      {formatCurrency(subtotal)}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryTopic}>
+                      Overall Discount ({data.discountType === "PERCENTAGE"
+                        ? `${data.discountValue}%`
+                        : formatCurrency(data.discountValue!)})
+                    </Text>
+                    <Text style={styles.summaryAmount}>
+                      -{formatCurrency(subtotal - grandTotal)}
+                    </Text>
+                  </View>
+                </>
+              )}
             </>
           )}
           <View style={styles.totalRow}>
@@ -590,12 +784,15 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
                     Total Time:
                   </Text>
                   <Text style={styles.topicFooterValue}>
-                    {isCapped
+                    {!isRetainer && isCapped
                       ? `${formatHours(topic.capHours!)} (capped from ${formatHours(totalHours)})`
                       : formatHours(totalHours)}
                   </Text>
                 </View>
-                {topic.pricingMode === "HOURLY" ? (
+                {isRetainer ? (
+                  /* Retainer mode: no per-topic monetary amounts */
+                  null
+                ) : topic.pricingMode === "HOURLY" ? (
                   <>
                     <View style={styles.topicFooterRow}>
                       <Text style={styles.topicFooterLabel}>

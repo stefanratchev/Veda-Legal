@@ -14,7 +14,7 @@ import {
   serializeDecimal,
   errorResponse,
 } from "@/lib/api-utils";
-import { calculateGrandTotal } from "@/lib/billing-pdf";
+import { calculateGrandTotal, calculateRetainerGrandTotal } from "@/lib/billing-pdf";
 import { BILLING_START_DATE } from "@/lib/billing-config";
 
 // GET /api/billing - List all service descriptions
@@ -34,6 +34,9 @@ export async function GET(request: NextRequest) {
         status: true,
         discountType: true,
         discountValue: true,
+        retainerFee: true,
+        retainerHours: true,
+        retainerOverageRate: true,
         updatedAt: true,
       },
       with: {
@@ -76,11 +79,16 @@ export async function GET(request: NextRequest) {
           waiveMode: (li.waiveMode as "EXCLUDED" | "ZERO" | null) || null,
         })),
       }));
-      const totalAmount = Math.round(calculateGrandTotal(
-        topics,
-        (sd.discountType as "PERCENTAGE" | "AMOUNT" | null) || null,
-        serializeDecimal(sd.discountValue),
-      ) * 100) / 100;
+      const sdRetainerFee = serializeDecimal(sd.retainerFee ?? null);
+      const sdRetainerHours = serializeDecimal(sd.retainerHours ?? null);
+      const sdRetainerOverageRate = serializeDecimal(sd.retainerOverageRate ?? null);
+      const discountType = (sd.discountType as "PERCENTAGE" | "AMOUNT" | null) || null;
+      const discountValue = serializeDecimal(sd.discountValue);
+      const isRetainer = sdRetainerFee != null && sdRetainerHours != null;
+
+      const totalAmount = isRetainer
+        ? Math.round(calculateRetainerGrandTotal(topics, sdRetainerFee, sdRetainerHours, sdRetainerOverageRate || 0, discountType, discountValue) * 100) / 100
+        : Math.round(calculateGrandTotal(topics, discountType, discountValue) * 100) / 100;
 
       return {
         id: sd.id,
@@ -140,7 +148,7 @@ export async function POST(request: NextRequest) {
     // Get client with hourly rate
     const client = await db.query.clients.findFirst({
       where: eq(clients.id, clientId),
-      columns: { id: true, hourlyRate: true },
+      columns: { id: true, hourlyRate: true, retainerFee: true, retainerHours: true },
     });
 
     if (!client) {
@@ -216,6 +224,14 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
     const serviceDescriptionId = createId();
 
+    const retainerValues = client.retainerFee != null && client.retainerHours != null
+      ? {
+          retainerFee: client.retainerFee,
+          retainerHours: client.retainerHours,
+          retainerOverageRate: client.hourlyRate,
+        }
+      : {};
+
     await db.insert(serviceDescriptions).values({
       id: serviceDescriptionId,
       clientId,
@@ -223,6 +239,7 @@ export async function POST(request: NextRequest) {
       periodEnd: endDateStr,
       status: "DRAFT",
       updatedAt: now,
+      ...retainerValues,
     });
 
     // Create topics and line items

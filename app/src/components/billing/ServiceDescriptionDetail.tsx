@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { ServiceDescription, ServiceDescriptionTopic, PricingMode, WriteOffAction } from "@/types";
-import { calculateTopicTotal, calculateGrandTotal, formatCurrency } from "@/lib/billing-pdf";
+import { calculateTopicTotal, calculateGrandTotal, calculateRetainerSummary, formatCurrency } from "@/lib/billing-pdf";
 import { TopicSection } from "./TopicSection";
 import { AddTopicModal } from "./AddTopicModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -291,6 +291,9 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     }
   }, [activeDragType, handleTopicReorder, handleLineItemDragEnd]);
 
+  // Retainer mode detection
+  const isRetainer = data.retainerFee != null && data.retainerHours != null;
+
   // Calculate totals
   const topicTotals = useMemo(() => {
     return data.topics.map((topic) => ({
@@ -304,9 +307,19 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     return topicTotals.reduce((sum, t) => sum + t.total, 0);
   }, [topicTotals]);
 
+  // Retainer summary (only computed when in retainer mode)
+  const retainerSummary = useMemo(() => {
+    if (!isRetainer) return null;
+    return calculateRetainerSummary(
+      data.topics, data.retainerFee!, data.retainerHours!,
+      data.retainerOverageRate || 0, data.discountType, data.discountValue,
+    );
+  }, [data.topics, data.discountType, data.discountValue, isRetainer, data.retainerFee, data.retainerHours, data.retainerOverageRate]);
+
   const grandTotal = useMemo(() => {
+    if (retainerSummary) return retainerSummary.grandTotal;
     return calculateGrandTotal(data.topics, data.discountType, data.discountValue);
-  }, [data.topics, data.discountType, data.discountValue]);
+  }, [retainerSummary, data.topics, data.discountType, data.discountValue]);
 
   const [isUpdatingDiscount, setIsUpdatingDiscount] = useState(false);
   const [localOverallDiscount, setLocalOverallDiscount] = useState<string>(data.discountValue != null ? String(data.discountValue) : "");
@@ -771,28 +784,77 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
       <div className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border-subtle)] p-5">
         <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Summary</h2>
         <div className="space-y-2.5">
-          {/* Topic rows with dotted leaders */}
-          {topicTotals.map((topic) => (
-            <div key={topic.id} className="flex items-baseline gap-2 text-sm">
-              <span className="text-[var(--text-primary)] shrink-0">{topic.name}</span>
-              <span className="flex-1 border-b border-dotted border-[var(--border-subtle)]" />
-              <span className="text-[var(--text-secondary)] shrink-0 [font-variant-numeric:tabular-nums]">
-                {formatCurrency(topic.total)}
-              </span>
-            </div>
-          ))}
-          {topicTotals.length === 0 && (
-            <p className="text-sm text-[var(--text-muted)] italic">No topics yet</p>
-          )}
-
-          {/* Subtotal + Discount + Grand Total */}
-          {topicTotals.length > 0 && (
+          {isRetainer && retainerSummary ? (
+            /* ---- Retainer Summary ---- */
             <>
-              {/* Subtotal - always shown */}
+              {/* Retainer package */}
+              <div className="flex items-baseline gap-2 text-sm">
+                <span className="text-[var(--text-primary)] shrink-0">
+                  Monthly Retainer ({retainerSummary.retainerHours}h included)
+                </span>
+                <span className="flex-1 border-b border-dotted border-[var(--border-subtle)]" />
+                <span className="text-[var(--text-secondary)] shrink-0 [font-variant-numeric:tabular-nums]">
+                  {formatCurrency(retainerSummary.retainerFee)}
+                </span>
+              </div>
+
+              {/* Hours used */}
+              <div className="flex items-baseline gap-2 text-sm">
+                <span className="text-[var(--text-muted)] shrink-0">
+                  Hours Used: {retainerSummary.totalHourlyHours.toFixed(2)} of {retainerSummary.retainerHours}
+                </span>
+                <span className="flex-1" />
+                <span className={`text-xs shrink-0 ${
+                  retainerSummary.overageHours > 0
+                    ? "text-[var(--warning)]"
+                    : "text-[var(--success)]"
+                }`}>
+                  {retainerSummary.overageHours > 0
+                    ? `${retainerSummary.overageHours.toFixed(2)}h over`
+                    : `${(retainerSummary.retainerHours - retainerSummary.totalHourlyHours).toFixed(2)}h remaining`}
+                </span>
+              </div>
+
+              {/* Overage line (only if over) */}
+              {retainerSummary.overageHours > 0 && (
+                <div className="flex items-baseline gap-2 text-sm">
+                  <span className="text-[var(--text-primary)] shrink-0">
+                    Overage ({retainerSummary.overageHours.toFixed(2)}h @ {formatCurrency(retainerSummary.overageRate)}/h)
+                  </span>
+                  <span className="flex-1 border-b border-dotted border-[var(--border-subtle)]" />
+                  <span className="text-[var(--text-secondary)] shrink-0 [font-variant-numeric:tabular-nums]">
+                    {formatCurrency(retainerSummary.overageAmount)}
+                  </span>
+                </div>
+              )}
+
+              {/* Fixed topic fees (if any) */}
+              {retainerSummary.fixedTopicFees > 0 && (
+                <div className="flex items-baseline gap-2 text-sm">
+                  <span className="text-[var(--text-primary)] shrink-0">Fixed Fee Topics</span>
+                  <span className="flex-1 border-b border-dotted border-[var(--border-subtle)]" />
+                  <span className="text-[var(--text-secondary)] shrink-0 [font-variant-numeric:tabular-nums]">
+                    {formatCurrency(retainerSummary.fixedTopicFees)}
+                  </span>
+                </div>
+              )}
+
+              {/* Fixed line item fees (if any) */}
+              {retainerSummary.fixedLineItemFees > 0 && (
+                <div className="flex items-baseline gap-2 text-sm">
+                  <span className="text-[var(--text-primary)] shrink-0">Fixed Fee Items</span>
+                  <span className="flex-1 border-b border-dotted border-[var(--border-subtle)]" />
+                  <span className="text-[var(--text-secondary)] shrink-0 [font-variant-numeric:tabular-nums]">
+                    {formatCurrency(retainerSummary.fixedLineItemFees)}
+                  </span>
+                </div>
+              )}
+
+              {/* Subtotal */}
               <div className="flex items-center justify-between text-sm pt-3 border-t border-[var(--border-subtle)]">
                 <span className="text-[var(--text-secondary)]">Subtotal</span>
                 <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
-                  {formatCurrency(subtotal)}
+                  {formatCurrency(retainerSummary.subtotal)}
                 </span>
               </div>
 
@@ -840,7 +902,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
                   </div>
                   {data.discountType && data.discountValue ? (
                     <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
-                      -{formatCurrency(subtotal - grandTotal)}
+                      -{formatCurrency(retainerSummary.subtotal - retainerSummary.grandTotal)}
                     </span>
                   ) : null}
                 </div>
@@ -853,7 +915,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
                     Overall Discount ({data.discountType === "PERCENTAGE" ? `${data.discountValue}%` : formatCurrency(data.discountValue)})
                   </span>
                   <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
-                    -{formatCurrency(subtotal - grandTotal)}
+                    -{formatCurrency(retainerSummary.subtotal - retainerSummary.grandTotal)}
                   </span>
                 </div>
               )}
@@ -862,9 +924,109 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
               <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
                 <span className="text-lg font-semibold text-[var(--text-primary)]">Total</span>
                 <span className="text-lg font-semibold text-[var(--text-primary)] [font-variant-numeric:tabular-nums]">
-                  {formatCurrency(grandTotal)}
+                  {formatCurrency(retainerSummary.grandTotal)}
                 </span>
               </div>
+            </>
+          ) : (
+            /* ---- Standard (Non-Retainer) Summary ---- */
+            <>
+              {/* Topic rows with dotted leaders */}
+              {topicTotals.map((topic) => (
+                <div key={topic.id} className="flex items-baseline gap-2 text-sm">
+                  <span className="text-[var(--text-primary)] shrink-0">{topic.name}</span>
+                  <span className="flex-1 border-b border-dotted border-[var(--border-subtle)]" />
+                  <span className="text-[var(--text-secondary)] shrink-0 [font-variant-numeric:tabular-nums]">
+                    {formatCurrency(topic.total)}
+                  </span>
+                </div>
+              ))}
+              {topicTotals.length === 0 && (
+                <p className="text-sm text-[var(--text-muted)] italic">No topics yet</p>
+              )}
+
+              {/* Subtotal + Discount + Grand Total */}
+              {topicTotals.length > 0 && (
+                <>
+                  {/* Subtotal - always shown */}
+                  <div className="flex items-center justify-between text-sm pt-3 border-t border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-secondary)]">Subtotal</span>
+                    <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
+                      {formatCurrency(subtotal)}
+                    </span>
+                  </div>
+
+                  {/* Discount controls (DRAFT only) */}
+                  {isEditable && (
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[var(--text-muted)]">Overall Discount</span>
+                        <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
+                          <button
+                            onClick={() => handleOverallDiscountTypeChange(data.discountType === "PERCENTAGE" ? null : "PERCENTAGE")}
+                            disabled={isUpdatingDiscount}
+                            className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                              data.discountType === "PERCENTAGE"
+                                ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                                : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+                            }`}
+                          >
+                            %
+                          </button>
+                          <button
+                            onClick={() => handleOverallDiscountTypeChange(data.discountType === "AMOUNT" ? null : "AMOUNT")}
+                            disabled={isUpdatingDiscount}
+                            className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                              data.discountType === "AMOUNT"
+                                ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
+                                : "bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+                            }`}
+                          >
+                            EUR
+                          </button>
+                        </div>
+                        {data.discountType && (
+                          <input
+                            type="number"
+                            value={localOverallDiscount}
+                            onChange={(e) => setLocalOverallDiscount(e.target.value)}
+                            onBlur={(e) => handleOverallDiscountValueChange(e.target.value)}
+                            placeholder="0"
+                            className="w-20 px-2 py-1 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
+                            step="0.01"
+                            min="0"
+                          />
+                        )}
+                      </div>
+                      {data.discountType && data.discountValue ? (
+                        <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
+                          -{formatCurrency(subtotal - grandTotal)}
+                        </span>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {/* Discount display when finalized */}
+                  {!isEditable && data.discountType && data.discountValue && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-[var(--text-muted)]">
+                        Overall Discount ({data.discountType === "PERCENTAGE" ? `${data.discountValue}%` : formatCurrency(data.discountValue)})
+                      </span>
+                      <span className="text-[var(--text-secondary)] [font-variant-numeric:tabular-nums]">
+                        -{formatCurrency(subtotal - grandTotal)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Grand Total */}
+                  <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
+                    <span className="text-lg font-semibold text-[var(--text-primary)]">Total</span>
+                    <span className="text-lg font-semibold text-[var(--text-primary)] [font-variant-numeric:tabular-nums]">
+                      {formatCurrency(grandTotal)}
+                    </span>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

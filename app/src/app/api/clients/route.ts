@@ -21,10 +21,12 @@ const VALID_STATUS = ["ACTIVE", "INACTIVE"] as const;
 // Valid client types
 const VALID_CLIENT_TYPES = ["REGULAR", "INTERNAL", "MANAGEMENT"] as const;
 
-function serializeClient<T extends { hourlyRate: string | null }>(client: T) {
+function serializeClient<T extends { hourlyRate: string | null; retainerFee?: string | null; retainerHours?: string | null }>(client: T) {
   return {
     ...client,
     hourlyRate: serializeDecimal(client.hourlyRate),
+    retainerFee: serializeDecimal(client.retainerFee ?? null),
+    retainerHours: serializeDecimal(client.retainerHours ?? null),
   };
 }
 
@@ -69,6 +71,8 @@ export async function GET(request: NextRequest) {
         status: true,
         clientType: true,
         notes: true,
+        retainerFee: true,
+        retainerHours: true,
         createdAt: true,
       },
       where: conditions.length > 0 ? and(...conditions) : undefined,
@@ -99,7 +103,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { name, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes, clientType } = body;
+  const { name, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes, clientType, retainerFee, retainerHours } = body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return errorResponse("Name is required", 400);
@@ -121,6 +125,25 @@ export async function POST(request: NextRequest) {
     const rate = Number(hourlyRate);
     if (isNaN(rate) || rate < 0) {
       return errorResponse("Hourly rate must be a positive number", 400);
+    }
+  }
+
+  // Validate retainer fields — if one is set, both must be set
+  const hasRetainerFee = retainerFee !== undefined && retainerFee !== null && retainerFee !== "";
+  const hasRetainerHours = retainerHours !== undefined && retainerHours !== null && retainerHours !== "";
+  if (hasRetainerFee !== hasRetainerHours) {
+    return errorResponse("Both retainer fee and retainer hours must be set together", 400);
+  }
+  if (hasRetainerFee) {
+    const fee = Number(retainerFee);
+    if (isNaN(fee) || fee <= 0) {
+      return errorResponse("Retainer fee must be a positive number", 400);
+    }
+  }
+  if (hasRetainerHours) {
+    const hours = Number(retainerHours);
+    if (isNaN(hours) || hours <= 0) {
+      return errorResponse("Retainer hours must be a positive number", 400);
     }
   }
 
@@ -146,6 +169,8 @@ export async function POST(request: NextRequest) {
       email: email?.trim() || null,
       secondaryEmails: secondaryEmails?.trim() || null,
       hourlyRate: hourlyRate ? String(hourlyRate) : null,
+      retainerFee: hasRetainerFee ? String(retainerFee) : null,
+      retainerHours: hasRetainerHours ? String(retainerHours) : null,
       status: clientStatus,
       clientType: validatedClientType,
       notes: notes?.trim() || null,
@@ -158,6 +183,8 @@ export async function POST(request: NextRequest) {
       email: clients.email,
       secondaryEmails: clients.secondaryEmails,
       hourlyRate: clients.hourlyRate,
+      retainerFee: clients.retainerFee,
+      retainerHours: clients.retainerHours,
       status: clients.status,
       clientType: clients.clientType,
       notes: clients.notes,
@@ -188,7 +215,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, name, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes, clientType } = body;
+  const { id, name, invoicedName, invoiceAttn, email, secondaryEmails, hourlyRate, status, notes, clientType, retainerFee, retainerHours } = body;
 
   if (!id) {
     return NextResponse.json(
@@ -222,6 +249,30 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  // Validate retainer fields for PATCH — both must be sent together
+  if (retainerFee !== undefined || retainerHours !== undefined) {
+    if (retainerFee === undefined || retainerHours === undefined) {
+      return errorResponse("Both retainer fee and retainer hours must be provided together", 400);
+    }
+    const hasFee = retainerFee !== null && retainerFee !== "";
+    const hasHours = retainerHours !== null && retainerHours !== "";
+    if (hasFee !== hasHours) {
+      return errorResponse("Both retainer fee and retainer hours must be set together", 400);
+    }
+    if (hasFee) {
+      const fee = Number(retainerFee);
+      if (isNaN(fee) || fee <= 0) {
+        return errorResponse("Retainer fee must be a positive number", 400);
+      }
+    }
+    if (hasHours) {
+      const hours = Number(retainerHours);
+      if (isNaN(hours) || hours <= 0) {
+        return errorResponse("Retainer hours must be a positive number", 400);
+      }
+    }
+  }
+
   // Validate status if provided
   if (status !== undefined && !VALID_STATUS.includes(status)) {
     return errorResponse("Invalid status value", 400);
@@ -244,6 +295,12 @@ export async function PATCH(request: NextRequest) {
   if (hourlyRate !== undefined) {
     updateData.hourlyRate = hourlyRate ? String(hourlyRate) : null;
   }
+  if (retainerFee !== undefined) {
+    updateData.retainerFee = retainerFee ? String(retainerFee) : null;
+  }
+  if (retainerHours !== undefined) {
+    updateData.retainerHours = retainerHours ? String(retainerHours) : null;
+  }
   if (status !== undefined) updateData.status = status;
   if (clientType !== undefined) updateData.clientType = clientType;
   if (notes !== undefined) updateData.notes = notes?.trim() || null;
@@ -260,6 +317,8 @@ export async function PATCH(request: NextRequest) {
         email: clients.email,
         secondaryEmails: clients.secondaryEmails,
         hourlyRate: clients.hourlyRate,
+        retainerFee: clients.retainerFee,
+        retainerHours: clients.retainerHours,
         status: clients.status,
         clientType: clients.clientType,
         notes: clients.notes,

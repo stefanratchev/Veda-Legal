@@ -17,6 +17,8 @@ interface Client {
   email: string | null;
   secondaryEmails: string | null;
   hourlyRate: number | null;
+  retainerFee: number | null;
+  retainerHours: number | null;
   phone: string | null;
   address: string | null;
   practiceArea: string | null;
@@ -39,6 +41,8 @@ interface FormData {
   email: string;
   secondaryEmails: string;
   hourlyRate: string;
+  retainerFee: string;
+  retainerHours: string;
   status: ClientStatus;
   clientType: ClientType;
   notes: string;
@@ -51,6 +55,8 @@ const initialFormData: FormData = {
   email: "",
   secondaryEmails: "",
   hourlyRate: "",
+  retainerFee: "",
+  retainerHours: "",
   status: "ACTIVE",
   clientType: "REGULAR",
   notes: "",
@@ -105,6 +111,8 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
       email: client.email || "",
       secondaryEmails: client.secondaryEmails || "",
       hourlyRate: client.hourlyRate?.toString() || "",
+      retainerFee: client.retainerFee?.toString() || "",
+      retainerHours: client.retainerHours?.toString() || "",
       status: client.status,
       clientType: client.clientType || "REGULAR",
       notes: client.notes || "",

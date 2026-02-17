@@ -179,6 +179,8 @@ export interface ServiceDescription {
     invoiceAttn: string | null;
     hourlyRate: number | null;
     notes: string | null;
+    retainerFee: number | null;
+    retainerHours: number | null;
   };
   periodStart: string;
   periodEnd: string;
@@ -186,6 +188,9 @@ export interface ServiceDescription {
   finalizedAt: string | null;
   discountType: DiscountType | null;
   discountValue: number | null;
+  retainerFee: number | null;
+  retainerHours: number | null;
+  retainerOverageRate: number | null;
   topics: ServiceDescriptionTopic[];
   createdAt: string;
   updatedAt: string;

@@ -12,6 +12,8 @@ interface FormData {
   email: string;
   secondaryEmails: string;
   hourlyRate: string;
+  retainerFee: string;
+  retainerHours: string;
   status: ClientStatus;
   clientType: ClientType;
   notes: string;
@@ -208,6 +210,59 @@ export function ClientModal({
                   />
                 </div>
               </div>
+
+              {/* Retainer Agreement */}
+              {formData.clientType === "REGULAR" && (
+                <div>
+                  <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1">
+                    Retainer Agreement
+                  </label>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-[13px]">
+                          €
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.retainerFee}
+                          onChange={(e) => onFormChange({ retainerFee: e.target.value })}
+                          className="
+                            w-full pl-7 pr-3 py-2 rounded text-[13px]
+                            bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                            text-[var(--text-primary)] placeholder-[var(--text-muted)]
+                            focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+                            focus:outline-none transition-all duration-200
+                          "
+                          placeholder="Monthly fee"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={formData.retainerHours}
+                        onChange={(e) => onFormChange({ retainerHours: e.target.value })}
+                        className="
+                          w-full px-3 py-2 rounded text-[13px]
+                          bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                          text-[var(--text-primary)] placeholder-[var(--text-muted)]
+                          focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+                          focus:outline-none transition-all duration-200
+                        "
+                        placeholder="Included hours"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                    Leave empty for standard hourly billing
+                  </p>
+                </div>
+              )}
 
               {/* Status */}
               <div>

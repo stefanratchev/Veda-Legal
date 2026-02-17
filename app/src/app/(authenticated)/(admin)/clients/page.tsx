@@ -12,6 +12,8 @@ export default async function ClientsPage() {
       email: true,
       secondaryEmails: true,
       hourlyRate: true,
+      retainerFee: true,
+      retainerHours: true,
       phone: true,
       address: true,
       practiceArea: true,
@@ -27,6 +29,8 @@ export default async function ClientsPage() {
   const serializedClients = clientsList.map((client) => ({
     ...client,
     hourlyRate: client.hourlyRate ? Number(client.hourlyRate) : null,
+    retainerFee: client.retainerFee ? Number(client.retainerFee) : null,
+    retainerHours: client.retainerHours ? Number(client.retainerHours) : null,
     createdAt: client.createdAt,
   }));
 

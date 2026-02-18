@@ -683,7 +683,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
           const isCapped = topic.pricingMode === "HOURLY" && topic.capHours && totalHours > topic.capHours;
 
           return (
-            <View key={topic.id} style={[styles.topicContainer, topicIndex === 0 && { marginTop: 0 }]}>
+            <View key={topic.id} style={topicIndex === 0 ? { ...styles.topicContainer, marginTop: 0 } : styles.topicContainer}>
               {/* Keep topic header + table header together to prevent orphaned headers */}
               <View wrap={false}>
                 <View style={styles.topicHeader}>

@@ -1,6 +1,5 @@
 /**
  * Veda Legal firm details for use in service descriptions and other documents.
- * Update these values with actual company information.
  */
 export const firmDetails = {
   name: "VEDA LEGAL",

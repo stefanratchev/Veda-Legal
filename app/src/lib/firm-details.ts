@@ -4,12 +4,8 @@
  */
 export const firmDetails = {
   name: "VEDA LEGAL",
-  fullName: "Veda Legal Ltd.",
-  address: "[Company Address]",
-  city: "[City, Country]",
-  phone: "[Phone Number]",
-  email: "[Email Address]",
-  website: "veda.uk",
-  vatNumber: "[VAT Number]",
-  registrationNumber: "[Registration Number]",
+  fullName: "VEDA Legal Attorney Partnership",
+  address: "47 Cherni Vrah Blvd.",
+  city: "Sofia, Bulgaria",
+  email: "hello@veda.legal",
 } as const;

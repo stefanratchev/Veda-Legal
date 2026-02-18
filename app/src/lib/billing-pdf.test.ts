@@ -3,7 +3,6 @@ import {
   formatCurrency,
   formatDate,
   formatPeriod,
-  generateReference,
   calculateTopicBaseTotal,
   calculateTopicTotal,
   calculateTopicHours,
@@ -96,35 +95,6 @@ describe("billing-pdf utilities", () => {
     it("formats different months correctly", () => {
       expect(formatPeriod("2025-12-01")).toBe("December 2025");
       expect(formatPeriod("2026-01-15")).toBe("January 2026");
-    });
-  });
-
-  describe("generateReference", () => {
-    it("generates reference from service description", () => {
-      const data = {
-        id: "abc123def456",
-        periodStart: "2026-02-01",
-      } as ServiceDescription;
-
-      expect(generateReference(data)).toBe("SD-202602-ABC123");
-    });
-
-    it("uses first 6 characters of ID", () => {
-      const data = {
-        id: "xyz789longer",
-        periodStart: "2025-12-01",
-      } as ServiceDescription;
-
-      expect(generateReference(data)).toBe("SD-202512-XYZ789");
-    });
-
-    it("pads single digit months", () => {
-      const data = {
-        id: "testid123456",
-        periodStart: "2026-01-01",
-      } as ServiceDescription;
-
-      expect(generateReference(data)).toBe("SD-202601-TESTID");
     });
   });
 

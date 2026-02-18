@@ -40,7 +40,7 @@ export const TopicSection = memo(function TopicSection({
   onDeleteLineItem,
   onWriteOff,
 }: TopicSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [addItemError, setAddItemError] = useState<string | null>(null);

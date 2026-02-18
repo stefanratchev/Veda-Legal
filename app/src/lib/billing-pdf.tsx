@@ -344,11 +344,7 @@ export function calculateTopicBaseTotal(topic: ServiceDescription["topics"][0]):
   );
   const billedHours = topic.capHours ? Math.min(rawHours, topic.capHours) : rawHours;
   const hourlyTotal = billedHours * (topic.hourlyRate || 0);
-  const fixedTotal = billableItems.reduce(
-    (sum, item) => sum + (item.waiveMode === "ZERO" ? 0 : (item.fixedAmount || 0)),
-    0
-  );
-  return Math.round((hourlyTotal + fixedTotal) * 100) / 100;
+  return Math.round(hourlyTotal * 100) / 100;
 }
 
 export function calculateTopicTotal(topic: ServiceDescription["topics"][0]): number {
@@ -409,9 +405,7 @@ export interface RetainerSummary {
   overageAmount: number;
   /** Sum of FIXED topic fees (billed separately from retainer) */
   fixedTopicFees: number;
-  /** Sum of fixedAmount line items in HOURLY topics (billed separately) */
-  fixedLineItemFees: number;
-  /** retainerCharge + fixedTopicFees + fixedLineItemFees (before SD discount) */
+  /** retainerCharge + fixedTopicFees (before SD discount) */
   subtotal: number;
   /** Final total after SD-level discount */
   grandTotal: number;
@@ -423,7 +417,6 @@ export interface RetainerSummary {
  * Rules:
  * - HOURLY topic hours count against retainer included hours
  * - FIXED topic fees are billed separately on top of retainer
- * - fixedAmount line items (manual items in HOURLY topics) are billed separately
  * - Waived items (EXCLUDED/ZERO) do NOT count toward retainer hours
  * - Topic-level caps and discounts are ignored in retainer mode
  * - SD-level discount applies to the final total
@@ -438,7 +431,6 @@ export function calculateRetainerSummary(
 ): RetainerSummary {
   let totalHourlyHours = 0;
   let fixedTopicFees = 0;
-  let fixedLineItemFees = 0;
 
   for (const topic of topics) {
     if (topic.pricingMode === "FIXED") {
@@ -446,12 +438,11 @@ export function calculateRetainerSummary(
       continue;
     }
 
-    // HOURLY topic — count hours toward retainer, collect fixedAmount items
+    // HOURLY topic — count hours toward retainer
     for (const item of topic.lineItems) {
       if (item.waiveMode === "EXCLUDED") continue;
       if (item.waiveMode === "ZERO") continue;
       totalHourlyHours += item.hours || 0;
-      fixedLineItemFees += item.fixedAmount || 0;
     }
   }
 
@@ -460,9 +451,8 @@ export function calculateRetainerSummary(
   const retainerCharge = retainerFee + overageAmount;
 
   fixedTopicFees = Math.round(fixedTopicFees * 100) / 100;
-  fixedLineItemFees = Math.round(fixedLineItemFees * 100) / 100;
 
-  let subtotal = retainerCharge + fixedTopicFees + fixedLineItemFees;
+  let subtotal = retainerCharge + fixedTopicFees;
   subtotal = Math.round(subtotal * 100) / 100;
 
   let grandTotal = subtotal;
@@ -481,7 +471,6 @@ export function calculateRetainerSummary(
     overageRate,
     overageAmount,
     fixedTopicFees,
-    fixedLineItemFees,
     subtotal,
     grandTotal,
   };
@@ -600,14 +589,6 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
                   <Text style={styles.summaryTopic}>Fixed Fees</Text>
                   <Text style={styles.summaryAmount}>
                     {formatCurrency(retainerSummary.fixedTopicFees)}
-                  </Text>
-                </View>
-              )}
-              {retainerSummary.fixedLineItemFees > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryTopic}>Additional Charges</Text>
-                  <Text style={styles.summaryAmount}>
-                    {formatCurrency(retainerSummary.fixedLineItemFees)}
                   </Text>
                 </View>
               )}

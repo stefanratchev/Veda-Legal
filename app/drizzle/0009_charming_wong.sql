@@ -1,0 +1,1 @@
+ALTER TABLE "service_description_line_items" DROP COLUMN "fixedAmount";

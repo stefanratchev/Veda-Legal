@@ -205,17 +205,12 @@ export const LineItemRow = memo(function LineItemRow({ item, sortableId, isEdita
               {isZero && (
                 <span className="ml-2 text-xs bg-[var(--warning-bg)] text-[var(--warning)] px-1.5 py-0.5 rounded">Waived</span>
               )}
-              {item.fixedAmount !== null && item.fixedAmount > 0 && (
-                <span className="ml-2 text-xs text-[var(--text-muted)]">
-                  (+€{item.fixedAmount.toLocaleString("en-GB", { minimumFractionDigits: 2 })})
-                </span>
-              )}
             </div>
           )}
         </td>
 
         {/* Hours */}
-        <td className="px-4 py-3 text-right">
+        <td className="px-4 py-3 text-right whitespace-nowrap">
           {isExcluded ? (
             <span className="text-sm text-[var(--text-muted)]">
               {formatHoursDisplay(item.hours)}

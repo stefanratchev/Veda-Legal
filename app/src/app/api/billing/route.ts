@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
           },
           with: {
             lineItems: {
-              columns: { hours: true, fixedAmount: true, waiveMode: true },
+              columns: { hours: true, waiveMode: true },
             },
           },
         },
@@ -75,7 +75,6 @@ export async function GET(request: NextRequest) {
         lineItems: t.lineItems.map((li) => ({
           id: "", timeEntryId: null, date: null, description: "", displayOrder: 0,
           hours: serializeDecimal(li.hours),
-          fixedAmount: serializeDecimal(li.fixedAmount),
           waiveMode: (li.waiveMode as "EXCLUDED" | "ZERO" | null) || null,
         })),
       }));

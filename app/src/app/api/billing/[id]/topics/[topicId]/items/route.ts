@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return errorResponse("Invalid JSON", 400);
   }
 
-  const { date, description, hours, fixedAmount } = body;
+  const { date, description, hours } = body;
 
   if (!description || typeof description !== "string" || description.trim().length === 0) {
     return errorResponse("Description is required", 400);
@@ -61,7 +61,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       date: date ? date : null,
       description: description.trim(),
       hours: hours ? String(hours) : null,
-      fixedAmount: fixedAmount ? String(fixedAmount) : null,
       displayOrder: maxOrder + 1,
       updatedAt: now,
     }).returning({
@@ -70,7 +69,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       date: serviceDescriptionLineItems.date,
       description: serviceDescriptionLineItems.description,
       hours: serviceDescriptionLineItems.hours,
-      fixedAmount: serviceDescriptionLineItems.fixedAmount,
       displayOrder: serviceDescriptionLineItems.displayOrder,
     });
 
@@ -80,7 +78,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       date: item.date || null,
       description: item.description,
       hours: serializeDecimal(item.hours),
-      fixedAmount: serializeDecimal(item.fixedAmount),
       displayOrder: item.displayOrder,
       waiveMode: null,
     });

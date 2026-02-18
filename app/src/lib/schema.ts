@@ -74,7 +74,6 @@ export const serviceDescriptionLineItems = pgTable("service_description_line_ite
 	date: date(),
 	description: text().notNull(),
 	hours: numeric({ precision: 4, scale:  2 }),
-	fixedAmount: numeric({ precision: 10, scale:  2 }),
 	displayOrder: integer().default(0).notNull(),
 	waiveMode: waiveModeEnum(),
 	createdAt: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),

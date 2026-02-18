@@ -68,7 +68,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                 date: true,
                 description: true,
                 hours: true,
-                fixedAmount: true,
                 displayOrder: true,
                 waiveMode: true,
               },

@@ -5,18 +5,14 @@ import { useState, useEffect } from "react";
 interface AddLineItemModalProps {
   isLoading: boolean;
   error: string | null;
-  onSubmit: (data: { date?: string; description: string; hours?: number; fixedAmount?: number }) => void;
+  onSubmit: (data: { date?: string; description: string; hours?: number }) => void;
   onClose: () => void;
 }
-
-type ItemType = "hours" | "fixed";
 
 export function AddLineItemModal({ isLoading, error, onSubmit, onClose }: AddLineItemModalProps) {
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
-  const [itemType, setItemType] = useState<ItemType>("hours");
   const [hours, setHours] = useState("");
-  const [fixedAmount, setFixedAmount] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,7 +33,7 @@ export function AddLineItemModal({ isLoading, error, onSubmit, onClose }: AddLin
       return;
     }
 
-    const data: { date?: string; description: string; hours?: number; fixedAmount?: number } = {
+    const data: { date?: string; description: string; hours?: number } = {
       description: trimmedDescription,
     };
 
@@ -45,16 +41,9 @@ export function AddLineItemModal({ isLoading, error, onSubmit, onClose }: AddLin
       data.date = date;
     }
 
-    if (itemType === "hours") {
-      const hoursValue = parseFloat(hours);
-      if (hours && !isNaN(hoursValue) && hoursValue > 0) {
-        data.hours = hoursValue;
-      }
-    } else {
-      const fixedValue = parseFloat(fixedAmount);
-      if (fixedAmount && !isNaN(fixedValue) && fixedValue > 0) {
-        data.fixedAmount = fixedValue;
-      }
+    const hoursValue = parseFloat(hours);
+    if (hours && !isNaN(hoursValue) && hoursValue > 0) {
+      data.hours = hoursValue;
     }
 
     onSubmit(data);
@@ -114,75 +103,24 @@ export function AddLineItemModal({ isLoading, error, onSubmit, onClose }: AddLin
             />
           </div>
 
-          {/* Type toggle */}
+          {/* Hours */}
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-              Type
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              Hours
             </label>
-            <div className="flex rounded overflow-hidden border border-[var(--border-subtle)]">
-              <button
-                type="button"
-                onClick={() => setItemType("hours")}
-                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                  itemType === "hours"
-                    ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
-                    : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }`}
-              >
-                Hours
-              </button>
-              <button
-                type="button"
-                onClick={() => setItemType("fixed")}
-                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                  itemType === "fixed"
-                    ? "bg-[var(--accent-pink)] text-[var(--bg-deep)]"
-                    : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }`}
-              >
-                Fixed Amount
-              </button>
+            <div className="relative">
+              <input
+                type="number"
+                value={hours}
+                onChange={(e) => setHours(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2 pr-8 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
+                step="0.25"
+                min="0"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">h</span>
             </div>
           </div>
-
-          {/* Hours or Fixed Amount input */}
-          {itemType === "hours" ? (
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                Hours
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={hours}
-                  onChange={(e) => setHours(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-3 py-2 pr-8 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
-                  step="0.25"
-                  min="0"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">h</span>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                Fixed Amount
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={fixedAmount}
-                  onChange={(e) => setFixedAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 pr-12 text-sm bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-pink)]"
-                  step="0.01"
-                  min="0"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">EUR</span>
-              </div>
-            </div>
-          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <button

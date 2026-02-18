@@ -150,7 +150,7 @@ Service descriptions are invoice-like documents managed in `components/billing/`
 
 **Billing calculations** are centralized in `lib/billing-pdf.tsx` — use the canonical functions there rather than computing inline. Key functions: `calculateTopicTotal()`, `calculateGrandTotal()`, `calculateRetainerSummary()`, `calculateRetainerGrandTotal()`. PDF export uses `@react-pdf/renderer` in the same file.
 
-**Retainer billing:** Clients can have a retainer agreement (monthly fee for included hours). Fields are snapshotted from client onto the service description at creation time (`retainerFee`, `retainerHours`, `retainerOverageRate`). Retainer mode is detected by `retainerFee != null && retainerHours != null`. In retainer mode: HOURLY topic hours count against the retainer allowance, overage hours are billed at the overage rate, FIXED topics and `fixedAmount` line items are always billed separately on top. Topic-level caps/discounts are ignored; SD-level discount applies to the final total.
+**Retainer billing:** Clients can have a retainer agreement (monthly fee for included hours). Fields are snapshotted from client onto the service description at creation time (`retainerFee`, `retainerHours`, `retainerOverageRate`). Retainer mode is detected by `retainerFee != null && retainerHours != null`. In retainer mode: HOURLY topic hours count against the retainer allowance, overage hours are billed at the overage rate, FIXED topics are always billed separately on top. Topic-level caps/discounts are ignored; SD-level discount applies to the final total.
 
 ### Timesheet Submissions
 Users submit timesheets daily via `POST /api/timesheets/submit`. Key behaviors:

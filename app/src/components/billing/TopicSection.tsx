@@ -19,7 +19,7 @@ interface TopicSectionProps {
   clientHourlyRate: number | null;
   onUpdateTopic: (topicId: string, updates: Partial<ServiceDescriptionTopic>) => Promise<void>;
   onDeleteTopic: (topicId: string) => void;
-  onAddLineItem: (topicId: string, data: { date?: string; description: string; hours?: number; fixedAmount?: number }) => Promise<void>;
+  onAddLineItem: (topicId: string, data: { date?: string; description: string; hours?: number }) => Promise<void>;
   onUpdateLineItem: (topicId: string, itemId: string, updates: { description?: string; hours?: number }) => Promise<void>;
   onRemoveLineItem: (topicId: string, itemId: string) => void;
   onDeleteLineItem: (topicId: string, itemId: string) => void;
@@ -222,7 +222,7 @@ export const TopicSection = memo(function TopicSection({
   }, []);
 
   const handleAddItem = useCallback(
-    async (data: { date?: string; description: string; hours?: number; fixedAmount?: number }) => {
+    async (data: { date?: string; description: string; hours?: number }) => {
       setIsAddingItem(true);
       setAddItemError(null);
       try {
@@ -522,7 +522,7 @@ export const TopicSection = memo(function TopicSection({
                     <th className="px-4 py-2.5 text-left font-medium w-24">Date</th>
                     <th className="px-4 py-2.5 text-left font-medium w-28">Lawyer</th>
                     <th className="px-4 py-2.5 text-left font-medium">Description</th>
-                    <th className="px-4 py-2.5 text-right font-medium w-24">Hours</th>
+                    <th className="px-4 py-2.5 text-right font-medium w-32">Hours</th>
                     {isEditable && <th className="px-4 py-2.5 text-right font-medium w-10"></th>}
                   </tr>
                 </thead>

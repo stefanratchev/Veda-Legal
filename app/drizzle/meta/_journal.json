@@ -64,6 +64,13 @@
       "when": 1771340801009,
       "tag": "0008_parched_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1771421277396,
+      "tag": "0009_charming_wong",
+      "breakpoints": true
     }
   ]
 }

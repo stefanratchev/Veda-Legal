@@ -99,7 +99,6 @@ describe("GET /api/billing/[id]", () => {
               date: "2024-01-15",
               description: "Legal research",
               hours: "2.50",
-              fixedAmount: null,
               displayOrder: 0,
               timeEntry: {
                 description: "Original description",

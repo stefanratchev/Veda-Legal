@@ -34,7 +34,7 @@ export default async function BillingPage() {
         },
         with: {
           lineItems: {
-            columns: { hours: true, fixedAmount: true, waiveMode: true },
+            columns: { hours: true, waiveMode: true },
           },
         },
       },
@@ -60,7 +60,6 @@ export default async function BillingPage() {
       lineItems: t.lineItems.map((li) => ({
         id: "", timeEntryId: null, date: null, description: "", displayOrder: 0,
         hours: li.hours ? Number(li.hours) : null,
-        fixedAmount: li.fixedAmount ? Number(li.fixedAmount) : null,
         waiveMode: (li.waiveMode as "EXCLUDED" | "ZERO" | null) || null,
       })),
     }));

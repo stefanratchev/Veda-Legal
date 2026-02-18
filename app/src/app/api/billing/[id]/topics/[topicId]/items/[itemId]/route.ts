@@ -60,9 +60,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body.hours !== undefined) {
       updateData.hours = body.hours ? String(body.hours) : null;
     }
-    if (body.fixedAmount !== undefined) {
-      updateData.fixedAmount = body.fixedAmount ? String(body.fixedAmount) : null;
-    }
     if (body.displayOrder !== undefined) {
       updateData.displayOrder = body.displayOrder;
     }
@@ -90,7 +87,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           date: serviceDescriptionLineItems.date,
           description: serviceDescriptionLineItems.description,
           hours: serviceDescriptionLineItems.hours,
-          fixedAmount: serviceDescriptionLineItems.fixedAmount,
           displayOrder: serviceDescriptionLineItems.displayOrder,
           waiveMode: serviceDescriptionLineItems.waiveMode,
         });
@@ -149,7 +145,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       date: updated.date || null,
       description: updated.description,
       hours: serializeDecimal(updated.hours),
-      fixedAmount: serializeDecimal(updated.fixedAmount),
       displayOrder: updated.displayOrder,
       waiveMode: updated.waiveMode || null,
       originalDescription,

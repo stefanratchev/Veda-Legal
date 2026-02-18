@@ -491,7 +491,7 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
 
   // Add line item
   const handleAddLineItem = useCallback(
-    async (topicId: string, itemData: { date?: string; description: string; hours?: number; fixedAmount?: number }) => {
+    async (topicId: string, itemData: { date?: string; description: string; hours?: number }) => {
       try {
         const response = await fetch(`/api/billing/${data.id}/topics/${topicId}/items`, {
           method: "POST",
@@ -835,17 +835,6 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
                   <span className="flex-1 border-b border-dotted border-[var(--border-subtle)]" />
                   <span className="text-[var(--text-secondary)] shrink-0 [font-variant-numeric:tabular-nums]">
                     {formatCurrency(retainerSummary.fixedTopicFees)}
-                  </span>
-                </div>
-              )}
-
-              {/* Fixed line item fees (if any) */}
-              {retainerSummary.fixedLineItemFees > 0 && (
-                <div className="flex items-baseline gap-2 text-sm">
-                  <span className="text-[var(--text-primary)] shrink-0">Fixed Fee Items</span>
-                  <span className="flex-1 border-b border-dotted border-[var(--border-subtle)]" />
-                  <span className="text-[var(--text-secondary)] shrink-0 [font-variant-numeric:tabular-nums]">
-                    {formatCurrency(retainerSummary.fixedLineItemFees)}
                   </span>
                 </div>
               )}

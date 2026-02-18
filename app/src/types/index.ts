@@ -140,7 +140,6 @@ export interface ServiceDescriptionLineItem {
   date: string | null;
   description: string;
   hours: number | null;
-  fixedAmount: number | null;
   displayOrder: number;
   waiveMode: WaiveMode | null;
   // Original values from TimeEntry (for showing changes)

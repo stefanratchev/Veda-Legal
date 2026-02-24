@@ -44,10 +44,11 @@ Plans:
   2. A "Revenue by Employee" bar chart appears in the overview tab showing proportional EUR revenue per employee, visible only to Admin/Partner users
   3. Revenue charts are separate from the existing hours charts (not dual-axis)
   4. Revenue charts respect the selected date range and comparison period (showing % change when comparison is active)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md — Create RevenueBarChart component with EUR formatting, top-10 grouping, and comparison badges
+- [ ] 02-02-PLAN.md — Integrate revenue charts into OverviewTab with paired-row layout and admin gating
 
 ### Phase 3: Client Drill-Down Enhancements
 **Goal**: When drilling into a client, admins can see what topics work was spent on, how hours trended over time, and browse all entries for the period
@@ -86,7 +87,7 @@ Note: Phases 3 and 4 both depend on Phase 1 only (not on each other or Phase 2).
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Data Layer | 0/2 | Complete    | 2026-02-24 |
-| 2. Overview Revenue Charts | 0/? | Not started | - |
+| 1. Data Layer | 2/2 | Complete    | 2026-02-24 |
+| 2. Overview Revenue Charts | 0/2 | Not started | - |
 | 3. Client Drill-Down Enhancements | 0/? | Not started | - |
 | 4. Employee Drill-Down Enhancements | 0/? | Not started | - |

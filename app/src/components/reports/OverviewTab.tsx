@@ -158,6 +158,7 @@ export function OverviewTab({
               onBarClick={onClientClick}
               valueFormatter={formatHours}
               layout="vertical"
+              maxBars={15}
             />
           </div>
         </div>
@@ -171,6 +172,7 @@ export function OverviewTab({
                 data={clientRevenueData}
                 comparisonData={clientComparisonRevenue}
                 onBarClick={onClientClick}
+                maxBars={15}
               />
             </div>
           </div>

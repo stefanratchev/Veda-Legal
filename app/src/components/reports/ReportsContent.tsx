@@ -51,6 +51,7 @@ interface Entry {
   date: string;
   hours: number;
   description: string;
+  topicName: string;
   client: {
     id: string;
     name: string;
@@ -251,6 +252,7 @@ export function ReportsContent({
     date: e.date,
     hours: e.hours,
     description: e.description,
+    topicName: e.topicName,
     client: {
       id: e.clientId,
       name: e.clientName,

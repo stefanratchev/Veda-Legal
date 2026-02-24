@@ -9,6 +9,7 @@ interface ClientStats {
   totalHours: number;
   revenue: number | null;
   employees: { id: string; name: string; hours: number }[];
+  topics: { topicName: string; totalHours: number; writtenOffHours: number }[];
 }
 
 interface Entry {
@@ -16,6 +17,7 @@ interface Entry {
   date: string;
   hours: number;
   description: string;
+  topicName: string;
   client: {
     id: string;
     name: string;

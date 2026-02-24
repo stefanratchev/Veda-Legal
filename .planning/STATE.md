@@ -5,32 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Partners and admins can quickly understand firm performance -- revenue, hours, and work distribution -- from the reports page.
-**Current focus:** Phase 1: Data Layer
+**Current focus:** Phase 2: Overview Revenue Charts
 
 ## Current Position
 
-Phase: 1 of 4 (Data Layer) -- COMPLETE
-Plan: 2 of 2 in current phase
-Status: Phase Complete
-Last activity: 2026-02-24 -- Completed 01-02-PLAN.md
+Phase: 2 of 4 (Overview Revenue Charts)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-24 -- Completed 02-01-PLAN.md
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
+- Total plans completed: 3
 - Average duration: 3min
-- Total execution time: 0.10 hours
+- Total execution time: 0.13 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-data-layer | 2 | 6min | 3min |
+| 02-overview-revenue-charts | 1 | 2min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 2min
+- Last 5 plans: 4min, 2min, 2min
 - Trend: improving
 
 *Updated after each plan completion*
@@ -51,6 +52,9 @@ Recent decisions affecting current work:
 - Revenue exclusion rule: !isWrittenOff && clientType === REGULAR && clientRate > 0
 - [Phase 01-data-layer]: Entry interface left unchanged in ReportsContent -- local transformation type distinct from API shape
 - [Phase 01-data-layer]: Server component uses explicit column selection matching route.ts for consistency
+- [Phase 02-overview-revenue-charts]: Teal #4ECDC4 as --accent-revenue color (distinct from coral pink hours)
+- [Phase 02-overview-revenue-charts]: LabelList with custom content renderer for per-bar % change badges
+- [Phase 02-overview-revenue-charts]: Module-level Intl.NumberFormat cache for formatEurExact performance
 
 ### Pending Todos
 
@@ -65,5 +69,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 01-02-PLAN.md (Phase 1 complete)
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None

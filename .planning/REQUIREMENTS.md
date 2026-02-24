@@ -9,8 +9,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Overview Revenue
 
-- [ ] **REV-01**: Admin/Partner can see a Revenue by Client bar chart in the overview tab showing `hourlyRate × hours` per client
-- [ ] **REV-02**: Admin/Partner can see a Revenue by Employee bar chart in the overview tab showing proportional revenue per employee (based on hours worked on each client × that client's rate)
+- [x] **REV-01**: Admin/Partner can see a Revenue by Client bar chart in the overview tab showing `hourlyRate × hours` per client
+- [x] **REV-02**: Admin/Partner can see a Revenue by Employee bar chart in the overview tab showing proportional revenue per employee (based on hours worked on each client × that client's rate)
 
 ### Client Drill-Down
 
@@ -68,8 +68,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DAT-01 | Phase 1 | Complete |
 | DAT-02 | Phase 1 | Complete |
 | DAT-03 | Phase 1 | Complete |
-| REV-01 | Phase 2 | Pending |
-| REV-02 | Phase 2 | Pending |
+| REV-01 | Phase 2 | Complete |
+| REV-02 | Phase 2 | Complete |
 | CDR-01 | Phase 3 | Pending |
 | CDR-02 | Phase 3 | Pending |
 | CDR-03 | Phase 3 | Pending |

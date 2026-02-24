@@ -13,6 +13,10 @@
   --accent-pink-dim: #CC7A7A;
   --accent-pink-glow: rgba(255, 153, 153, 0.18);
 
+  /* Revenue Accent - Teal */
+  --accent-revenue: #4ECDC4;
+  --accent-revenue-dim: #3BA89F;
+
   /* Text */
   --text-primary: #ffffff;
   --text-secondary: #d1d1d1;
@@ -44,6 +48,9 @@
 
   --color-accent-pink: var(--accent-pink);
   --color-accent-pink-dim: var(--accent-pink-dim);
+
+  --color-accent-revenue: var(--accent-revenue);
+  --color-accent-revenue-dim: var(--accent-revenue-dim);
 
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);

@@ -27,9 +27,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Data Layer
 
-- [ ] **DAT-01**: Reports API includes topic data (topicName) in its response for entries and aggregations
-- [ ] **DAT-02**: Reports API includes per-client revenue (hourlyRate × hours) in its response
-- [ ] **DAT-03**: Reports API includes per-employee revenue (proportional by hours worked on each client) in its response
+- [x] **DAT-01**: Reports API includes topic data (topicName) in its response for entries and aggregations
+- [x] **DAT-02**: Reports API includes per-client revenue (hourlyRate × hours) in its response
+- [x] **DAT-03**: Reports API includes per-employee revenue (proportional by hours worked on each client) in its response
 
 ## v2 Requirements
 
@@ -65,9 +65,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DAT-01 | Phase 1 | Pending |
-| DAT-02 | Phase 1 | Pending |
-| DAT-03 | Phase 1 | Pending |
+| DAT-01 | Phase 1 | Complete |
+| DAT-02 | Phase 1 | Complete |
+| DAT-03 | Phase 1 | Complete |
 | REV-01 | Phase 2 | Pending |
 | REV-02 | Phase 2 | Pending |
 | CDR-01 | Phase 3 | Pending |

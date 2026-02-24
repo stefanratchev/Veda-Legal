@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 1 of 4 (Data Layer)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-02-24 -- Roadmap created
+Plan: 1 of 2 in current phase
+Status: Executing
+Last activity: 2026-02-24 -- Completed 01-01-PLAN.md
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 10%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 4min
+- Total execution time: 0.07 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-data-layer | 1 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: -
+- Last 5 plans: 4min
 - Trend: -
 
 *Updated after each plan completion*
@@ -46,6 +46,9 @@ Recent decisions affecting current work:
 - Revenue charts separate from hours charts (no dual-axis)
 - No revenue in drill-down views (hours and activity patterns only)
 - All entries in drill-down tables (remove 10-entry limit)
+- Revenue is always a number (0 for non-billable), not null -- breaking change from prior behavior
+- TopicAggregation interface: { topicName, totalHours, writtenOffHours } -- reuse in UI phases
+- Revenue exclusion rule: !isWrittenOff && clientType === REGULAR && clientRate > 0
 
 ### Pending Todos
 
@@ -60,5 +63,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Roadmap created, ready to plan Phase 1
+Stopped at: Completed 01-01-PLAN.md
 Resume file: None

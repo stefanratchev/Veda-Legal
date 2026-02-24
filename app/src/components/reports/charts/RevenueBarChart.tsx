@@ -25,6 +25,34 @@ const BAR_COLORS = [
   "#A3E635", // lime
 ];
 
+const MAX_LABEL_CHARS = 14;
+
+function TruncatedYAxisTick(props: {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+}) {
+  const { x, y, payload } = props;
+  const name = payload?.value ?? "";
+  const display =
+    name.length > MAX_LABEL_CHARS
+      ? name.slice(0, MAX_LABEL_CHARS - 1) + "\u2026"
+      : name;
+
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="end"
+      dominantBaseline="central"
+      fill="var(--text-muted)"
+      fontSize={11}
+    >
+      {display}
+    </text>
+  );
+}
+
 // --- Types ---
 
 interface RevenueItem {
@@ -246,7 +274,7 @@ export function RevenueBarChart({
         <YAxis
           type="category"
           dataKey="name"
-          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+          tick={<TruncatedYAxisTick />}
           axisLine={{ stroke: "var(--border-subtle)" }}
           tickLine={false}
           width={100}

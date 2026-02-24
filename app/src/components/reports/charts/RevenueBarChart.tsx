@@ -157,22 +157,25 @@ interface PercentChangeLabelProps {
   x?: number;
   y?: number;
   width?: number;
+  height?: number;
   value?: number | null;
 }
 
-function PercentChangeLabel({ x, y, width, value }: PercentChangeLabelProps) {
+function PercentChangeLabel({ x, y, width, height, value }: PercentChangeLabelProps) {
   if (value == null) return null;
 
   const isPositive = value > 0;
   const color = isPositive ? "var(--success)" : "var(--danger)";
   const text = `${isPositive ? "+" : ""}${Math.round(value)}%`;
 
+  // Position at the end of horizontal bar, vertically centered
   return (
     <text
-      x={(x ?? 0) + (width ?? 0) / 2}
-      y={(y ?? 0) - 6}
+      x={(x ?? 0) + (width ?? 0) + 4}
+      y={(y ?? 0) + (height ?? 0) / 2}
       fill={color}
-      textAnchor="middle"
+      textAnchor="start"
+      dominantBaseline="central"
       fontSize={10}
       fontWeight={500}
     >
@@ -217,22 +220,23 @@ export function RevenueBarChart({
     <ResponsiveContainer width="100%" height="100%">
       <RechartsBarChart
         data={chartData}
-        margin={{ top: 20, right: 10, left: 10, bottom: 10 }}
+        layout="vertical"
+        margin={{ top: 10, right: 50, left: 10, bottom: 10 }}
       >
         <XAxis
-          dataKey="name"
-          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
-          axisLine={{ stroke: "var(--border-subtle)" }}
-          tickLine={false}
-          angle={-35}
-          textAnchor="end"
-          height={60}
-        />
-        <YAxis
+          type="number"
           tick={{ fill: "var(--text-muted)", fontSize: 11 }}
           axisLine={{ stroke: "var(--border-subtle)" }}
           tickLine={false}
           tickFormatter={formatEurAbbreviated}
+        />
+        <YAxis
+          type="category"
+          dataKey="name"
+          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+          axisLine={{ stroke: "var(--border-subtle)" }}
+          tickLine={false}
+          width={100}
         />
         <Tooltip
           content={<RevenueTooltip />}
@@ -240,7 +244,7 @@ export function RevenueBarChart({
         />
         <Bar
           dataKey="value"
-          radius={[4, 4, 0, 0]}
+          radius={[4, 4, 4, 4]}
           cursor={onBarClick ? "pointer" : "default"}
           onClick={(_, index) => handleClick(chartData[index])}
         >
@@ -253,7 +257,7 @@ export function RevenueBarChart({
           ))}
           <LabelList
             dataKey="percentChange"
-            position="top"
+            position="right"
             content={<PercentChangeLabel />}
           />
         </Bar>

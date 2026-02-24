@@ -79,8 +79,14 @@ None yet.
 - INTERNAL/MANAGEMENT clients (hourlyRate = null) must be excluded from revenue charts
 - Entry tables now have pagination (50/page via DataTable) -- resolved in 03-02
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Increase height of client charts on reports overview | 2026-02-24 | c8e9d27 | [1-increase-height-of-hours-by-client-and-r](./quick/1-increase-height-of-hours-by-client-and-r/) |
+
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 04-02-PLAN.md
+Stopped at: Completed quick task 1
 Resume file: None

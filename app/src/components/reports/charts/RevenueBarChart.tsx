@@ -12,6 +12,19 @@ import {
   LabelList,
 } from "recharts";
 
+const BAR_COLORS = [
+  "#FF9999", // coral pink (accent)
+  "#4ECDC4", // teal (revenue accent)
+  "#F5A623", // amber
+  "#5A8FC7", // steel blue
+  "#C084FC", // purple
+  "#4A9D6E", // green
+  "#F472B6", // pink
+  "#FB923C", // orange
+  "#38BDF8", // sky blue
+  "#A3E635", // lime
+];
+
 // --- Types ---
 
 interface RevenueItem {
@@ -237,6 +250,7 @@ export function RevenueBarChart({
           axisLine={{ stroke: "var(--border-subtle)" }}
           tickLine={false}
           width={100}
+          interval={0}
         />
         <Tooltip
           content={<RevenueTooltip />}
@@ -251,7 +265,7 @@ export function RevenueBarChart({
           {chartData.map((_, index) => (
             <Cell
               key={`cell-${index}`}
-              fill="var(--accent-revenue)"
+              fill={BAR_COLORS[index % BAR_COLORS.length]}
               fillOpacity={0.8}
             />
           ))}

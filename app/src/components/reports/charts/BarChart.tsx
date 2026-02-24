@@ -120,6 +120,7 @@ export function BarChart({
               axisLine={{ stroke: "var(--border-subtle)" }}
               tickLine={false}
               width={100}
+              interval={0}
             />
           </>
         )}

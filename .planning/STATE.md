@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 4 of 4 (Employee Drill-Down Enhancements)
-Plan: 2 of 3 in current phase
+Plan: 3 of 3 in current phase
 Status: In Progress
-Last activity: 2026-02-24 -- Completed 04-01-PLAN.md
+Last activity: 2026-02-24 -- Completed 04-02-PLAN.md
 
-Progress: [█████████░] 90%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 2min
-- Total execution time: 0.34 hours
+- Total execution time: 0.37 hours
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: [█████████░] 90%
 | 01-data-layer | 2 | 6min | 3min |
 | 02-overview-revenue-charts | 2 | 4min | 2min |
 | 03-client-drill-down-enhancements | 3 | 6min | 2min |
-| 04-employee-drill-down-enhancements | 2 | 4min | 2min |
+| 04-employee-drill-down-enhancements | 3 | 6min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 2min, 2min, 1min, 3min
+- Last 5 plans: 2min, 2min, 2min, 2min, 1min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -67,6 +67,7 @@ Recent decisions affecting current work:
 - [Phase 03-client-drill-down-enhancements]: CDR-02 (hours trend chart) dropped by user decision -- noted for traceability
 - [Phase 04-employee-drill-down-enhancements]: Test scaffold with 6 RED stubs and 2 GREEN stubs as Nyquist sampling command for Phase 4
 - [Phase 04-employee-drill-down-enhancements]: Kept hand-rolled entry table for plan 01 -- DataTable replacement deferred to plan 04-02
+- [Phase 04-employee-drill-down-enhancements]: Column order Date/Client/Topic/Description/Hours -- Client as pivot dimension in employee drill-down
 
 ### Pending Todos
 
@@ -81,5 +82,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 04-01-PLAN.md
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None

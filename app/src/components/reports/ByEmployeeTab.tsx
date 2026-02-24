@@ -93,6 +93,46 @@ export function ByEmployeeTab({
       (e) => e.employee.id === selectedEmployeeId
     );
 
+    // Empty state: employee selected but no entries in period
+    if (employeeEntries.length === 0) {
+      return (
+        <div className="space-y-6">
+          {/* Back button and header */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onSelectEmployee(null)}
+              className="flex items-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors text-sm"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+              Back to All
+            </button>
+            <span className="text-[var(--border-subtle)]">|</span>
+            <h3 className="text-[var(--text-primary)] font-medium">
+              {selectedEmployee.name}
+            </h3>
+          </div>
+          {/* Empty state message */}
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-[var(--text-secondary)] text-[13px]">
+              No time entries for this employee in the selected period
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     // Calculate hours by client for bar chart
     const hoursByClient = employeeEntries.reduce(
       (acc, entry) => {
@@ -109,21 +149,23 @@ export function ByEmployeeTab({
       (a, b) => b.value - a.value
     );
 
-    // Calculate hours by day for bar chart
-    const hoursByDay = employeeEntries.reduce(
-      (acc, entry) => {
-        const date = entry.date;
-        if (!acc[date]) {
-          acc[date] = { name: formatDateDisplay(date), value: 0, id: date };
-        }
-        acc[date].value += entry.hours;
-        return acc;
-      },
-      {} as Record<string, { name: string; value: number; id: string }>
-    );
-    const dayChartData = Object.values(hoursByDay).sort((a, b) =>
-      a.id.localeCompare(b.id)
-    );
+    // Prepare topic chart data from pre-computed topics
+    const topicChartData = selectedEmployee.topics
+      .filter((t) => t.totalHours > 0)
+      .map((t) => {
+        const pct = selectedEmployee.totalHours > 0
+          ? Math.round((t.totalHours / selectedEmployee.totalHours) * 100)
+          : 0;
+        return {
+          name: `${t.topicName}  ${formatHours(t.totalHours)} (${pct}%)`,
+          value: t.totalHours,
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+
+    // Dynamic chart heights based on number of items
+    const topicChartHeight = Math.max(256, topicChartData.length * 40);
+    const clientChartHeight = Math.max(256, clientChartData.length * 40);
 
     // Get last 10 entries
     const recentEntries = [...employeeEntries]
@@ -162,30 +204,31 @@ export function ByEmployeeTab({
           </span>
         </div>
 
-        {/* Charts */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Side-by-side charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Topic Breakdown */}
           <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-              Hours by Client
+              Topic Breakdown
             </h3>
-            <div className="h-64">
+            <div style={{ height: topicChartHeight }}>
               <BarChart
-                data={clientChartData}
+                data={topicChartData}
                 valueFormatter={formatHours}
                 layout="vertical"
               />
             </div>
           </div>
-
+          {/* Hours by Client */}
           <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-              Hours by Day
+              Hours by Client
             </h3>
-            <div className="h-64">
+            <div style={{ height: clientChartHeight }}>
               <BarChart
-                data={dayChartData}
+                data={clientChartData}
                 valueFormatter={formatHours}
-                layout="horizontal"
+                layout="vertical"
               />
             </div>
           </div>

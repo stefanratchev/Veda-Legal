@@ -2,13 +2,16 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ByClientTab } from "./ByClientTab";
 
-// Mock ResizeObserver for Recharts ResponsiveContainer
-class ResizeObserverMock {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-global.ResizeObserver = ResizeObserverMock;
+// Mock BarChart to render data as DOM text (Recharts SVG doesn't render in JSDOM)
+vi.mock("./charts/BarChart", () => ({
+  BarChart: ({ data }: { data: { name: string; value: number }[] }) => (
+    <div data-testid="bar-chart">
+      {data.map((d) => (
+        <span key={d.name}>{d.name}</span>
+      ))}
+    </div>
+  ),
+}));
 
 // --- Types matching ByClientTab's expected interfaces AFTER 03-01 updates ---
 // These types include `topics` on ClientStats and `topicName` on Entry,

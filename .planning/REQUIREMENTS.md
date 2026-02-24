@@ -15,7 +15,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 ### Client Drill-Down
 
 - [x] **CDR-01**: When drilling into a client, a topic breakdown summary shows hours per topic at the top
-- [x] **CDR-02**: When drilling into a client, an hours-over-time trend chart shows daily activity for the selected period
+- [~] **CDR-02**: ~~When drilling into a client, an hours-over-time trend chart shows daily activity for the selected period~~ (dropped by user decision)
 - [x] **CDR-03**: When drilling into a client, the entry table shows ALL entries for the selected date range (not just last 10)
 - [x] **CDR-04**: The client drill-down entry table includes a topic column
 
@@ -71,7 +71,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REV-01 | Phase 2 | Complete |
 | REV-02 | Phase 2 | Complete |
 | CDR-01 | Phase 3 | Complete |
-| CDR-02 | Phase 3 | Complete |
+| CDR-02 | Phase 3 | Dropped |
 | CDR-03 | Phase 3 | Complete |
 | CDR-04 | Phase 3 | Complete |
 | EDR-01 | Phase 4 | Pending |

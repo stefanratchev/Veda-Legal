@@ -65,24 +65,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REV-01 | — | Pending |
-| REV-02 | — | Pending |
-| CDR-01 | — | Pending |
-| CDR-02 | — | Pending |
-| CDR-03 | — | Pending |
-| CDR-04 | — | Pending |
-| EDR-01 | — | Pending |
-| EDR-02 | — | Pending |
-| EDR-03 | — | Pending |
-| DAT-01 | — | Pending |
-| DAT-02 | — | Pending |
-| DAT-03 | — | Pending |
+| DAT-01 | Phase 1 | Pending |
+| DAT-02 | Phase 1 | Pending |
+| DAT-03 | Phase 1 | Pending |
+| REV-01 | Phase 2 | Pending |
+| REV-02 | Phase 2 | Pending |
+| CDR-01 | Phase 3 | Pending |
+| CDR-02 | Phase 3 | Pending |
+| CDR-03 | Phase 3 | Pending |
+| CDR-04 | Phase 3 | Pending |
+| EDR-01 | Phase 4 | Pending |
+| EDR-02 | Phase 4 | Pending |
+| EDR-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-24*
-*Last updated: 2026-02-24 after initial definition*
+*Last updated: 2026-02-24 after roadmap creation*

@@ -30,8 +30,8 @@ Partners and admins can quickly understand firm performance — who worked on wh
 
 <!-- Current scope for this milestone. -->
 
-- [ ] Revenue by Client chart in overview (estimated: rate × hours, and actual: from finalized service descriptions)
-- [ ] Revenue by Employee chart in overview (estimated: rate × hours, and actual: from finalized service descriptions)
+- [ ] Revenue by Client chart in overview (rate × hours)
+- [ ] Revenue by Employee chart in overview (proportional by hours worked per client × rate)
 - [ ] Client drill-down: topic breakdown summary at the top (hours per topic)
 - [ ] Client drill-down: hours by employee chart (keep existing)
 - [ ] Client drill-down: hours over time trend chart
@@ -81,7 +81,7 @@ Partners and admins can quickly understand firm performance — who worked on wh
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Separate revenue charts (not merged with hours charts) | Revenue and hours have different scales; separate charts avoid confusing dual-axis layouts | — Pending |
-| Both estimated and actual billed revenue | Estimated (rate × hours) is always available; actual (from SDs) only exists for finalized periods — showing both gives complete picture | — Pending |
+| Revenue = rate × hours only (no SD integration) | User decided to keep reporting simple — service descriptions add complexity without proportional value for this milestone | — Pending |
 | No revenue in drill-downs | User chose hours and activity patterns for drill-downs; revenue stays at overview level | — Pending |
 | All entries in drill-down tables | Last-10 limit was too restrictive for real analysis; full period data needed | — Pending |
 

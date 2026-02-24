@@ -74,11 +74,12 @@ Plans:
   1. Employee drill-down shows a topic breakdown chart showing hours per topic across all clients the employee worked on
   2. Employee drill-down entry table shows ALL entries for the selected date range (not limited to 10), with pagination if the list exceeds ~50 entries
   3. Employee drill-down entry table includes a topic column showing the topic name for each entry
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-00-PLAN.md — Wave 0: Create ByEmployeeTab test scaffold (failing stubs for EDR-01, EDR-02, EDR-03)
+- [ ] 04-01-PLAN.md — Add topic breakdown chart and side-by-side layout with Hours by Client
+- [ ] 04-02-PLAN.md — Replace entry table with DataTable, add topic column and pagination
 
 ## Progress
 
@@ -91,4 +92,4 @@ Note: Phases 3 and 4 both depend on Phase 1 only (not on each other or Phase 2).
 | 1. Data Layer | 2/2 | Complete    | 2026-02-24 |
 | 2. Overview Revenue Charts | 2/2 | Complete    | 2026-02-24 |
 | 3. Client Drill-Down Enhancements | 0/3 | Not started | - |
-| 4. Employee Drill-Down Enhancements | 0/? | Not started | - |
+| 4. Employee Drill-Down Enhancements | 0/3 | Not started | - |

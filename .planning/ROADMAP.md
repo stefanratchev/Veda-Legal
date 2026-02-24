@@ -59,9 +59,10 @@ Plans:
   2. ~~Client drill-down shows an hours-over-time trend chart for the selected date range~~ (CDR-02 dropped by user decision)
   3. Client drill-down entry table shows ALL entries for the selected date range (not limited to 10), with pagination if the list exceeds ~50 entries
   4. Client drill-down entry table includes a topic column showing the topic name for each entry
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
+- [ ] 03-00-PLAN.md — Wave 0: Create ByClientTab test scaffold (failing stubs for CDR-01, CDR-03, CDR-04)
 - [ ] 03-01-PLAN.md — Add topic breakdown chart and side-by-side layout with Hours by Employee
 - [ ] 03-02-PLAN.md — Replace entry table with DataTable, add topic column and pagination
 
@@ -89,5 +90,5 @@ Note: Phases 3 and 4 both depend on Phase 1 only (not on each other or Phase 2).
 |-------|----------------|--------|-----------|
 | 1. Data Layer | 2/2 | Complete    | 2026-02-24 |
 | 2. Overview Revenue Charts | 2/2 | Complete    | 2026-02-24 |
-| 3. Client Drill-Down Enhancements | 0/2 | Not started | - |
+| 3. Client Drill-Down Enhancements | 0/3 | Not started | - |
 | 4. Employee Drill-Down Enhancements | 0/? | Not started | - |

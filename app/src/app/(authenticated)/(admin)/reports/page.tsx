@@ -36,6 +36,16 @@ async function getReportData({
   // Query entries with user and client relations
   const entries = await db.query.timeEntries.findMany({
     where: whereConditions,
+    columns: {
+      id: true,
+      date: true,
+      hours: true,
+      description: true,
+      userId: true,
+      clientId: true,
+      topicName: true,
+      isWrittenOff: true,
+    },
     with: {
       user: {
         columns: {
@@ -48,204 +58,207 @@ async function getReportData({
           id: true,
           name: true,
           hourlyRate: true,
+          clientType: true,
         },
       },
     },
     orderBy: [desc(timeEntries.date)],
   });
 
-  // Use Maps for efficient aggregation
-  const employeeMap = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      totalHours: number;
-      clientHoursMap: Map<string, { id: string; name: string; hours: number }>;
-      dailyHoursMap: Map<string, number>;
-    }
-  >();
+  // Aggregate by employee
+  const employeeMap = new Map<string, {
+    id: string;
+    name: string;
+    totalHours: number;
+    billableHours: number;
+    revenue: number;
+    clients: Map<string, { name: string; hours: number }>;
+    dailyHours: Map<string, number>;
+    topicMap: Map<string, { totalHours: number; writtenOffHours: number }>;
+  }>();
 
-  const clientMap = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      hourlyRate: number | null;
-      totalHours: number;
-      employeeHoursMap: Map<string, { id: string; name: string; hours: number }>;
-    }
-  >();
+  // Aggregate by client
+  const clientMap = new Map<string, {
+    id: string;
+    name: string;
+    hourlyRate: number | null;
+    clientType: "REGULAR" | "INTERNAL" | "MANAGEMENT";
+    totalHours: number;
+    revenue: number;
+    employees: Map<string, { name: string; hours: number }>;
+    topicMap: Map<string, { totalHours: number; writtenOffHours: number }>;
+  }>();
 
   let totalHours = 0;
   let totalRevenue = 0;
+  let totalWrittenOffHours = 0;
   const activeClientIds = new Set<string>();
 
-  // Process each entry
   for (const entry of entries) {
     const hours = Number(entry.hours);
-    const hourlyRate = entry.client.hourlyRate
-      ? Number(entry.client.hourlyRate)
-      : null;
-    // In Drizzle, date is already a string in YYYY-MM-DD format
-    const dateStr = entry.date;
+    const topicName = entry.topicName || "Uncategorized";
+    const isWrittenOff = entry.isWrittenOff ?? false;
+    const clientType = entry.client.clientType as "REGULAR" | "INTERNAL" | "MANAGEMENT";
+    const isBillable = clientType === "REGULAR";
+    const clientRate = entry.client.hourlyRate ? Number(entry.client.hourlyRate) : 0;
 
     totalHours += hours;
-    if (hourlyRate !== null) {
-      totalRevenue += hours * hourlyRate;
+    activeClientIds.add(entry.clientId);
+
+    if (isWrittenOff) {
+      totalWrittenOffHours += hours;
     }
-    activeClientIds.add(entry.client.id);
 
-    // Aggregate by employee
-    const employeeData = employeeMap.get(entry.user.id);
-    if (employeeData) {
-      employeeData.totalHours += hours;
+    // Revenue: only count when not written-off, billable client, and rate > 0
+    if (!isWrittenOff && isBillable && clientRate > 0) {
+      totalRevenue += hours * clientRate;
+    }
 
-      // Update client hours for this employee
-      const existingClientHours = employeeData.clientHoursMap.get(
-        entry.client.id
-      );
-      if (existingClientHours) {
-        existingClientHours.hours += hours;
-      } else {
-        employeeData.clientHoursMap.set(entry.client.id, {
-          id: entry.client.id,
-          name: entry.client.name,
-          hours,
-        });
-      }
-
-      // Update daily hours
-      const existingDailyHours = employeeData.dailyHoursMap.get(dateStr) || 0;
-      employeeData.dailyHoursMap.set(dateStr, existingDailyHours + hours);
-    } else {
-      const clientHoursMap = new Map<
-        string,
-        { id: string; name: string; hours: number }
-      >();
-      clientHoursMap.set(entry.client.id, {
-        id: entry.client.id,
-        name: entry.client.name,
-        hours,
-      });
-
-      const dailyHoursMap = new Map<string, number>();
-      dailyHoursMap.set(dateStr, hours);
-
-      employeeMap.set(entry.user.id, {
-        id: entry.user.id,
+    // Employee aggregation
+    const empId = entry.userId;
+    if (!employeeMap.has(empId)) {
+      employeeMap.set(empId, {
+        id: empId,
         name: entry.user.name || "Unknown",
-        totalHours: hours,
-        clientHoursMap,
-        dailyHoursMap,
+        totalHours: 0,
+        billableHours: 0,
+        revenue: 0,
+        clients: new Map(),
+        dailyHours: new Map(),
+        topicMap: new Map(),
       });
     }
+    const emp = employeeMap.get(empId)!;
+    emp.totalHours += hours;
 
-    // Aggregate by client
-    const clientData = clientMap.get(entry.client.id);
-    if (clientData) {
-      clientData.totalHours += hours;
+    // Employee billable hours: REGULAR clients, not written-off
+    if (isBillable && !isWrittenOff) {
+      emp.billableHours += hours;
+      emp.revenue += hours * clientRate;
+    }
 
-      // Update employee hours for this client
-      const existingEmployeeHours = clientData.employeeHoursMap.get(
-        entry.user.id
-      );
-      if (existingEmployeeHours) {
-        existingEmployeeHours.hours += hours;
-      } else {
-        clientData.employeeHoursMap.set(entry.user.id, {
-          id: entry.user.id,
-          name: entry.user.name || "Unknown",
-          hours,
-        });
-      }
-    } else {
-      const employeeHoursMap = new Map<
-        string,
-        { id: string; name: string; hours: number }
-      >();
-      employeeHoursMap.set(entry.user.id, {
-        id: entry.user.id,
-        name: entry.user.name || "Unknown",
-        hours,
-      });
+    // Employee topic aggregation
+    if (!emp.topicMap.has(topicName)) {
+      emp.topicMap.set(topicName, { totalHours: 0, writtenOffHours: 0 });
+    }
+    const empTopic = emp.topicMap.get(topicName)!;
+    empTopic.totalHours += hours;
+    if (isWrittenOff) empTopic.writtenOffHours += hours;
 
-      clientMap.set(entry.client.id, {
-        id: entry.client.id,
+    // entry.date is already a YYYY-MM-DD string in Drizzle
+    emp.dailyHours.set(entry.date, (emp.dailyHours.get(entry.date) || 0) + hours);
+
+    if (!emp.clients.has(entry.clientId)) {
+      emp.clients.set(entry.clientId, { name: entry.client.name, hours: 0 });
+    }
+    emp.clients.get(entry.clientId)!.hours += hours;
+
+    // Client aggregation
+    const clientId = entry.clientId;
+    if (!clientMap.has(clientId)) {
+      clientMap.set(clientId, {
+        id: clientId,
         name: entry.client.name,
-        hourlyRate,
-        totalHours: hours,
-        employeeHoursMap,
+        hourlyRate: entry.client.hourlyRate ? Number(entry.client.hourlyRate) : null,
+        clientType,
+        totalHours: 0,
+        revenue: 0,
+        employees: new Map(),
+        topicMap: new Map(),
       });
     }
+    const client = clientMap.get(clientId)!;
+    client.totalHours += hours;
+
+    // Client revenue: only for REGULAR, not written-off
+    if (!isWrittenOff && isBillable && clientRate > 0) {
+      client.revenue += hours * clientRate;
+    }
+
+    // Client topic aggregation
+    if (!client.topicMap.has(topicName)) {
+      client.topicMap.set(topicName, { totalHours: 0, writtenOffHours: 0 });
+    }
+    const clientTopic = client.topicMap.get(topicName)!;
+    clientTopic.totalHours += hours;
+    if (isWrittenOff) clientTopic.writtenOffHours += hours;
+
+    if (!client.employees.has(empId)) {
+      client.employees.set(empId, { name: entry.user.name || "Unknown", hours: 0 });
+    }
+    client.employees.get(empId)!.hours += hours;
   }
 
-  // Convert employee map to array
-  const byEmployee = Array.from(employeeMap.values())
-    .map((emp) => {
-      const clients = Array.from(emp.clientHoursMap.values()).sort(
-        (a, b) => b.hours - a.hours
-      );
-      const topClient = clients.length > 0 ? clients[0] : null;
-      const dailyHours = Array.from(emp.dailyHoursMap.entries())
+  // Build response
+  const byEmployee = Array.from(employeeMap.values()).map((emp) => {
+    const clients = Array.from(emp.clients.entries())
+      .map(([id, data]) => ({ id, name: data.name, hours: data.hours }))
+      .sort((a, b) => b.hours - a.hours);
+
+    const topics = Array.from(emp.topicMap.entries())
+      .map(([name, data]) => ({ topicName: name, totalHours: data.totalHours, writtenOffHours: data.writtenOffHours }));
+
+    return {
+      id: emp.id,
+      name: emp.name,
+      totalHours: emp.totalHours,
+      billableHours: isAdmin ? emp.billableHours : null,
+      revenue: isAdmin ? emp.revenue : null,
+      clientCount: clients.length,
+      topClient: clients[0] ? { name: clients[0].name, hours: clients[0].hours } : null,
+      clients,
+      dailyHours: Array.from(emp.dailyHours.entries())
         .map(([date, hours]) => ({ date, hours }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      topics,
+    };
+  }).sort((a, b) => b.totalHours - a.totalHours);
 
-      return {
-        id: emp.id,
-        name: emp.name,
-        totalHours: emp.totalHours,
-        clientCount: clients.length,
-        topClient,
-        clients,
-        dailyHours,
-      };
-    })
-    .sort((a, b) => b.totalHours - a.totalHours);
+  const byClient = Array.from(clientMap.values()).map((client) => {
+    const employees = Array.from(client.employees.entries())
+      .map(([id, data]) => ({ id, name: data.name, hours: data.hours }))
+      .sort((a, b) => b.hours - a.hours);
 
-  // Convert client map to array
-  const byClient = Array.from(clientMap.values())
-    .map((client) => {
-      const employees = Array.from(client.employeeHoursMap.values()).sort(
-        (a, b) => b.hours - a.hours
-      );
-      const revenue =
-        client.hourlyRate !== null ? client.totalHours * client.hourlyRate : null;
+    const topics = Array.from(client.topicMap.entries())
+      .map(([name, data]) => ({ topicName: name, totalHours: data.totalHours, writtenOffHours: data.writtenOffHours }));
 
-      return {
-        id: client.id,
-        name: client.name,
-        hourlyRate: client.hourlyRate,
-        totalHours: client.totalHours,
-        revenue,
-        employees,
-      };
-    })
-    .sort((a, b) => b.totalHours - a.totalHours);
+    return {
+      id: client.id,
+      name: client.name,
+      hourlyRate: client.hourlyRate,
+      clientType: client.clientType,
+      totalHours: client.totalHours,
+      revenue: client.revenue,
+      employees,
+      topics,
+    };
+  }).sort((a, b) => b.totalHours - a.totalHours);
 
-  // Transform entries for the response
-  const transformedEntries = entries.map((entry) => ({
-    id: entry.id,
-    // In Drizzle, date is already a string in YYYY-MM-DD format
-    date: entry.date,
-    hours: Number(entry.hours),
-    description: entry.description,
-    userId: entry.user.id,
-    userName: entry.user.name || "Unknown",
-    clientId: entry.client.id,
-    clientName: entry.client.name,
-  }));
-
-  return {
+  const response: ReportData = {
     summary: {
       totalHours,
       totalRevenue: isAdmin ? totalRevenue : null,
+      totalWrittenOffHours: isAdmin ? totalWrittenOffHours : null,
       activeClients: activeClientIds.size,
     },
-    byEmployee,
-    byClient,
-    entries: transformedEntries,
+    byEmployee: isAdmin ? byEmployee : byEmployee.filter(e => e.id === userId),
+    byClient: isAdmin ? byClient : byClient.map(c => ({ ...c, hourlyRate: null, revenue: null })),
+    entries: entries.map((e) => ({
+      id: e.id,
+      date: e.date,
+      hours: Number(e.hours),
+      description: e.description,
+      userId: e.userId,
+      userName: e.user.name || "Unknown",
+      clientId: e.clientId,
+      clientName: e.client.name,
+      topicName: e.topicName || "Uncategorized",
+      isWrittenOff: e.isWrittenOff ?? false,
+      clientType: e.client.clientType as "REGULAR" | "INTERNAL" | "MANAGEMENT",
+    })),
   };
+
+  return response;
 }
 
 export default async function ReportsPage() {

@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Partners and admins can quickly understand firm performance -- revenue, hours, and work distribution -- from the reports page.
-**Current focus:** Phase 2: Overview Revenue Charts
+**Current focus:** Phase 3: Client Drill-Down Enhancements
 
 ## Current Position
 
-Phase: 2 of 4 (Overview Revenue Charts)
-Plan: 2 of 2 in current phase (PHASE COMPLETE)
-Status: Phase Complete
-Last activity: 2026-02-24 -- Completed 02-02-PLAN.md
+Phase: 3 of 4 (Client Drill-Down Enhancements)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-24 -- Completed 03-01-PLAN.md
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 62%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 2min
-- Total execution time: 0.17 hours
+- Total execution time: 0.20 hours
 
 **By Phase:**
 
@@ -29,9 +29,10 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | 01-data-layer | 2 | 6min | 3min |
 | 02-overview-revenue-charts | 2 | 4min | 2min |
+| 03-client-drill-down-enhancements | 1 | 2min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 2min, 2min, 2min
+- Last 5 plans: 4min, 2min, 2min, 2min, 2min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -58,6 +59,8 @@ Recent decisions affecting current work:
 - [Phase 02-overview-revenue-charts]: Revenue charts use horizontal bars for better scalability with many clients/employees
 - [Phase 02-overview-revenue-charts]: Paired-row layout: Hours by Client | Revenue by Client, Hours by Employee | Revenue by Employee
 - [Phase 02-overview-revenue-charts]: Hours by Client switched from DonutChart to horizontal BarChart for visual consistency
+- [Phase 03-client-drill-down-enhancements]: Hours+percentage embedded in BarChart name field to keep axis ticks clean
+- [Phase 03-client-drill-down-enhancements]: Dynamic chart height via inline style Math.max(256, items * 40) for scalability
 
 ### Pending Todos
 
@@ -72,5 +75,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 02-02-PLAN.md (Phase 2 complete)
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None

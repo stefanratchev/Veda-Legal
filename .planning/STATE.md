@@ -9,29 +9,29 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 
 ## Current Position
 
-Phase: 1 of 4 (Data Layer)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-24 -- Completed 01-01-PLAN.md
+Phase: 1 of 4 (Data Layer) -- COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-02-24 -- Completed 01-02-PLAN.md
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 4min
-- Total execution time: 0.07 hours
+- Total plans completed: 2
+- Average duration: 3min
+- Total execution time: 0.10 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-data-layer | 1 | 4min | 4min |
+| 01-data-layer | 2 | 6min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 4min
-- Trend: -
+- Last 5 plans: 4min, 2min
+- Trend: improving
 
 *Updated after each plan completion*
 
@@ -49,6 +49,8 @@ Recent decisions affecting current work:
 - Revenue is always a number (0 for non-billable), not null -- breaking change from prior behavior
 - TopicAggregation interface: { topicName, totalHours, writtenOffHours } -- reuse in UI phases
 - Revenue exclusion rule: !isWrittenOff && clientType === REGULAR && clientRate > 0
+- [Phase 01-data-layer]: Entry interface left unchanged in ReportsContent -- local transformation type distinct from API shape
+- [Phase 01-data-layer]: Server component uses explicit column selection matching route.ts for consistency
 
 ### Pending Todos
 
@@ -63,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 01-01-PLAN.md
+Stopped at: Completed 01-02-PLAN.md (Phase 1 complete)
 Resume file: None

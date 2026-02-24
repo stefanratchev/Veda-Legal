@@ -154,15 +154,10 @@ export function ByEmployeeTab({
     // Prepare topic chart data from pre-computed topics
     const topicChartData = selectedEmployee.topics
       .filter((t) => t.totalHours > 0)
-      .map((t) => {
-        const pct = selectedEmployee.totalHours > 0
-          ? Math.round((t.totalHours / selectedEmployee.totalHours) * 100)
-          : 0;
-        return {
-          name: `${t.topicName}  ${formatHours(t.totalHours)} (${pct}%)`,
-          value: t.totalHours,
-        };
-      })
+      .map((t) => ({
+        name: t.topicName,
+        value: t.totalHours,
+      }))
       .sort((a, b) => b.value - a.value);
 
     // Dynamic chart heights based on number of items

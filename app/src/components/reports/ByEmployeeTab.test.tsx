@@ -125,7 +125,7 @@ describe("topic breakdown chart", () => {
     expect(container.textContent).not.toContain("Zero Topic");
   });
 
-  it("shows hours and percentage in topic bar labels", () => {
+  it("shows topic name only in bar labels (hours/percentage in tooltip)", () => {
     const employee = createEmployee({
       topics: [
         { topicName: "M&A Advisory", totalHours: 14, writtenOffHours: 0 },
@@ -142,12 +142,9 @@ describe("topic breakdown chart", () => {
       />
     );
 
-    // The topic chart should show hours and percentage.
-    // Look for either "14h" or "58%" pattern in the rendered output.
+    // Topic name should appear in the chart labels
     const textContent = container.textContent || "";
-    const hasHoursOrPercentage =
-      textContent.includes("14h") || textContent.includes("58%");
-    expect(hasHoursOrPercentage).toBe(true);
+    expect(textContent).toContain("M&A Advisory");
   });
 });
 

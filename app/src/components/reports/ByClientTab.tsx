@@ -4,35 +4,11 @@ import { BarChart } from "./charts/BarChart";
 import { DataTable } from "@/components/ui/DataTable";
 import { ColumnDef } from "@/components/ui/table-types";
 import { formatHours } from "@/lib/date-utils";
-
-interface ClientStats {
-  id: string;
-  name: string;
-  totalHours: number;
-  revenue: number | null;
-  employees: { id: string; name: string; hours: number }[];
-  topics: { topicName: string; totalHours: number; writtenOffHours: number }[];
-}
-
-interface Entry {
-  id: string;
-  date: string;
-  hours: number;
-  description: string;
-  topicName: string;
-  client: {
-    id: string;
-    name: string;
-  };
-  employee: {
-    id: string;
-    name: string;
-  };
-}
+import type { ClientStats, DrillDownEntry } from "@/types/reports";
 
 interface ByClientTabProps {
   clients: ClientStats[];
-  entries: Entry[];
+  entries: DrillDownEntry[];
   isAdmin: boolean;
   selectedClientId: string | null;
   onSelectClient: (id: string | null) => void;
@@ -157,7 +133,7 @@ export function ByClientTab({
     const employeeChartHeight = Math.max(256, employeeChartData.length * 40);
 
     // Column definitions for the entries DataTable
-    const entryColumns: ColumnDef<Entry>[] = [
+    const entryColumns: ColumnDef<DrillDownEntry>[] = [
       {
         id: "date",
         header: "Date",

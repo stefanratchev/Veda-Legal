@@ -16,23 +16,34 @@ import {
 
 type TabType = "overview" | "by-employee" | "by-client";
 
+interface TopicAggregation {
+  topicName: string;
+  totalHours: number;
+  writtenOffHours: number;
+}
+
 interface EmployeeStats {
   id: string;
   name: string;
   totalHours: number;
+  billableHours: number | null;
+  revenue: number | null;
   clientCount: number;
   topClient: { name: string; hours: number } | null;
   clients: { id: string; name: string; hours: number }[];
   dailyHours: { date: string; hours: number }[];
+  topics: TopicAggregation[];
 }
 
 interface ClientStats {
   id: string;
   name: string;
   hourlyRate: number | null;
+  clientType: "REGULAR" | "INTERNAL" | "MANAGEMENT";
   totalHours: number;
   revenue: number | null;
   employees: { id: string; name: string; hours: number }[];
+  topics: TopicAggregation[];
 }
 
 interface Entry {
@@ -54,6 +65,7 @@ export interface ReportData {
   summary: {
     totalHours: number;
     totalRevenue: number | null;
+    totalWrittenOffHours: number | null;
     activeClients: number;
   };
   byEmployee: EmployeeStats[];
@@ -67,6 +79,9 @@ export interface ReportData {
     userName: string;
     clientId: string;
     clientName: string;
+    topicName: string;
+    isWrittenOff: boolean;
+    clientType: "REGULAR" | "INTERNAL" | "MANAGEMENT";
   }[];
 }
 

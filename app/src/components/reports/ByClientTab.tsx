@@ -136,10 +136,27 @@ export function ByClientTab({
       (a, b) => b.value - a.value
     );
 
-    // Get last 10 entries
-    const recentEntries = [...clientEntries]
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 10);
+    // Prepare topic chart data
+    const topicChartData = selectedClient.topics
+      .filter((t) => t.totalHours > 0)
+      .map((t) => {
+        const pct = selectedClient.totalHours > 0
+          ? Math.round((t.totalHours / selectedClient.totalHours) * 100)
+          : 0;
+        return {
+          name: `${t.topicName}  ${formatHours(t.totalHours)} (${pct}%)`,
+          value: t.totalHours,
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+
+    // Dynamic chart heights based on number of items
+    const topicChartHeight = Math.max(256, topicChartData.length * 40);
+    const employeeChartHeight = Math.max(256, employeeChartData.length * 40);
+
+    // Get all entries sorted by date descending
+    const sortedEntries = [...clientEntries]
+      .sort((a, b) => b.date.localeCompare(a.date));
 
     return (
       <div className="space-y-6">
@@ -178,25 +195,41 @@ export function ByClientTab({
           )}
         </div>
 
-        {/* Hours by Employee chart */}
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-          <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-            Hours by Employee
-          </h3>
-          <div className="h-64">
-            <BarChart
-              data={employeeChartData}
-              valueFormatter={formatHours}
-              layout="vertical"
-            />
+        {/* Side-by-side charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Topic Breakdown */}
+          <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
+              Topic Breakdown
+            </h3>
+            <div style={{ height: topicChartHeight }}>
+              <BarChart
+                data={topicChartData}
+                valueFormatter={formatHours}
+                layout="vertical"
+              />
+            </div>
+          </div>
+          {/* Hours by Employee */}
+          <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
+              Hours by Employee
+            </h3>
+            <div style={{ height: employeeChartHeight }}>
+              <BarChart
+                data={employeeChartData}
+                valueFormatter={formatHours}
+                layout="vertical"
+              />
+            </div>
           </div>
         </div>
 
-        {/* Recent entries table */}
+        {/* Entries table */}
         <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded">
           <div className="p-4 border-b border-[var(--border-subtle)]">
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
-              Recent Entries
+              Entries
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -210,7 +243,7 @@ export function ByClientTab({
                 </tr>
               </thead>
               <tbody>
-                {recentEntries.map((entry) => (
+                {sortedEntries.map((entry) => (
                   <tr
                     key={entry.id}
                     className="border-b border-[var(--border-subtle)] last:border-b-0"

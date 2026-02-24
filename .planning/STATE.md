@@ -85,9 +85,10 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 1 | Increase height of client charts on reports overview | 2026-02-24 | c8e9d27 | [1-increase-height-of-hours-by-client-and-r](./quick/1-increase-height-of-hours-by-client-and-r/) |
 | 2 | Top 15 entries with "Other" grouping in client charts | 2026-02-24 | 004f790 | [2-show-top-15-entries-in-hours-by-client-a](./quick/2-show-top-15-entries-in-hours-by-client-a/) |
+| 3 | Truncate long client names with ellipsis in chart Y-axis | 2026-02-24 | 2fe34ab | [3-truncate-long-client-names-with-ellipsis](./quick/3-truncate-long-client-names-with-ellipsis/) |
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed quick task 2
+Stopped at: Completed quick task 3
 Resume file: None

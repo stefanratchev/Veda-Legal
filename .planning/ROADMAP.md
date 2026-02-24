@@ -12,7 +12,7 @@ This milestone enriches the existing Reports section with revenue visibility and
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Data Layer** - Extend reports API with topic aggregations and revenue calculations
+- [x] **Phase 1: Data Layer** - Extend reports API with topic aggregations and revenue calculations (completed 2026-02-24)
 - [ ] **Phase 2: Overview Revenue Charts** - Add Revenue by Client and Revenue by Employee charts to the overview tab
 - [ ] **Phase 3: Client Drill-Down Enhancements** - Add topic breakdown, hours trend, full entry table with topic column to client drill-down
 - [ ] **Phase 4: Employee Drill-Down Enhancements** - Add cross-client topic breakdown, full entry table with topic column to employee drill-down
@@ -86,7 +86,7 @@ Note: Phases 3 and 4 both depend on Phase 1 only (not on each other or Phase 2).
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Data Layer | 0/2 | Not started | - |
+| 1. Data Layer | 0/2 | Complete    | 2026-02-24 |
 | 2. Overview Revenue Charts | 0/? | Not started | - |
 | 3. Client Drill-Down Enhancements | 0/? | Not started | - |
 | 4. Employee Drill-Down Enhancements | 0/? | Not started | - |

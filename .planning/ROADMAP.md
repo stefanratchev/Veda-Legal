@@ -14,8 +14,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Data Layer** - Extend reports API with topic aggregations and revenue calculations (completed 2026-02-24)
 - [x] **Phase 2: Overview Revenue Charts** - Add Revenue by Client and Revenue by Employee charts to the overview tab (completed 2026-02-24)
-- [ ] **Phase 3: Client Drill-Down Enhancements** - Add topic breakdown, hours trend, full entry table with topic column to client drill-down
-- [ ] **Phase 4: Employee Drill-Down Enhancements** - Add cross-client topic breakdown, full entry table with topic column to employee drill-down
+- [x] **Phase 3: Client Drill-Down Enhancements** - Add topic breakdown, hours trend, full entry table with topic column to client drill-down (completed 2026-02-24)
+- [x] **Phase 4: Employee Drill-Down Enhancements** - Add cross-client topic breakdown, full entry table with topic column to employee drill-down (completed 2026-02-24)
 
 ## Phase Details
 
@@ -32,8 +32,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — TDD: Extend API route with topic aggregations, revenue rules, and write-off handling
-- [ ] 01-02-PLAN.md — Update server component and frontend TypeScript interfaces to match API route
+- [x] 01-01-PLAN.md — TDD: Extend API route with topic aggregations, revenue rules, and write-off handling
+- [x] 01-02-PLAN.md — Update server component and frontend TypeScript interfaces to match API route
 
 ### Phase 2: Overview Revenue Charts
 **Goal**: Partners and admins can see revenue distribution across clients and employees directly in the overview tab
@@ -62,9 +62,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-00-PLAN.md — Wave 0: Create ByClientTab test scaffold (failing stubs for CDR-01, CDR-03, CDR-04)
-- [ ] 03-01-PLAN.md — Add topic breakdown chart and side-by-side layout with Hours by Employee
-- [ ] 03-02-PLAN.md — Replace entry table with DataTable, add topic column and pagination
+- [x] 03-00-PLAN.md — Wave 0: Create ByClientTab test scaffold (failing stubs for CDR-01, CDR-03, CDR-04)
+- [x] 03-01-PLAN.md — Add topic breakdown chart and side-by-side layout with Hours by Employee
+- [x] 03-02-PLAN.md — Replace entry table with DataTable, add topic column and pagination
 
 ### Phase 4: Employee Drill-Down Enhancements
 **Goal**: When drilling into an employee, admins can see their topic distribution across all clients and browse all entries for the period
@@ -77,9 +77,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 04-00-PLAN.md — Wave 0: Create ByEmployeeTab test scaffold (failing stubs for EDR-01, EDR-02, EDR-03)
-- [ ] 04-01-PLAN.md — Add topic breakdown chart and side-by-side layout with Hours by Client
-- [ ] 04-02-PLAN.md — Replace entry table with DataTable, add topic column and pagination
+- [x] 04-00-PLAN.md — Wave 0: Create ByEmployeeTab test scaffold (failing stubs for EDR-01, EDR-02, EDR-03)
+- [x] 04-01-PLAN.md — Add topic breakdown chart and side-by-side layout with Hours by Client
+- [x] 04-02-PLAN.md — Replace entry table with DataTable, add topic column and pagination
 
 ## Progress
 
@@ -91,5 +91,5 @@ Note: Phases 3 and 4 both depend on Phase 1 only (not on each other or Phase 2).
 |-------|----------------|--------|-----------|
 | 1. Data Layer | 2/2 | Complete    | 2026-02-24 |
 | 2. Overview Revenue Charts | 2/2 | Complete    | 2026-02-24 |
-| 3. Client Drill-Down Enhancements | 0/3 | Not started | - |
-| 4. Employee Drill-Down Enhancements | 0/3 | Not started | - |
+| 3. Client Drill-Down Enhancements | 3/3 | Complete    | 2026-02-24 |
+| 4. Employee Drill-Down Enhancements | 3/3 | Complete    | 2026-02-24 |

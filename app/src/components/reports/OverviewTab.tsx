@@ -152,7 +152,7 @@ export function OverviewTab({
           <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
             Hours by Client
           </h3>
-          <div className="h-64">
+          <div className="h-96">
             <BarChart
               data={clientChartData}
               onBarClick={onClientClick}
@@ -166,7 +166,7 @@ export function OverviewTab({
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
               Revenue by Client
             </h3>
-            <div className="h-64">
+            <div className="h-96">
               <RevenueBarChart
                 data={clientRevenueData}
                 comparisonData={clientComparisonRevenue}

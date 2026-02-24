@@ -1,8 +1,8 @@
-# Veda Legal Timesheets — Reports Improvements
+# Veda Legal Timesheets
 
 ## What This Is
 
-A legal practice management app used by ~10 employees and ~200 clients. This milestone focuses on improving the Reports section — adding revenue visibility to the overview, richer drill-down views for clients and employees, and showing complete time entry data for selected periods.
+A legal practice management app used by ~10 employees and ~200 clients. Features timesheet tracking, billing/invoicing, and reports with revenue visibility and rich drill-downs.
 
 ## Core Value
 
@@ -12,34 +12,26 @@ Partners and admins can quickly understand firm performance — who worked on wh
 
 ### Validated
 
-<!-- Existing capabilities confirmed working in current codebase. -->
-
 - ✓ Time entry logging with client, topic, subtopic, hours, description — existing
 - ✓ Reports overview with Total Hours, Total Revenue, Active Clients summary cards — existing
 - ✓ Hours by Employee bar chart in overview — existing
-- ✓ Hours by Client donut chart in overview — existing
+- ✓ Hours by Client bar chart in overview — existing (upgraded from donut to horizontal bar in v1.0)
 - ✓ Date range picker with presets (This Month, Last Month, custom) — existing
 - ✓ Comparison picker (Previous Period, Previous Year) with % change — existing
-- ✓ By Employee tab with drill-down (hours by client, hours by day charts) — existing
-- ✓ By Client tab with drill-down (hours by employee chart) — existing
 - ✓ Admin/non-admin access control on revenue data — existing
 - ✓ Billing system with service descriptions, line items, discounts, waivers, retainers — existing
 - ✓ Client hourly rates stored on client records — existing
+- ✓ Revenue by Client chart in overview (rate x hours) — v1.0
+- ✓ Revenue by Employee chart in overview (proportional) — v1.0
+- ✓ Client drill-down: topic breakdown summary — v1.0
+- ✓ Employee drill-down: topic breakdown across clients — v1.0
+- ✓ Drill-down entry tables show ALL entries with pagination — v1.0
+- ✓ Entry tables include topic column — v1.0
+- ✓ Reports API includes topic and revenue data — v1.0
 
 ### Active
 
-<!-- Current scope for this milestone. -->
-
-- [ ] Revenue by Client chart in overview (rate × hours)
-- [ ] Revenue by Employee chart in overview (proportional by hours worked per client × rate)
-- [ ] Client drill-down: topic breakdown summary at the top (hours per topic)
-- [ ] Client drill-down: hours by employee chart (keep existing)
-- [ ] Client drill-down: hours over time trend chart
-- [ ] Employee drill-down: hours by client chart (keep existing)
-- [ ] Employee drill-down: hours over time trend chart (keep existing)
-- [ ] Employee drill-down: topic breakdown across clients
-- [ ] Drill-down entry tables show ALL entries for selected date range (not just last 10)
-- [ ] Entry tables include topic column
+(No active requirements — define with `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -48,42 +40,39 @@ Partners and admins can quickly understand firm performance — who worked on wh
 - Filtering reports by topic/subtopic — not requested
 - Non-admin revenue visibility changes — current access control stays as-is
 - Mobile-specific report layouts — not requested
+- Actual billed revenue from service descriptions — user decided rate x hours only
+- Revenue in drill-down views — user chose hours and activity patterns for drill-downs
+- Hours trend chart in client drill-down — dropped by user decision (CDR-02)
 
 ## Context
 
-**Existing reports architecture:**
-- Server Component (`reports/page.tsx`) fetches current + comparison period data via Drizzle, passes to `ReportsContent` client component
-- Client component manages tab state, date range, comparison, and drill-down selection
-- Single API endpoint `GET /api/reports?startDate=&endDate=` returns all data (summary, byEmployee, byClient, entries)
-- Charts use Recharts 3.6.0 with dark theme styling via CSS variables
-- Revenue currently calculated as `hours × client.hourlyRate` only — no integration with finalized service descriptions
+Shipped v1.0 Reports Improvements. Reports section now has:
+- Overview: summary cards + paired rows of Hours/Revenue charts by Client and Employee
+- Client drill-down: topic breakdown + hours by employee (side-by-side) + full entry DataTable
+- Employee drill-down: topic breakdown + hours by client (side-by-side) + full entry DataTable
+- 965 tests across 46 files, all passing
 
-**New revenue data source:**
-- Service descriptions (DRAFT → FINALIZED) contain actual billed amounts including discounts, caps, waivers, and retainer logic
-- Billing calculations centralized in `lib/billing-pdf.tsx` — `calculateGrandTotal()`, `calculateRetainerGrandTotal()`
-- Need to query finalized SDs for the selected period to get "actual billed" revenue alongside the existing "estimated" calculation
-
-**Drill-down rethink:**
-- Current employee drill-down: Hours by Client (bar) + Hours by Day (bar) + last 10 entries table
-- Current client drill-down: Hours by Employee (bar) + last 10 entries table
-- Both need richer top sections with topic breakdowns and time trends
-- Entry tables need to show all entries for the period with a topic column added
+Tech stack: Next.js 16, Recharts, Drizzle ORM, PostgreSQL, Tailwind CSS v4.
 
 ## Constraints
 
 - **Tech stack**: Next.js 16 + Recharts 3.6.0 + Drizzle ORM — no new dependencies needed
-- **Access control**: Revenue data (both estimated and actual) must remain admin/partner only
-- **Performance**: Reports API already returns all data in one call — adding topic and SD data must not make this unacceptably slow for ~200 clients
-- **Currency**: Euros (EUR) — `formatCurrency()` in `billing-pdf.tsx`
+- **Access control**: Revenue data must remain admin/partner only
+- **Performance**: Reports API returns all data in one call — must stay fast for ~200 clients
+- **Currency**: Euros (EUR)
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Separate revenue charts (not merged with hours charts) | Revenue and hours have different scales; separate charts avoid confusing dual-axis layouts | — Pending |
-| Revenue = rate × hours only (no SD integration) | User decided to keep reporting simple — service descriptions add complexity without proportional value for this milestone | — Pending |
-| No revenue in drill-downs | User chose hours and activity patterns for drill-downs; revenue stays at overview level | — Pending |
-| All entries in drill-down tables | Last-10 limit was too restrictive for real analysis; full period data needed | — Pending |
+| Separate revenue charts (not dual-axis) | Different scales; avoid confusing layouts | ✓ Good |
+| Revenue = rate x hours only (no SD integration) | Keep reporting simple for this milestone | ✓ Good |
+| No revenue in drill-downs | Hours and activity patterns sufficient for drill-downs | ✓ Good |
+| All entries in drill-down tables (DataTable, 50/page) | Last-10 limit too restrictive for analysis | ✓ Good |
+| Horizontal bars for all charts | Better scalability with many items | ✓ Good |
+| Teal #4ECDC4 as revenue accent color | Distinct from coral pink hours | ✓ Good |
+| CDR-02 hours trend chart dropped | User decision — not needed | ✓ Good |
+| Top-15 with "Other" grouping | Prevents chart overflow with many clients | ✓ Good |
 
 ---
-*Last updated: 2026-02-24 after initialization*
+*Last updated: 2026-02-24 after v1.0 milestone*

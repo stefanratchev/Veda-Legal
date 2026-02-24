@@ -5,60 +5,49 @@
 ## Test Framework
 
 **Runner:**
-- Vitest 4.0.16 with jsdom environment
+- Vitest 4.0.16
 - Config: `app/vitest.config.ts`
-- React Testing Library 16.3.1 for component tests
+- Environment: jsdom (browser APIs available in all tests)
+- Globals enabled: `describe`, `it`, `expect`, `vi`, `beforeEach`, `afterEach` available without import (though explicit imports are used as convention)
 
 **Assertion Library:**
-- Built-in Vitest assertions (expect API)
-- Testing Library matchers via `@testing-library/jest-dom` (v6.9.1)
+- Vitest built-in (`expect`) + `@testing-library/jest-dom` matchers (`.toBeInTheDocument()`, `.toBeDisabled()`, etc.)
+- Setup: `app/src/test/setup.ts` imports `@testing-library/jest-dom/vitest`
 
 **Run Commands:**
 ```bash
-npm run test              # Run tests in watch mode
-npm run test -- file     # Run specific test file (e.g., npm run test -- date-utils)
-npm run test -- --run    # Run all tests once (no watch)
-npm run test:coverage    # Run tests with coverage report (v8 provider)
+npm run test               # Watch mode (default)
+npm run test -- someFile   # Run specific file
+npm run test -- --run      # Run all tests once (no watch)
+npm run test:coverage      # Run with v8 coverage report
 ```
 
 ## Test File Organization
 
 **Location:**
-- Co-located with source: `src/lib/date-utils.ts` → `src/lib/date-utils.test.ts`
-- API routes: `src/app/api/timesheets/route.ts` → `src/app/api/timesheets/route.test.ts`
-- Components: `src/components/timesheets/WeekStrip.tsx` → `src/components/timesheets/WeekStrip.test.tsx`
+- Co-located with source files — test file sits next to the file it tests
+- `app/src/lib/date-utils.ts` → `app/src/lib/date-utils.test.ts`
+- `app/src/app/api/billing/[id]/route.ts` → `app/src/app/api/billing/[id]/route.test.ts`
+- `app/src/components/timesheets/EntryCard.tsx` → `app/src/components/timesheets/EntryCard.test.tsx`
 
 **Naming:**
-- Pattern: `{name}.test.ts` or `{name}.test.tsx`
-- Vitest includes files matching `src/**/*.{test,spec}.{ts,tsx}`
+- Files: `[source-name].test.ts` or `[source-name].test.tsx`
+- Top-level `describe`: matches the module name or component name
+- HTTP method describes: `describe("GET /api/timesheets", ...)`, `describe("POST /api/timesheets", ...)`
 
-**Structure:**
+**Shared test utilities:**
 ```
-app/src/
-├── lib/
-│   ├── date-utils.ts
-│   ├── date-utils.test.ts        # Unit tests
-│   ├── api-utils.ts
-│   └── api-utils.test.ts
-├── app/api/
-│   ├── timesheets/
-│   │   ├── route.ts
-│   │   └── route.test.ts          # API route tests
-│   └── billing/
-│       └── [id]/
-│           └── topics/
-│               ├── reorder/
-│               │   ├── route.ts
-│               │   └── route.test.ts
-└── test/
-    ├── setup.ts                   # Vitest global setup
-    ├── utils.tsx                  # renderWithProviders helper
-    ├── helpers/
-    │   └── api.ts                 # createMockRequest
-    └── mocks/
-        ├── factories.ts           # createMockUser, createMockClient, etc.
-        ├── auth.ts                # Auth mocking helpers
-        └── db.ts                  # Database mocking utilities
+app/src/test/
+├── setup.ts                  # Global test setup (jest-dom, cleanup)
+├── utils.tsx                 # renderWithProviders()
+├── helpers/
+│   ├── api.ts                # createMockRequest()
+│   └── index.ts              # Re-exports
+└── mocks/
+    ├── auth.ts               # Auth mock helpers
+    ├── db.ts                 # DB mock helpers
+    ├── factories.ts          # Data factory functions
+    └── index.ts              # Re-exports
 ```
 
 ## Test Structure
@@ -67,50 +56,66 @@ app/src/
 ```typescript
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-describe("date-utils", () => {
-  describe("formatDateLong", () => {
-    it("formats date with full weekday, day, month and year", () => {
-      const date = new Date(2024, 11, 20);
-      expect(formatDateLong(date)).toBe("Friday, 20 December 2024");
+describe("GET /api/billing/[id]/topics/reorder", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("Authentication", () => {
+    it("returns 401 when not authenticated", async () => { ... });
+  });
+
+  describe("Validation", () => {
+    beforeEach(() => {
+      // shared setup for all validation tests
+      setupAuthenticatedAdmin();
+      mockDb.query.serviceDescriptions.findFirst.mockResolvedValue({ status: "DRAFT" });
     });
 
-    it("handles year boundary (Jan 1)", () => {
-      const date = new Date(2025, 0, 1);
-      expect(formatDateLong(date)).toBe("Wednesday, 1 January 2025");
-    });
+    it("returns 400 when items is missing", async () => { ... });
+    it("returns 400 when items is empty array", async () => { ... });
+  });
+
+  describe("Happy Path", () => {
+    it("returns success and calls transaction for valid reorder", async () => { ... });
+  });
+
+  describe("Error Handling", () => {
+    it("returns 500 when transaction throws", async () => { ... });
   });
 });
 ```
 
 **Patterns:**
-- Top-level `describe()` wraps entire module
-- Nested `describe()` blocks for function groups
-- `beforeEach()` clears mocks before each test
-- `it()` for individual test cases with descriptive names
-- Arrange-act-assert within each test
-
-**Setup:**
-- Global setup file: `src/test/setup.ts` registers `@testing-library/jest-dom/vitest` and adds cleanup
-- Mocks must be set up before imports using `vi.hoisted()`
+- `beforeEach(() => { vi.clearAllMocks(); })` at top-level of every test suite — always reset mocks between tests
+- Nested `describe` blocks group by concern: Authentication, Validation, Happy Path, Error Handling, Authorization, Role-Based Behavior
+- Helper functions within test files for repeated setup: `function setupAuthenticatedAdmin() { ... }`
+- `beforeEach` in nested `describe` for shared preconditions
 
 ## Mocking
 
-**Framework:** Vitest `vi` API for mocking
+**Framework:** Vitest (`vi.mock`, `vi.fn`, `vi.hoisted`, `vi.stubGlobal`)
 
-**Patterns:**
+**Critical pattern — `vi.hoisted()` for API route tests:**
 
-### API Route Tests (vi.hoisted pattern)
+All mocks for API route tests MUST use `vi.hoisted()` because `vi.mock()` is hoisted to the top of the file by Vitest's transformer, but the mock factory needs to reference variables. `vi.hoisted()` creates those variables before hoisting occurs.
+
 ```typescript
-// Use vi.hoisted() to create mocks that are available when vi.mock is hoisted
-const { mockRequireAuth, mockDb } = vi.hoisted(() => ({
-  mockRequireAuth: vi.fn(),
-  mockDb: {
-    query: {
-      users: { findFirst: vi.fn() },
+// Step 1: Create mocks with vi.hoisted()
+const { mockRequireAdmin, mockDb } = vi.hoisted(() => {
+  return {
+    mockRequireAdmin: vi.fn(),
+    mockDb: {
+      query: {
+        serviceDescriptions: { findFirst: vi.fn() },
+      },
+      transaction: vi.fn(),
+      update: vi.fn(),
     },
-  },
-}));
+  };
+});
 
+// Step 2: Wire mocks to modules
 vi.mock("@/lib/db", () => ({
   db: mockDb,
 }));
@@ -118,318 +123,231 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/api-utils", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/api-utils")>();
   return {
-    ...original,
-    requireAuth: mockRequireAuth,
+    ...original,          // Preserve non-mocked exports
+    requireAdmin: mockRequireAdmin,
   };
 });
 
-// Import route AFTER mocks are set up
-import { GET, POST, DELETE } from "./route";
+// Step 3: Import route handler AFTER mocks are set up
+import { PATCH } from "./route";
 ```
 
-### Component Tests (direct mock)
+**Module mocking patterns:**
 ```typescript
-vi.mock("@/hooks/useClickOutside", () => ({
-  useClickOutside: vi.fn(),
+// Mock entire module
+vi.mock("@/lib/db", () => ({ db: mockDb }));
+
+// Partial mock — preserve original exports
+vi.mock("@/lib/api-utils", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/api-utils")>();
+  return { ...original, requireAdmin: mockRequireAdmin };
+});
+
+// Mock Next.js navigation
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
-vi.mock("@/lib/date-utils", () => ({
-  formatDateISO: (date: Date) => { /* implementation */ },
-  getWeekDays: (centerDate: Date) => { /* implementation */ },
+// Mock global fetch (for M365 Graph API)
+vi.stubGlobal("fetch", mockFetch);
+```
+
+**Component mocking:**
+```typescript
+// Mock child component with test-id attributes
+vi.mock("@/components/ui/ClientSelect", () => ({
+  ClientSelect: ({ value, onChange }: { clients: ...; value: string; onChange: (id: string) => void }) => (
+    <button data-testid="client-select" onClick={() => onChange("client-1")}>
+      {value || "Select client..."}
+    </button>
+  ),
 }));
 ```
 
 **What to Mock:**
-- External dependencies: `db`, `auth`, API utilities
-- Hooks: `useClickOutside`, `useState` side effects
-- Date functions when predictable values needed
-- Network calls via `vi.stubGlobal("fetch", mockFetch)` for M365 tests
+- Database (`@/lib/db`) — never hit real database in tests
+- Auth functions (`requireAuth`, `requireAdmin`, `requireWriteAccess`)
+- `getUserFromSession` when testing user-aware logic
+- External HTTP calls (Microsoft Graph API via `vi.stubGlobal("fetch", ...)`)
+- Next.js navigation (`useRouter`, `usePathname`)
+- Child components in component tests when they have complex setup requirements
 
 **What NOT to Mock:**
-- Pure utility functions being tested
-- React core components
-- Real date/time calculations (unless testing time-dependent logic)
+- Utility functions from `@/lib/date-utils`, `@/lib/billing-utils` — test these through their own unit tests
+- Simple validation functions from `@/lib/api-utils` — preserve with `importOriginal`
 
 ## Fixtures and Factories
 
-**Test Data:**
-- Factory functions in `src/test/mocks/factories.ts` create consistent test objects
-- Use `createId()` from `@paralleldrive/cuid2` for IDs
+**Test Data:** Factory functions in `app/src/test/mocks/factories.ts`:
 
-**Factories:**
 ```typescript
-export function createMockUser(overrides: Partial<MockUser> = {}): MockUser {
-  return {
-    id: createId(),
-    email: "test@example.com",
-    name: "Test User",
-    position: "ASSOCIATE",
-    status: "ACTIVE",
-    ...overrides,
-  };
-}
+// Override any field with Partial<T>
+const user = createMockUser({ position: "ADMIN", id: "user-123" });
+const client = createMockClient({ status: "INACTIVE" });
+const entry = createMockTimeEntry({ userId: user.id, hours: "8.0" });
+const subtopic = createMockSubtopic({ status: "INACTIVE" });
+```
 
-export function createMockClient(overrides: Partial<MockClient> = {}): MockClient {
-  return {
-    id: createId(),
-    name: "Test Client Ltd",
-    status: "ACTIVE",
-    ...overrides,
-  };
-}
+**Factory defaults:**
+- `createMockUser()`: ASSOCIATE, ACTIVE, auto-generated cuid2 id
+- `createMockClient()`: ACTIVE, "Test Client Ltd"
+- `createMockTimeEntry()`: date "2024-12-20", hours "2.5", includes client relation
+- `createMockSubtopic()`: ACTIVE, with ACTIVE parent topic
 
-export function createMockTimeEntry(overrides: Partial<MockTimeEntry> = {}): MockTimeEntry {
-  const clientId = overrides.clientId || createId();
+**Inline test fixtures for complex objects:**
+```typescript
+// Local helper in test file for complex domain objects
+function createServiceDescription(notes: string | null): ServiceDescription {
   return {
-    id: createId(),
-    userId: createId(),
-    clientId,
-    date: "2024-12-20",
-    hours: "2.5",
-    description: "Test time entry description",
-    topicId: createId(),
-    subtopicId: createId(),
-    topicName: "General Advisory",
-    subtopicName: "Client correspondence:",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    client: { id: clientId, name: "Test Client Ltd" },
-    ...overrides,
-  };
-}
-
-export function createMockSubtopic(overrides: Partial<MockSubtopic> = {}): MockSubtopic {
-  return {
-    id: createId(),
-    name: "Client correspondence:",
-    status: "ACTIVE",
-    topic: { name: "General Advisory", status: "ACTIVE" },
-    ...overrides,
+    id: "sd-1",
+    clientId: "client-1",
+    client: { id: "client-1", name: "Acme Corp", hourlyRate: 200, notes, ... },
+    status: "DRAFT",
+    topics: [],
+    ...
   };
 }
 ```
 
 **Location:**
-- `src/test/mocks/factories.ts` - All factory functions
-- `src/test/mocks/auth.ts` - Auth state helpers
-- `src/test/mocks/db.ts` - Database mock utilities
+- Shared factories: `app/src/test/mocks/factories.ts`
+- Test-local fixtures: inline within the test file as functions or `const` declarations
 
-**Auth Test Helpers:**
+## Coverage
+
+**Requirements:** No enforced minimum (no `threshold` in vitest config)
+
+**Provider:** v8
+
+**View Coverage:**
+```bash
+npm run test:coverage
+# Reports: text (console), json, html
+# HTML report in: app/coverage/
+```
+
+**Exclusions from coverage:**
+- `src/**/*.{test,spec}.{ts,tsx}`
+- `src/test/**`
+- `src/types/**`
+
+## Test Types
+
+**Unit Tests:**
+- Scope: Individual utility functions, hooks, pure logic
+- Examples: `lib/date-utils.test.ts`, `lib/auth-utils.test.ts`, `hooks/useClickOutside.test.ts`
+- Pattern: Import function directly, call with inputs, assert outputs
+
+**Integration Tests (API Routes):**
+- Scope: Full API handler execution with mocked DB and auth
+- Tests verify: HTTP status codes, response body shape, auth enforcement, validation errors, happy path behavior
+- Pattern: `vi.hoisted` → `vi.mock` → `import handler` → `createMockRequest` → call handler → assert response
+
+**Component Tests:**
+- Scope: React component rendering and user interaction
+- Tool: `@testing-library/react` with `render`, `screen`, `fireEvent`
+- Pattern: Render with props, query DOM with `screen.getBy*`/`screen.queryBy*`, interact with `fireEvent`
+- No E2E tests
+
+## Common Patterns
+
+**API route test structure:**
 ```typescript
-// Helper to set up authenticated user in API route tests
+describe("PATCH /api/billing/[id]", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    mockRequireAdmin.mockResolvedValue({ error: "Unauthorized", status: 401 });
+
+    const request = createMockRequest({
+      method: "PATCH",
+      url: "/api/billing/sd-1",
+      body: { status: "FINALIZED" },
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "sd-1" }),  // Note: params is a Promise in Next.js App Router
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(data.error).toBe("Unauthorized");
+  });
+});
+```
+
+**Chainable DB mock pattern:**
+```typescript
+// insert().values().returning()
+mockDb.insert.mockReturnValue({
+  values: vi.fn().mockReturnValue({
+    returning: vi.fn().mockResolvedValue([createdEntry]),
+  }),
+});
+
+// update().set().where()
+mockDb.update.mockReturnValue({
+  set: vi.fn().mockReturnValue({
+    where: vi.fn().mockResolvedValue(undefined),
+  }),
+});
+```
+
+**Async component testing:**
+```typescript
+// fireEvent (NOT userEvent — @testing-library/user-event is not installed)
+fireEvent.click(screen.getByText("Client Notes"));
+expect(screen.getByText(/First line/)).toBeInTheDocument();
+```
+
+**Error testing:**
+```typescript
+it("returns 500 when transaction throws", async () => {
+  mockDb.transaction.mockRejectedValue(new Error("Database connection failed"));
+
+  const response = await PATCH(request, { params: Promise.resolve({ id: "sd-1" }) });
+  const data = await response.json();
+
+  expect(response.status).toBe(500);
+  expect(data.error).toBe("Failed to reorder topics");
+});
+```
+
+**Hook testing with renderHook:**
+```typescript
+import { renderHook } from "@testing-library/react";
+
+const { rerender, unmount } = renderHook(
+  ({ enabled }) => useClickOutside(ref, handler, enabled),
+  { initialProps: { enabled: false } }
+);
+rerender({ enabled: true });
+```
+
+**Auth setup helpers:**
+```typescript
+// In test file: local helper composing mock setup
 function setupAuthenticatedUser(user: MockUser) {
   mockRequireAuth.mockResolvedValue({
     session: { user: { name: user.name, email: user.email } },
   });
   mockGetUserFromSession.mockResolvedValue({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    position: user.position,
+    id: user.id, email: user.email, name: user.name, position: user.position,
   });
 }
 
-// Reset mocks between tests
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+// In test body
+const user = createMockUser({ position: "ADMIN" });
+setupAuthenticatedUser(user);
 ```
 
-**Database Mock Helpers:**
+**Component with providers:**
 ```typescript
-// Create mock with chainable methods
-export function createMockDb() {
-  return {
-    query: {
-      users: { findFirst: vi.fn(), findMany: vi.fn() },
-      clients: { findFirst: vi.fn(), findMany: vi.fn() },
-      timeEntries: { findFirst: vi.fn(), findMany: vi.fn() },
-    },
-    select: vi.fn(),
-    insert: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-  };
-}
-
-// Helper for chainable insert
-export function mockInsertReturning<T>(data: T) {
-  return {
-    values: vi.fn().mockReturnValue({
-      returning: vi.fn().mockResolvedValue([data]),
-    }),
-  };
-}
-
-// Helper for chainable update
-export function mockUpdateReturning<T>(data: T | null) {
-  return {
-    set: vi.fn().mockReturnValue({
-      where: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue(data ? [data] : []),
-      }),
-    }),
-  };
-}
-```
-
-## Coverage
-
-**Requirements:** Not enforced (no coverage threshold in config)
-
-**View Coverage:**
-```bash
-npm run test:coverage
-# Generates: text, json, html reports
-# HTML report: coverage/index.html
-```
-
-**Coverage Config:**
-- Provider: v8
-- Includes: `src/**/*.{ts,tsx}`
-- Excludes: test files, test utilities, type files
-
-## Test Types
-
-**Unit Tests:**
-- Location: `src/lib/*.test.ts`
-- Scope: Pure functions with isolated inputs/outputs
-- Example: `date-utils.test.ts` tests date formatting without external dependencies
-- Pattern: Create input, call function, assert output
-```typescript
-describe("formatHours", () => {
-  it("formats whole hours", () => {
-    expect(formatHours(3)).toBe("3h");
-  });
-  it("formats hours with minutes", () => {
-    expect(formatHours(2.5)).toBe("2h 30m");
-  });
-});
-```
-
-**Integration Tests:**
-- Location: `src/app/api/**/*.test.ts`
-- Scope: API routes with mocked db and auth
-- Example: `route.test.ts` tests full request-response cycle
-- Pattern: Mock dependencies, create request, call handler, assert response
-```typescript
-describe("GET /api/timesheets", () => {
-  it("returns 401 when not authenticated", async () => {
-    mockRequireAuth.mockResolvedValue({ error: "Unauthorized", status: 401 });
-    const request = createMockRequest({ method: "GET", url: "/api/timesheets" });
-    const response = await GET(request);
-    expect(response.status).toBe(401);
-  });
-});
-```
-
-**Component Tests:**
-- Location: `src/components/**/*.test.tsx`
-- Scope: React components with mocked hooks and utilities
-- Example: `WeekStrip.test.tsx` tests rendering and interaction
-- Pattern: Mock dependencies, render component, simulate interaction, assert updates
-```typescript
-describe("WeekStrip", () => {
-  it("renders all 7 weekdays (Mon-Sun)", () => {
-    render(<WeekStrip {...defaultProps} />);
-    expect(screen.getByText("Mon")).toBeInTheDocument();
-  });
-  it("calls onSelectDate when day clicked", () => {
-    render(<WeekStrip {...defaultProps} />);
-    fireEvent.click(screen.getByText("26"));
-    expect(mockOnSelectDate).toHaveBeenCalled();
-  });
-});
-```
-
-**E2E Tests:**
-- Not used in this codebase
-
-## Common Patterns
-
-**Async Testing:**
-```typescript
-it("fetches entries for a date", async () => {
-  mockDb.query.timeEntries.findMany.mockResolvedValue([mockEntry1, mockEntry2]);
-
-  const response = await GET(createMockRequest({ method: "GET", url: "/api/timesheets?date=2024-12-20" }));
-
-  expect(response.status).toBe(200);
-  const data = await response.json();
-  expect(data).toHaveLength(2);
-});
-```
-
-**Error Testing:**
-```typescript
-it("returns 400 for invalid hours", async () => {
-  const request = createMockRequest({
-    method: "POST",
-    url: "/api/timesheets",
-    body: { hours: 15 }, // Exceeds MAX_HOURS_PER_ENTRY
-  });
-
-  const response = await POST(request);
-  expect(response.status).toBe(400);
-  const data = await response.json();
-  expect(data.error).toContain("Invalid hours");
-});
-```
-
-**Component Interaction:**
-```typescript
-// Note: @testing-library/user-event NOT installed; use fireEvent
-import { fireEvent, render, screen } from "@testing-library/react";
-
-it("calls handler on button click", () => {
-  render(<Component />);
-  fireEvent.click(screen.getByRole("button", { name: /submit/i }));
-  expect(mockHandler).toHaveBeenCalled();
-});
-```
-
-**Fixed Dates for Predictable Tests:**
-```typescript
-// Use specific dates to avoid flaky tests
-const selectedDate = new Date(2024, 11, 26); // Thu Dec 26, 2024
-const today = new Date(2024, 11, 26);
-
-// Mock date functions for consistent output
-vi.mock("@/lib/date-utils", () => ({
-  formatDateISO: (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  },
-}));
-```
-
-## Test Utilities
-
-**API Helper:**
-- `createMockRequest()` from `src/test/helpers/api.ts`
-- Creates NextRequest objects for API route testing
-- Accepts method, url, body, headers
-```typescript
-const request = createMockRequest({
-  method: "POST",
-  url: "/api/billing/sd-1/topics/reorder",
-  body: { items: [{ id: "topic-1", displayOrder: 0 }] },
-});
-```
-
-**Component Helper:**
-- `renderWithProviders()` from `src/test/utils.tsx`
-- Wraps components with required context providers (MobileNavProvider)
-- Use as drop-in replacement for render
-```typescript
-export function renderWithProviders(
-  ui: ReactElement,
-  options?: Omit<RenderOptions, "wrapper">
-) {
-  return render(ui, { wrapper: AllTheProviders, ...options });
-}
+import { renderWithProviders } from "@/test/utils";
+// Wraps with MobileNavProvider and any other required contexts
+renderWithProviders(<ComponentUnderTest />);
 ```
 
 ---

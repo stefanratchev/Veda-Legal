@@ -5,111 +5,104 @@
 ## Languages
 
 **Primary:**
-- TypeScript 5.x - Full codebase, strict mode enabled, used in all source files
-- JSX/TSX - React components and Next.js pages
-- SQL - Database migrations and schema (PostgreSQL dialect)
+- TypeScript 5.x - All application source code (`app/src/**/*.ts`, `app/src/**/*.tsx`)
 
 **Secondary:**
-- JavaScript - Build configuration files (ESLint, PostCSS, Vitest configs)
+- JavaScript (MJS) - Config files only (`eslint.config.mjs`, `postcss.config.mjs`, `app/scripts/generate-favicons.mjs`)
+- CSS - Design system (`app/src/app/globals.css`)
 
 ## Runtime
 
 **Environment:**
-- Node.js 22 (production target per `.github/workflows/ci.yml`)
-- Built with Next.js 16 App Router
+- Node.js 22.x (production target; local dev also runs 22.17.0)
 
 **Package Manager:**
-- npm 10.x (inferred from Node 22)
-- Lockfile: `package-lock.json` present and committed
+- npm
+- Lockfile: `app/package-lock.json` (present, committed)
 
 ## Frameworks
 
 **Core:**
-- Next.js 16.0.10 - Full-stack React framework with App Router
-- React 19.2.1 - UI library with concurrent features
-- React DOM 19.2.1 - React rendering engine
+- Next.js 16.0.10 - App Router; standalone output mode for Azure deployment
+- React 19.2.1 - UI rendering
+- React DOM 19.2.1 - DOM bindings
+
+**Auth:**
+- NextAuth.js 4.24.13 - Session management, JWT strategy, Azure AD SSO provider
+  - Config: `app/src/lib/auth.ts`
+  - Middleware: `app/src/middleware.ts`
+
+**Database ORM:**
+- Drizzle ORM 0.45.1 - Type-safe PostgreSQL queries
+  - Schema: `app/src/lib/schema.ts`
+  - Client: `app/src/lib/drizzle.ts`
+  - Config: `app/drizzle.config.ts`
+  - Migrations: `app/drizzle/`
 
 **Testing:**
-- Vitest 4.0.16 - Unit/integration test runner (jsdom environment)
-- @testing-library/react 16.3.1 - Component testing utilities
-- @testing-library/dom 10.4.1 - DOM testing utilities
-- @testing-library/jest-dom 6.9.1 - Custom matchers (@testing-library/jest-dom/vitest)
-- @vitest/coverage-v8 4.0.16 - Code coverage reports
+- Vitest 4.0.16 - Test runner
+  - Config: `app/vitest.config.ts`
+  - Setup: `app/src/test/setup.ts`
+- React Testing Library 16.3.1 - Component testing
+- @testing-library/jest-dom 6.9.1 - DOM assertions
+- @vitest/coverage-v8 4.0.16 - Code coverage
 
 **Build/Dev:**
-- TypeScript 5.x - Language compiler
-- ESLint 9.x - Linting (Next.js web vitals + TypeScript config)
-- Tailwind CSS 4.x - Utility-first CSS framework
-- PostCSS 8.x - CSS processing pipeline
-- @tailwindcss/postcss 4.x - Tailwind PostCSS integration
-- Drizzle Kit 0.31.8 - Database schema generation and migrations
-- tsx - TypeScript execution (used for seed scripts)
+- ESLint 9 with `eslint-config-next` - Linting; config at `app/eslint.config.mjs`
+- Tailwind CSS v4 - Utility-first CSS; config via `@tailwindcss/postcss` plugin
+- PostCSS - CSS processing; config at `app/postcss.config.mjs`
 
 ## Key Dependencies
 
-**Critical:**
-- next-auth 4.24.13 - JWT-based authentication with Azure AD SSO
-- drizzle-orm 0.45.1 - TypeScript ORM for PostgreSQL
-- pg 8.16.3 - PostgreSQL client library
+**UI & Interaction:**
+- `recharts` 3.6.0 - Charts and data visualization (`app/src/components/reports/charts/`)
+- `@dnd-kit/core` 6.3.1 + `@dnd-kit/sortable` 10.0.0 + `@dnd-kit/utilities` 3.2.2 - Drag-and-drop for billing topic/line item reordering (`app/src/components/billing/ServiceDescriptionDetail.tsx`)
+- `@react-pdf/renderer` 4.3.1 - Server-side PDF generation for service descriptions (`app/src/lib/billing-pdf.tsx`, `app/src/app/api/billing/[id]/pdf/route.tsx`)
 
-**Infrastructure:**
-- @azure/msal-node 3.8.4 - Microsoft Authentication Library for Node (offline token refresh)
-- @paralleldrive/cuid2 3.0.4 - Collision-resistant IDs for database records
+**Database:**
+- `pg` 8.16.3 - PostgreSQL driver (node-postgres), connection pool in `app/src/lib/drizzle.ts`
+- `drizzle-kit` 0.31.8 - Schema migration tooling (`npm run db:generate`, `npm run db:migrate`)
 
-**UI/Visualization:**
-- @dnd-kit/core 6.3.1 - Drag-and-drop primitives
-- @dnd-kit/sortable 10.0.0 - Sortable list components (topics, line items)
-- @dnd-kit/utilities 3.2.2 - DnD utilities (CSS transforms)
-- @react-pdf/renderer 4.3.1 - PDF generation for service descriptions
-- recharts 3.6.0 - React charting library for reports/analytics
+**Identity & IDs:**
+- `@paralleldrive/cuid2` 3.0.4 - CUID2 ID generation for all database records
+- `@azure/msal-node` 3.8.4 - Azure AD MSAL SDK (installed but not directly imported in src; auth handled via NextAuth AzureADProvider)
 
-**Data Handling:**
-- csv-parse 6.1.0 - CSV parsing for timesheet imports
-- xlsx 0.18.5 - Excel file read/write for exports
-- dotenv 17.2.3 - Environment variable loading for scripts
+**Utilities:**
+- `dotenv` 17.2.3 - Environment loading in seed scripts
+- `csv-parse` 6.1.0 - CSV parsing (available, not directly used in src; likely for scripts)
+- `xlsx` 0.18.5 - Excel file handling (devDependency; available for scripts)
+
+**Fonts:**
+- Roboto + Roboto Condensed - Loaded via `next/font/google` in `app/src/app/layout.tsx`
 
 ## Configuration
 
 **Environment:**
-- `.env` file in `app/` directory - Development configuration
-- `.env.prod` file - Production secrets (not committed, Azure deployment)
-- `NEXTAUTH_SECRET` - JWT signing key (openssl rand -base64 32)
-- `NEXTAUTH_URL` - Session callback URL (http://localhost:3000 dev, production URL in prod)
+- `app/.env` - Local development environment variables (not committed)
+- `app/.env.prod` - Production environment variables (not committed)
+- Required vars: `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET`, `AZURE_AD_TENANT_ID`
 
 **Build:**
-- `next.config.ts` - Next.js configuration with security headers (CSP, HSTS, X-Frame-Options)
-- `tsconfig.json` - TypeScript compiler options (ES2017 target, strict mode)
-- `drizzle.config.ts` - Drizzle ORM schema generation (PostgreSQL dialect)
-- `vitest.config.ts` - Test runner configuration (jsdom, global test APIs)
-- `eslint.config.mjs` - ESLint rules (Next.js web vitals + TypeScript)
-- `postcss.config.mjs` - PostCSS pipeline for Tailwind CSS
+- `app/next.config.ts` - `output: "standalone"` for Azure deployment; security headers (CSP, HSTS, X-Frame-Options, etc.)
+- `app/tsconfig.json` - TypeScript strict mode, `@/*` alias maps to `app/src/*`, target ES2017
+- `app/drizzle.config.ts` - Schema at `./src/lib/schema.ts`, migrations at `./drizzle/`, dialect `postgresql`
+
+**TypeScript Path Aliases:**
+- `@/*` → `app/src/*` (configured in both `tsconfig.json` and `vitest.config.ts`)
 
 ## Platform Requirements
 
 **Development:**
-- Node.js 22.x
-- PostgreSQL 17.x (local via Homebrew: `brew services start postgresql@17`)
-- npm 10.x
-- Git with worktrees support (feature development uses `.worktrees/`)
+- Node.js 22
+- PostgreSQL 17 (local via Homebrew)
+- Azure AD app registration (for SSO)
 
 **Production:**
-- Azure Web App (Node.js runtime)
-- Azure PostgreSQL Flexible Server (Europe region)
-- Output: `standalone` mode for containerization
-- Security headers: CSP with Microsoft login domains, HSTS enabled
-
-## Build Optimization
-
-**Output Mode:** `standalone` - Self-contained deployment artifact excluding node_modules
-
-**Security Headers (next.config.ts):**
-- Content-Security-Policy: Allows `'self'`, Microsoft login domains, `unsafe-inline`/`unsafe-eval` (Next.js requirement)
-- X-Frame-Options: DENY
-- X-Content-Type-Options: nosniff
-- Strict-Transport-Security: 31536000 seconds (1 year, production)
-- Referrer-Policy: strict-origin-when-cross-origin
-
-**Build Timestamp:** Generated at build time in Europe/Sofia timezone and injected as `NEXT_PUBLIC_BUILD_ID` env var
+- Azure Web App (EU region)
+- Azure PostgreSQL Flexible Server
+- GitHub Actions for CI/CD (`.github/workflows/ci.yml`, `.github/workflows/deploy-prod.yml`)
+- Deployment triggered by push to `main` branch
+- Node.js 22 on CI runners
 
 ---
 

@@ -5,141 +5,118 @@
 ## APIs & External Services
 
 **Microsoft 365 / Azure AD:**
-- **Purpose:** User authentication, calendar events, email activity tracking
-- **SDK/Client:**
-  - NextAuth.js `AzureADProvider` for OAuth2
-  - @azure/msal-node 3.8.4 for offline token refresh
-  - Native `fetch` for Graph API calls
-- **Auth:**
-  - `AZURE_AD_CLIENT_ID` - Azure Portal app registration
-  - `AZURE_AD_CLIENT_SECRET` - App registration client secret
-  - `AZURE_AD_TENANT_ID` - Azure AD tenant ID
-  - OAuth2 scopes: `openid profile email User.Read Calendars.Read Mail.Read offline_access`
+- Azure Active Directory (Azure AD) - Identity provider for SSO authentication
+  - SDK/Client: `next-auth/providers/azure-ad` (NextAuth AzureAD provider)
+  - Auth: `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET`, `AZURE_AD_TENANT_ID`
+  - OAuth scopes: `openid profile email User.Read Calendars.Read Mail.Read offline_access`
+  - Token refresh: Handled in `app/src/lib/auth.ts` JWT callback via `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`
 
-**Microsoft Graph API:**
-- **Calendar Events:** `GET https://graph.microsoft.com/v1.0/me/calendarview` (date range query)
-- **Email:** `GET https://graph.microsoft.com/v1.0/me/messages` (filtered by date range)
-- **User Photo:** `GET https://graph.microsoft.com/v1.0/me/photo/$value` (base64 encoded image)
-- **Implementation:** `app/src/app/api/m365/activity/route.ts`
-- **Notes:**
-  - Calendar events return `start.dateTime` WITHOUT Z suffix (use separate `timeZone` field)
-  - Email timestamps include Z suffix
-  - Timezone handling: All users in Bulgaria (Europe/Sofia), UTC+2/+3 DST
-  - Preference header: `Prefer: 'outlook.timezone="UTC"'` for consistent formatting
+- Microsoft Graph API - Calendar and email activity data for timesheet context
+  - Base URL: `https://graph.microsoft.com/v1.0`
+  - Endpoints used:
+    - `GET /me/calendarView` - Fetch calendar events for a date range
+    - `GET /me/mailFolders/Inbox/messages` - Fetch received emails
+    - `GET /me/mailFolders/SentItems/messages` - Fetch sent emails
+    - `GET /me/photo/$value` - Fetch user profile photo (called at sign-in)
+  - Implementation: `app/src/app/api/m365/activity/route.ts`
+  - Auth: Bearer token from session (`session.accessToken`) obtained during Azure AD login
+  - Timezone header: `Prefer: 'outlook.timezone="UTC"'` sent on calendar requests
+
+**Google Fonts:**
+- Roboto and Roboto Condensed loaded via Next.js `next/font/google` at build time
+  - Implementation: `app/src/app/layout.tsx`
+  - CSP allows: `font-src 'self' https://fonts.gstatic.com`
+  - No API key required (public CDN)
 
 ## Data Storage
 
 **Databases:**
-- PostgreSQL 17.x
-  - Connection: `DATABASE_URL` env var (postgresql://user:pass@host:5432/dbname)
-  - Client: Drizzle ORM 0.45.1 with pg driver (8.16.3)
-  - Region: Europe (Azure PostgreSQL Flexible Server in production)
-  - Schema: `app/src/lib/schema.ts` (12 tables: users, clients, service descriptions, line items, topics, subtopics, etc.)
-  - Migrations: Drizzle-generated SQL files in `drizzle/` directory (committed)
+- PostgreSQL 17
+  - Development: Local PostgreSQL 17 via Homebrew
+  - Production: Azure PostgreSQL Flexible Server (EU region)
+  - Connection: `DATABASE_URL` environment variable (connection string format)
+  - Client: Drizzle ORM (`drizzle-orm/node-postgres`) with `pg` connection pool
+  - Pool config: max 10 connections, 30s idle timeout, 5s connection timeout
+  - Pool implementation: `app/src/lib/drizzle.ts` (singleton pattern using `globalThis`)
 
 **File Storage:**
 - Local filesystem only
-  - Logo: `public/logo-print.png` (used in PDF generation)
-  - Static assets: `public/` directory
-  - No cloud storage (S3, Azure Blob, etc.)
+  - PDF export is generated on-demand and streamed directly to the browser; not persisted
+  - User profile photos are fetched from Microsoft Graph API on login and stored as base64 data URLs in the `users.image` database column
 
 **Caching:**
-- None configured
-- JWT sessions via NextAuth (in-memory on server, httpOnly cookies on client)
+- None (no Redis, Memcached, or other cache layer)
+- Next.js default fetch caching applies for server components
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Microsoft 365 (Azure AD) via OAuth2
-- Provider implementation: `app/src/lib/auth.ts` (NextAuthOptions)
-- Strategy: JWT with refresh token rotation
+- NextAuth.js with Azure AD (Microsoft 365 SSO) — the only login method
+  - Implementation: `app/src/lib/auth.ts`
+  - Sign-in page: `app/src/app/login/` (custom)
+  - Session strategy: JWT, max 8 hours
+  - Whitelist enforcement: Only users pre-existing in `users` table can log in; checked in `signIn` callback
+  - Inactive users are blocked at login
+  - Token auto-refresh: Implemented in JWT callback; refreshes ~5 minutes before expiry
 
-**Key Flows:**
-1. **Login:** User redirected to `https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/...`
-2. **Whitelist Check:** signIn callback verifies user exists in database (email match)
-3. **Token Refresh:** 5-minute buffer before expiration, refresh via `POST https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token`
-4. **Session:** 8-hour maxAge, JWT strategy with custom fields
-5. **Impersonation:** ADMIN-only cookie-based impersonation at `app/src/app/api/admin/impersonate/route.ts`
+**Session Extension Fields:**
+- `session.accessToken` — Microsoft Graph API Bearer token
+- `session.error` — Set to `"RefreshTokenError"` when token refresh fails
+- Types: `app/src/types/next-auth.d.ts`
 
-**Custom Session Fields (src/types/next-auth.d.ts):**
-- `session.accessToken` - Microsoft Graph API bearer token
-- `session.error` - Token refresh error state (RefreshTokenError)
-
-**Middleware:** `app/src/middleware.ts` protects all routes except `/login`, `/api/auth`, and static assets
+**Middleware Protection:**
+- `app/src/middleware.ts` uses NextAuth `withAuth` to protect all routes except `/login` and `/api/auth/*`
+- Admin routes additionally protected by position check in layout and `requireAdmin()` in API routes
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None (no Sentry, Rollbar, or similar configured)
-- Errors logged to console (development) or Azure app logs (production)
+- None (no Sentry, Datadog, or equivalent integrated)
 
 **Logs:**
-- Server-side: `console.log()`, `console.error()`, `console.warn()`
-- Client-side: Browser console only
-- Production: Azure Web App application insights (configured by Azure, not explicitly in code)
-
-**Debugging:**
-- NextAuth debug mode: Enabled in development (`process.env.NODE_ENV === "development"`)
+- `console.log`, `console.warn`, `console.error` used throughout server-side code
+- No structured logging library
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Azure Web App (Node.js 22 runtime)
-- Azure PostgreSQL Flexible Server (Europe region, credentials in `.env.prod`)
+- Azure Web App (EU region)
+- Build output: `next build` with `output: "standalone"` in `app/next.config.ts`
+- Deployed as standalone Next.js package (`.next/standalone/`)
 
 **CI Pipeline:**
-- GitHub Actions (`.github/workflows/ci.yml`)
-- Trigger: Pull requests to main branch
-- Steps:
-  1. Checkout code
-  2. Setup Node.js 22
-  3. Install dependencies (`npm ci`)
-  4. Run tests (`npm run test -- --run`)
-  5. Verify migrations sync'd with schema (`npx drizzle-kit generate`)
-- Fails if tests fail or schema/migrations out of sync
+- GitHub Actions — `.github/workflows/ci.yml`
+  - Trigger: Pull requests to `main`
+  - Steps: Install deps → Run all tests → Check migrations are in sync with schema
+  - Node 22 on `ubuntu-latest`
 
-**CD Pipeline:**
-- GitHub Actions (`.github/workflows/deploy-prod.yml`)
-- Trigger: Merge to main branch
-- Builds standalone Next.js artifact, deploys to Azure Web App
-- Requires passing CI checks
-
-**Database Migrations:**
-- Generated via `npm run db:generate` (Drizzle Kit)
-- Committed alongside schema changes
-- Applied via `npm run db:migrate` (local) or `/migrate-prod` command (production)
-- CI enforces: Migration file must exist for every schema change (prevents production sync errors)
+**Deployment Pipeline:**
+- GitHub Actions — `.github/workflows/deploy-prod.yml`
+  - Trigger: Push to `main` branch
+  - Steps: Install deps → Build → Deploy to Azure Web App
+  - Credentials: `AZURE_CREDENTIALS` and `AZURE_WEBAPP_NAME` GitHub secrets
 
 ## Environment Configuration
 
 **Required env vars:**
-- `DATABASE_URL` - PostgreSQL connection string
-- `NEXTAUTH_URL` - NextAuth callback URL (http://localhost:3000 dev)
-- `NEXTAUTH_SECRET` - JWT signing key (generate: `openssl rand -base64 32`)
-- `AZURE_AD_CLIENT_ID` - Azure Portal app registration ID
-- `AZURE_AD_CLIENT_SECRET` - Azure Portal app registration secret
-- `AZURE_AD_TENANT_ID` - Azure AD tenant ID
-- `NODE_ENV` - "development" or "production"
+- `DATABASE_URL` — PostgreSQL connection string
+- `NEXTAUTH_URL` — Public app URL (e.g., `http://localhost:3000`)
+- `NEXTAUTH_SECRET` — NextAuth JWT encryption secret
+- `AZURE_AD_CLIENT_ID` — Azure app registration client ID
+- `AZURE_AD_CLIENT_SECRET` — Azure app registration client secret
+- `AZURE_AD_TENANT_ID` — Azure AD tenant ID
 
 **Secrets location:**
-- Development: `app/.env` (git ignored, not committed)
-- Production: `app/.env.prod` (git ignored, not committed, managed by Azure deployment)
-- Build time: `NEXT_PUBLIC_BUILD_ID` injected from `next.config.ts`
+- Local: `app/.env` (not committed)
+- Production: `app/.env.prod` (not committed) + GitHub Actions secrets for deployment credentials
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- None configured
-- Time entries are polled via `GET /api/m365/activity?date=YYYY-MM-DD` on user request
+- `/api/auth/callback/azure-ad` — NextAuth OAuth callback from Azure AD (handled automatically by NextAuth)
 
 **Outgoing:**
-- None configured
-- No push notifications or external webhooks triggered
-
-**NextAuth Callbacks:**
-- `signIn()` - Whitelist verification, user status check, Azure photo fetch
-- `jwt()` - Token refresh logic (5-min buffer before expiration)
-- `session()` - Custom session fields population (accessToken, error)
+- None (no outgoing webhooks configured)
 
 ---
 

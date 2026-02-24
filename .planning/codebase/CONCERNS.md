@@ -4,193 +4,203 @@
 
 ## Tech Debt
 
-**Optimistic UI Updates Without Rollback State**
-- Issue: Multiple components use optimistic updates (immediately update UI, then fetch). If the API fails, the revert handler (`revertWithError`) reads from `dataRef.current` to restore state, but this only works if `dataRef` was updated before the handler was called.
-- Files: `app/src/components/billing/ServiceDescriptionDetail.tsx` (line 227-229, 274-276)
-- Impact: If the network request fails or takes too long, users see inconsistent state. The drag-and-drop reorder operations could leave the UI and database out of sync if the PATCH fails.
-- Fix approach: Implement proper rollback by storing pre-operation state separately, or refetch the full state from the server on error.
+**Dual Auth Utility Modules:**
+- Issue: Two parallel auth/authorization modules exist with overlapping responsibilities
+- Files: `app/src/lib/api-utils.ts`, `app/src/lib/auth-utils.ts`
+- Impact: `api-utils.ts` is used by all API routes; `auth-utils.ts` is only imported by one server component (`app/src/app/(authenticated)/timesheets/page.tsx`). The newer `auth-utils.ts` has a cleaner interface (returns `{ session, user }` with typed `AuthUser`) while `api-utils.ts` returns only `{ session }` requiring a second DB lookup for the user. This creates maintenance divergence — changes to auth logic may need to be applied in both places.
+- Fix approach: Migrate API routes to use `auth-utils.ts` (or consolidate into one module), then remove `api-utils.ts`.
 
-**Line Item Deletion Missing Cleanup**
-- Issue: When deleting a line item that references a waived time entry, the `DELETE` handler at `app/src/app/api/billing/[id]/topics/[topicId]/items/[itemId]/route.ts` (line 192) doesn't check if the time entry's `isWrittenOff` flag should be cleared. The `PATCH` handler includes this logic (lines 95-117), but `DELETE` omits it entirely.
-- Files: `app/src/app/api/billing/[id]/topics/[topicId]/items/[itemId]/route.ts` (line 192)
-- Impact: Time entries marked as written off may remain flagged even after all waived references are deleted, leaving orphaned `isWrittenOff = true` records.
-- Fix approach: Add a transaction to the DELETE handler that checks if any remaining waived line items reference this time entry, and clear the flag if none exist.
+**Hardcoded Role Checks Bypassing Utility Functions:**
+- Issue: The `hasAdminAccess()` utility exists in `api-utils.ts` but many files use inline `["ADMIN", "PARTNER"].includes(user.position)` instead
+- Files: `app/src/app/(authenticated)/team/page.tsx:36`, `app/src/app/(authenticated)/(admin)/layout.tsx:11`, `app/src/app/(authenticated)/(admin)/reports/page.tsx:253`, `app/src/app/api/reports/route.ts:62`, `app/src/components/layout/Sidebar.tsx:98`
+- Impact: If the role set for "admin" changes (e.g., adding SENIOR_PARTNER), each hardcoded check must be updated individually. Risk of inconsistent behavior.
+- Fix approach: Replace all inline `["ADMIN", "PARTNER"].includes(...)` with `hasAdminAccess(position)` from `api-utils.ts`.
 
-**Floating Point Precision in Billing Calculations**
-- Issue: Billing calculations use `Math.round(x * 100) / 100` for rounding, but JavaScript floating-point arithmetic can still introduce precision errors. For example, `0.1 + 0.2 !== 0.3` in JavaScript.
-- Files: `app/src/lib/billing-pdf.tsx` (lines 250, 453, 456, 460-464)
-- Impact: With large datasets or specific decimal combinations, cumulative rounding errors could result in invoice totals being off by a cent or more.
-- Fix approach: Consider using a decimal library (e.g., `decimal.js`, `big.js`) or implement explicit integer-based calculations (e.g., store everything in cents).
+**Position Type Redeclared in Multiple Files:**
+- Issue: The `Position` type (`"ADMIN" | "PARTNER" | "SENIOR_ASSOCIATE" | "ASSOCIATE" | "CONSULTANT"`) is locally redeclared in several files instead of being imported from a shared types module
+- Files: `app/src/lib/auth-utils.ts:14`, `app/src/lib/user.ts:11`, `app/src/components/employees/EmployeesContent.tsx:9`, `app/src/components/employees/EmployeeModal.tsx:5`
+- Impact: Schema drift risk — if the enum changes in `schema.ts`, the local type aliases won't update automatically.
+- Fix approach: Export `Position` type from `app/src/types/index.ts` and import from there.
 
-**Complex Drag-and-Drop State Management**
-- Issue: `ServiceDescriptionDetail.tsx` maintains multiple overlapping pieces of drag state: `activeDragType`, `activeTopicId`, `activeItemId`, plus collision detection filters and a `dataRef` to read latest state. The logic to distinguish between topic and line item drags is fragile (lines 73-88).
-- Files: `app/src/components/billing/ServiceDescriptionDetail.tsx` (lines 57-88, 90-102)
-- Impact: Edge cases in drag operations (e.g., rapid clicks, network delays) could trigger unintended reorders or corruption of the topic/item hierarchy.
-- Fix approach: Extract drag logic to a custom hook with explicit state machine; add integration tests for cross-topic moves and rapid sequential operations.
+**BILLING_START_DATE Is a Hardcoded String Constant:**
+- Issue: `BILLING_START_DATE = "2026-02-01"` is a fixed string in `app/src/lib/billing-config.ts`. It controls which time entries are included in billing and the unbilled summary.
+- Files: `app/src/lib/billing-config.ts`, `app/src/app/api/billing/route.ts:199`, `app/src/app/api/billing/unbilled-summary/route.ts:70`
+- Impact: This value was chosen as the billing launch date. As months pass and if the system needs to bill retroactively or the cutoff policy changes, this hardcoded value will silently exclude entries.
+- Fix approach: Convert to a configurable env variable or make it a per-SD setting rather than a global filter floor.
+
+**`secondaryEmails` Stored as a Free-Text String:**
+- Issue: Multiple email addresses for a client are stored as a single `text` field in the database, not as an array or a related table
+- Files: `app/src/lib/schema.ts:124`, `app/src/app/api/clients/route.ts:170`
+- Impact: No validation that the field contains valid email addresses (API accepts any string). Cannot query by secondary email. Fragile parsing if UI or future code needs to split the field.
+- Fix approach: Migrate to a separate `client_emails` table or PostgreSQL `text[]` array with proper validation.
+
+**`practiceArea` Field Not Editable via Client API:**
+- Issue: The `clients` table has a `practiceArea` enum column in `schema.ts`, and it is fetched in the clients page, but it is not included in the `POST /api/clients` or `PATCH /api/clients` request body handling
+- Files: `app/src/app/api/clients/route.ts` (lines 106, 218), `app/src/lib/schema.ts:119`
+- Impact: `practiceArea` can never be set or changed through the application UI, leaving it permanently `null` for all clients.
+- Fix approach: Add `practiceArea` to client create/update API handlers and the `ClientModal` form.
+
+**`retainerOverageRate` Not Stored on Client Record:**
+- Issue: `service_descriptions` snapshots `retainerOverageRate` from the client at creation time (set to `client.hourlyRate`). However, `retainerOverageRate` is not a field on the `clients` table — it is derived at SD creation from `clients.hourlyRate`. If a client's hourly rate changes after an SD is created, there is no way to see what the original overage rate was intended to be.
+- Files: `app/src/app/api/billing/route.ts:226-232`, `app/src/lib/schema.ts:52`
+- Impact: No per-client configurable overage rate — it is always the same as the base hourly rate. The snapshot mechanism works, but the intent is not surfaced anywhere in the UI.
+- Fix approach: Add a `retainerOverageRate` field to the `clients` table so it can be set independently from `hourlyRate`.
+
+**Temporary Sign Out Button on Dashboard:**
+- Issue: The Dashboard component has a "Sign Out" button labeled as temporary for testing
+- Files: `app/src/components/dashboard/DashboardContent.tsx:222`
+- Impact: Poor UX — sign-out appears on the dashboard but the proper place is in the sidebar/header. No functional bug but creates confusion.
+- Fix approach: Remove the temporary button. Sign out is accessible via sidebar or header nav.
 
 ## Known Bugs
 
-**Line Item Deletion Loss of `isWrittenOff` State**
-- Symptoms: After deleting a waived line item, the associated time entry remains marked as `isWrittenOff = true` in the database, even though no waived references exist.
-- Files: `app/src/app/api/billing/[id]/topics/[topicId]/items/[itemId]/route.ts` (line 192)
-- Trigger: Create a service description, add a line item linked to a time entry, set waive mode to EXCLUDED or ZERO, then delete the line item.
-- Workaround: Manually update the database to set `isWrittenOff = false` for orphaned entries, or re-export/re-import the line item.
+**Service Description Creation Fetches ALL Client Time Entries Without Date Filter:**
+- Symptoms: When creating a new service description, the query fetches all time entries for the client without a date range filter, then filters in JavaScript
+- Files: `app/src/app/api/billing/route.ts:163-209`
+- Trigger: Creating a service description for a client with many historical time entries (hundreds+)
+- Details: The `where` clause only has `eq(timeEntries.clientId, clientId)` — the commented-out date filter was never implemented. Date filtering happens in the `filteredEntries.filter()` call in memory. The comment `// date >= startDate AND date <= endDate / In Drizzle with date strings, we compare directly` indicates the intent but the implementation was left incomplete.
+- Workaround: None — it works correctly but scales poorly
+
+**N+1 Query Pattern in SD Delete and Topic Delete:**
+- Symptoms: Deleting a service description or topic that has written-off line items issues one SELECT + one UPDATE per affected time entry in a loop
+- Files: `app/src/app/api/billing/[id]/route.ts:239-252`, `app/src/app/api/billing/[id]/topics/[topicId]/route.ts:183-194`
+- Trigger: Deleting a DRAFT SD or topic with multiple waived line items
+- Impact: For an SD with 20 waived entries, this is 40 sequential DB queries inside a transaction. At current scale (small firm) this is acceptable, but will degrade with more data.
 
 ## Security Considerations
 
-**Admin Impersonation Lacks Audit Trail**
-- Risk: The impersonation system (`app/src/lib/api-utils.ts` lines 88-110) allows ADMIN users to impersonate any non-INACTIVE user without logging the action. An admin could silently log time entries, approve billing, or modify data as another user.
-- Files: `app/src/lib/api-utils.ts` (lines 88-110), `app/src/app/api/admin/impersonate/route.ts`
-- Current mitigation: ADMIN users must be trusted; impersonation cookie is httpOnly and session-based.
-- Recommendations: Add audit logging for all impersonation actions (start/end impersonation, what actions taken while impersonating). Consider requiring explicit impersonation confirmation or time-limited sessions.
+**CSP Allows `unsafe-inline` and `unsafe-eval`:**
+- Risk: The Content Security Policy in `next.config.ts` includes `'unsafe-inline'` for scripts and `'unsafe-eval'`, which significantly weakens XSS protections
+- Files: `app/next.config.ts:38`
+- Current mitigation: This is required by Next.js's client-side hydration and is noted in CLAUDE.md as a known limitation
+- Recommendations: Track Next.js releases — newer versions may support nonce-based CSP. Consider adding a `report-uri` endpoint to detect CSP violations in production.
 
-**SQL Injection Risk in Dynamic Queries**
-- Risk: While Drizzle ORM provides parameterization, raw `sql.join()` expressions (used in `app/src/app/api/timesheets/route.ts` lines 66-68) bypass some safety checks if user input is not carefully validated.
-- Files: `app/src/app/api/timesheets/route.ts` (lines 66-68, 181-182), `app/src/app/api/billing/unbilled-summary/route.ts` (line 79)
-- Current mitigation: The `entryIds` array is sourced from the database itself (not user input), so direct injection is not possible. However, the pattern is fragile.
-- Recommendations: Add explicit type-checking and validation before using raw SQL expressions. Document why raw SQL is necessary instead of using Drizzle's `in()` operator.
+**No Rate Limiting on API Routes:**
+- Risk: All API endpoints (auth-protected but not rate-limited) could be hit with high-frequency requests. M365 activity endpoint makes 3 external Graph API calls per request.
+- Files: All files under `app/src/app/api/`
+- Current mitigation: Azure Web App can provide infrastructure-level rate limiting; NextAuth limits auth routes
+- Recommendations: Add route-level rate limiting (e.g., Upstash Redis or Azure API Management) especially on `POST /api/timesheets`, `GET /api/m365/activity`.
 
-**No CSRF Protection on State-Changing API Routes**
-- Risk: API routes use `NextAuth` session validation but don't explicitly check CSRF tokens. If a cross-origin request is made, the browser's same-site cookie policy should block it, but this is not always reliable.
-- Files: All POST/PATCH/DELETE routes in `app/src/app/api`
-- Current mitigation: NextAuth middleware enforces same-origin checks; Next.js has built-in CORS protection.
-- Recommendations: Explicitly verify the `origin` header or add explicit CSRF token validation to sensitive endpoints (billing, client management).
+**Impersonation Cookie Not HTTPOnly-Only:**
+- Risk: The `impersonate_user_id` cookie is set with `httpOnly: true` and `secure: process.env.NODE_ENV === "production"` but is `sameSite: "strict"`. In development (`NODE_ENV !== "production"`), the cookie is not sent over HTTPS only.
+- Files: `app/src/app/api/admin/impersonate/route.ts:127`
+- Current mitigation: Impersonation is only available to ADMIN position users; cookie is verified server-side on every request
+- Recommendations: Acceptable in development; verify `NODE_ENV=production` is always set in Azure deployment.
+
+**`db:push` Script Remains Available:**
+- Risk: `npm run db:push` runs `drizzle-kit push` which applies schema changes directly without generating a migration file, bypassing the migration audit trail
+- Files: `app/package.json:14`
+- Current mitigation: CLAUDE.md explicitly warns against using it; CI checks migration sync
+- Recommendations: Remove the `db:push` script from `package.json` to prevent accidental use.
 
 ## Performance Bottlenecks
 
-**Inefficient Time Entry Lock Lookup**
-- Problem: Every GET request to `/api/timesheets?date=...` calls `getLockedEntryIds()`, which performs a multi-join query across `serviceDescriptionLineItems`, `serviceDescriptionTopics`, and `serviceDescriptions` for each date. For users with many entries, this becomes O(n) queries.
-- Files: `app/src/app/api/timesheets/route.ts` (lines 50-75, 137-138)
-- Cause: No caching or batching; the query re-executes for every request.
-- Improvement path: Cache the locked set for 5-10 minutes per user, or add a database index on `(timeEntryId, status)` to speed up the join. Consider moving this to a separate query that's only run once per session.
+**Reports Page Loads All Time Entries for Period in Memory:**
+- Problem: Both the server-side page (`reports/page.tsx`) and the API route (`/api/reports`) fetch all time entries for the date range into memory and aggregate in JavaScript using Maps
+- Files: `app/src/app/(authenticated)/(admin)/reports/page.tsx:37-54`, `app/src/app/api/reports/route.ts:100-115`
+- Cause: Client/employee aggregation is performed in application code rather than in SQL GROUP BY queries
+- Current impact: Acceptable for a small firm (~10 employees, ~200 clients, a few years of data). Monthly reports might pull a few thousand rows.
+- Improvement path: Move aggregation to SQL (SUM/GROUP BY) to reduce memory usage and improve response time as data grows.
 
-**Missing Database Indexes on Foreign Key Traversals**
-- Problem: The database schema has indexes on most foreign keys, but some traversals could be slow:
-  - `timeEntries` has an index on `userId`, but queries joining with `clients` and `topics` simultaneously may still be slow.
-  - `serviceDescriptionLineItems` join to `serviceDescriptionTopics` and then `serviceDescriptions` is not indexed directly.
-- Files: `app/src/lib/schema.ts`
-- Cause: Drizzle auto-generates basic indexes but not composite indexes for common join patterns.
-- Improvement path: Add composite indexes: `CREATE INDEX idx_service_desc_line_items_topic_desc ON service_description_line_items(topic_id, service_description_id)`.
+**M365 Activity Makes 3 Sequential External API Calls Per Request:**
+- Problem: `GET /api/m365/activity` makes three parallel `fetch()` calls (calendar, inbox, sent mail) to Microsoft Graph API; any failure causes a partial-failure scenario
+- Files: `app/src/app/api/m365/activity/route.ts`
+- Cause: Graph API doesn't support batching these into a single call without `$batch`
+- Improvement path: Consider `POST https://graph.microsoft.com/v1.0/$batch` to combine into a single HTTP request and reduce latency.
 
-**PDF Generation with Large Datasets**
-- Problem: `ServiceDescriptionPDF` renders all topics and line items in memory using React PDF. For invoices with 100+ line items, this causes memory spikes and slow rendering.
-- Files: `app/src/lib/billing-pdf.tsx` (full file)
-- Cause: `@react-pdf/renderer` is synchronous and renders the entire document tree before streaming.
-- Improvement path: Implement server-side PDF streaming or paginate invoices if they exceed a threshold. Consider using a native PDF library like `pdfkit` for large documents.
-
-**Large Test Files Slow Down Development Feedback**
-- Problem: Test files like `clients/route.test.ts` (1521 lines), `employees/route.test.ts` (1249 lines), and `timesheets/route.test.ts` (1077 lines) take several seconds to run, slowing development iteration.
-- Files: `app/src/app/api/clients/route.test.ts`, `app/src/app/api/employees/route.test.ts`, `app/src/app/api/timesheets/route.test.ts`
-- Cause: Tests are monolithic; many test cases are bundled into a single file.
-- Improvement path: Split large test files into focused suites (e.g., `route.create.test.ts`, `route.update.test.ts`, `route.delete.test.ts`). Run only affected tests during development with `vitest --watch --reporter=verbose`.
+**Billing List Page Calculates Totals for Every SD on Every Load:**
+- Problem: `GET /api/billing` fetches all service descriptions with all topics and line items, then iterates through each to compute `totalAmount` using `calculateGrandTotal()` or `calculateRetainerGrandTotal()`
+- Files: `app/src/app/api/billing/route.ts:66-102`
+- Cause: Total is not stored — it is computed on-the-fly from raw line item data
+- Improvement path: Cache computed total on the `service_descriptions` table as a denormalized `cachedTotal` column updated on write, or use a DB view.
 
 ## Fragile Areas
 
-**M365 Activity Sync Timezone Handling**
-- Files: `app/src/app/api/m365/activity/route.ts` (lines 98-109)
-- Why fragile: The timezone offset calculation uses `getTimezoneOffsetHours()` which relies on `Intl.DateTimeFormat` parsing. If the formatter output format changes or the timezone name is not recognized, it falls back to UTC+2, which is incorrect during summer (EEST = UTC+3).
-- Safe modification: Always test with both winter and summer dates (e.g., 2026-01-15 and 2026-06-15). Add unit tests that mock `Intl.DateTimeFormat` to ensure the fallback is tested.
-- Test coverage: `app/src/app/api/m365/activity/route.test.ts` has good coverage, but doesn't explicitly test DST transition dates.
+**`isWrittenOff` Flag Must Stay in Sync with `waiveMode` on Line Items:**
+- Files: `app/src/lib/schema.ts` (`timeEntries.isWrittenOff`, `serviceDescriptionLineItems.waiveMode`), `app/src/app/api/billing/[id]/topics/[topicId]/items/[itemId]/route.ts:94-117`, `app/src/app/api/billing/[id]/route.ts:238-252`, `app/src/app/api/billing/[id]/topics/[topicId]/route.ts:183-194`
+- Why fragile: `isWrittenOff` on `time_entries` is a denormalized summary of `waiveMode` across line items. Three separate code paths must correctly clear `isWrittenOff` when all waived references are removed (SD delete, topic delete, line item restore). If any one of these paths fails or a new deletion path is added without this cleanup, the flag becomes stale. A time entry would appear as written off to billers even though it has no active waive.
+- Safe modification: Any new code path that deletes a service description, topic, or line item must include the `isWrittenOff` cleanup transaction.
+- Test coverage: Partially covered in `app/src/app/api/billing/[id]/route.test.ts` and `app/src/app/api/billing/[id]/topics/[topicId]/route.test.ts`
 
-**Retainer Billing Mode Detection**
-- Files: `app/src/lib/billing-pdf.tsx` (line 501), `app/src/components/billing/ServiceDescriptionDetail.tsx` (line 295)
-- Why fragile: Mode is determined by checking `retainerFee != null && retainerHours != null`. If either field is 0, the check still passes, which could lead to unexpected behavior (e.g., zero retainer with overage rate).
-- Safe modification: Add explicit validation in the schema or API to prevent zero retainer fees. Document the retainer mode requirements clearly.
-- Test coverage: `app/src/lib/billing-pdf.test.ts` has retainer tests, but doesn't cover the zero-fee edge case.
+**`displayOrder` Integer Can Drift Out of Sync:**
+- Files: `app/src/app/api/billing/[id]/topics/reorder/route.ts`, `app/src/app/api/billing/[id]/line-items/reorder/route.ts`, `app/src/app/api/subtopics/reorder/route.ts`, `app/src/app/api/topics/reorder/route.ts`
+- Why fragile: Reorder endpoints accept `{ id, displayOrder }` pairs from the client and update them. If the client sends a partial list or stale data due to a network race, order values can become inconsistent. Items are sorted by `displayOrder ASC` throughout the app.
+- Safe modification: Reorder endpoints should validate the full set of IDs against the DB before updating to detect races.
+- Test coverage: Tested via route tests but not for concurrent-update scenarios.
 
-**Topic Type Validation Across Hierarchy**
-- Files: `app/src/app/api/timesheets/route.ts` (POST handler), `app/src/app/api/billing/[id]/topics/route.ts` (topic creation)
-- Why fragile: Topic type (REGULAR, INTERNAL, MANAGEMENT) must match the client type, but this validation is scattered across multiple API routes and not enforced by the schema.
-- Safe modification: Add a database constraint or centralize validation in `lib/api-utils.ts`. Add tests for each topic type + client type combination.
-- Test coverage: Tests cover common cases but not all cross-type mismatches.
-
-**Waive Mode State Consistency**
-- Files: `app/src/app/api/billing/[id]/topics/[topicId]/items/[itemId]/route.ts`, `app/src/lib/schema.ts`
-- Why fragile: `waiveMode` can be EXCLUDED, ZERO, or null, and the `isWrittenOff` flag on `timeEntries` is supposed to mirror this. However, there's no database constraint ensuring the relationship is maintained.
-- Safe modification: When updating or deleting line items with waive modes, always verify the cleanup logic (similar to lines 95-117 in the PATCH handler). Add a migration to repair any orphaned `isWrittenOff` flags.
-- Test coverage: The cleanup logic has tests, but bulk operations (e.g., deleting a service description) should be tested more thoroughly.
+**DnD in ServiceDescriptionDetail Uses Prefixed String IDs for Entity Disambiguation:**
+- Files: `app/src/components/billing/ServiceDescriptionDetail.tsx`
+- Why fragile: Topics use `topic:`, `topic-drop:`, `topic-empty:` prefixes; items use `item:` — all within a single DndContext. Adding new droppable zone types requires updating the collision detection logic (`collisionDetection` callback) and all drag event handlers. Missing a prefix check causes items/topics to be dropped in the wrong context.
+- Safe modification: Document all prefix types at the top of the file. Any new draggable/droppable type requires updates to `collisionDetection`, `handleDragStart`, `handleTopicReorder`, and `handleLineItemDragEnd`.
+- Test coverage: Basic render-only tests in `ServiceDescriptionDetail.test.tsx` — drag behavior is not tested.
 
 ## Scaling Limits
 
-**Time Entry Queries Become Slow at Scale**
-- Current capacity: Fine for ~10,000 time entries per user; performance degrades with 50,000+.
-- Limit: GET `/api/timesheets?date=...` and `/api/timesheets/team/[userId]` perform full scans without pagination.
-- Scaling path: Add cursor-based pagination, partition time entries by user + date, and implement caching. For the team view, consider aggregating data at night and storing summaries.
+**No Pagination on Any Data List:**
+- Current capacity: Works fine at current scale (~10 users, ~200 clients, years of entries)
+- Limit: The clients list (`GET /api/clients`), billing list (`GET /api/billing`), employees list, and topics list all return complete result sets with no pagination or cursor support
+- Scaling path: Implement cursor-based pagination for the billing and clients lists first as these will grow fastest with usage.
 
-**Service Description List View Inefficient**
-- Current capacity: Listing 100 service descriptions is fast; 1000+ becomes slow due to JOIN operations and total calculations.
-- Limit: `/api/billing` fetches all topics, line items, and clients for every service description to compute `totalAmount`.
-- Scaling path: Cache totals in a `totalAmount` denormalized column on `serviceDescriptions`, update on finalization. Use database views to aggregate instead of client-side calculations.
-
-**Reports Page Aggregation Unoptimized**
-- Current capacity: Monthly reports for one user are instant; firm-wide reports across 200+ clients and 6+ months become slow.
-- Limit: `/api/reports` does client-side aggregation in JavaScript after fetching all matching time entries.
-- Scaling path: Move aggregation to the database using `GROUP BY` and `SUM()`. Add a nightly job to pre-compute monthly summaries.
+**Reports Data Loaded at Page Level Without Caching:**
+- Current capacity: A single month's report for 10 employees may be 500-2000 rows, processed in memory
+- Limit: Yearly reports or large date ranges could return tens of thousands of rows causing memory pressure on the Node.js process
+- Scaling path: Add database-side aggregation via SQL GROUP BY and consider a `?granularity=month|week|day` parameter to limit detail level.
 
 ## Dependencies at Risk
 
-**@react-pdf/renderer Maintenance Risk**
-- Risk: The package is stable but has limited active maintenance. Recent versions (4.x) have had issues with font loading and large documents.
-- Impact: PDF generation could fail silently or produce corrupted files in edge cases.
-- Migration plan: Monitor the package. If issues arise, consider switching to `pdfkit` or server-side PDF generation (e.g., `puppeteer` + headless Chrome).
+**`next-auth` v4 Is in Maintenance Mode:**
+- Risk: `next-auth@^4.24.13` is the legacy v4 release; the project has been renamed Auth.js (v5) with a rewrite that has breaking API changes
+- Impact: v4 will receive security patches only. Next.js 15+ (currently on 16.0.10) has shifting RSC patterns that create friction with v4's session handling (evidenced by the dual `getServerSession` + `getToken` fallback in `api-utils.ts`).
+- Migration plan: Migrate to Auth.js v5 (`next-auth@5`) when stable — requires rewriting `authOptions`, callbacks, and session type augmentation in `src/types/next-auth.d.ts`.
 
-**Drizzle ORM Type Safety Gap**
-- Risk: Drizzle is newer than TypeORM/Sequelize and has fewer community resources. Type inference can be complex, and migration safety depends on developer care.
-- Impact: Incorrect schema changes or type mismatches could go unnoticed until runtime.
-- Migration plan: Enforce strict TypeScript settings (`strict: true` in `tsconfig.json`). Use the Drizzle CLI to validate migrations before applying. Consider adding pre-migration tests.
-
-**Next.js 16 Early Adoption**
-- Risk: Next.js 16 (released 2026) is relatively new. App Router (used here) is stable but features are still evolving.
-- Impact: Upgrades to 16.x minor versions could introduce breaking changes in APIs or performance characteristics.
-- Migration plan: Pin the Next.js version in `package.json` to a specific minor (e.g., `16.0.10`). Before upgrading, test thoroughly in a staging environment.
+**`@azure/msal-node` Dependency Listed but Not Used in Source:**
+- Risk: `@azure/msal-node@^3.8.4` is in `package.json` dependencies but no import of it was found in any source file
+- Files: `app/package.json:20`
+- Impact: Unused dependency adds attack surface and bundle size (though Node-only packages don't affect the client bundle)
+- Migration plan: Remove if truly unused. Verify it wasn't added in anticipation of a feature that uses `next-auth`'s AzureAD provider internally.
 
 ## Missing Critical Features
 
-**No Audit Logging for Sensitive Changes**
-- Problem: There is no audit trail for who changed what and when. Admins can modify billing, delete clients, or change topics without recording the action.
-- Blocks: Compliance requirements, dispute resolution, forensic analysis.
-- Recommendation: Add an `auditLog` table with user, action, timestamp, and diff. Log all state changes to sensitive entities (billing, clients, employees).
+**No Error Monitoring in Production:**
+- Problem: Production errors are only logged via `console.error()` which routes to Azure Web App's log stream. There is no structured error tracking, alerting, or aggregation.
+- Blocks: Visibility into production failures, especially transient DB connection errors, token refresh failures, and PDF generation errors
+- Recommendation: Integrate Sentry or Azure Application Insights for error capture and alerting.
 
-**No Soft Deletes for Data Retention**
-- Problem: Deleting records uses hard deletes, which can violate data retention policies and break referential integrity if soft-deleted data is still referenced.
-- Blocks: GDPR compliance, legal hold requests, audit trails.
-- Recommendation: Add `deletedAt` timestamps to key tables and soft-delete by setting this field instead of removing records.
-
-**No Notification System**
-- Problem: Users are not notified when timesheets are overdue, billing is finalized, or other events occur.
-- Blocks: Proactive user engagement, deadline reminders.
-- Recommendation: Add an email/Slack notification service triggered by key events (timesheet overdue, SD finalized, client added).
+**No Audit Log for Billing Actions:**
+- Problem: Finalizing, unlocking, and deleting service descriptions are irreversible (or high-impact) actions with no audit trail beyond `finalizedById`/`finalizedAt` on the SD record itself. There is no log of who changed a line item, waived an entry, or deleted a topic.
+- Blocks: Dispute resolution with clients, internal accountability for billing changes
+- Recommendation: Add an `audit_log` table tracking `(userId, action, entityType, entityId, changedAt, previousValue, newValue)` for finalization, deletion, and waive events.
 
 ## Test Coverage Gaps
 
-**Missing Concurrent Operation Tests**
-- What's not tested: Multiple users trying to edit the same service description simultaneously, or multiple reorder operations happening in quick succession.
-- Files: `app/src/app/api/billing/[id]/line-items/reorder/route.test.ts`, `app/src/components/billing/ServiceDescriptionDetail.tsx`
-- Risk: Race conditions could corrupt the `displayOrder` field or cause items to be lost.
-- Priority: High
+**Large Billing UI Components Not Tested:**
+- What's not tested: `TopicSection`, `LineItemRow`, `AddTopicModal`, `AddLineItemModal`, `CreateServiceDescriptionModal`, `BillingContent`
+- Files: `app/src/components/billing/TopicSection.tsx`, `app/src/components/billing/LineItemRow.tsx`, `app/src/components/billing/AddTopicModal.tsx`, `app/src/components/billing/AddLineItemModal.tsx`, `app/src/components/billing/BillingContent.tsx`, `app/src/components/billing/CreateServiceDescriptionModal.tsx`
+- Risk: Waive mode toggle behavior, discount calculation display, and DnD UI interactions have no automated test coverage. Changes to these components are verified manually only.
+- Priority: High — billing is the most financially sensitive part of the system.
 
-**Incomplete Waive Mode Coverage**
-- What's not tested: Deleting a line item with `waiveMode = EXCLUDED` or `ZERO` and verifying that `isWrittenOff` is properly cleared.
-- Files: `app/src/app/api/billing/[id]/topics/[topicId]/items/[itemId]/route.test.ts`
-- Risk: Orphaned `isWrittenOff` flags as described in the Known Bugs section.
-- Priority: High
-
-**Missing Timezone Edge Case Tests**
-- What's not tested: Daylight saving time transitions (e.g., submission deadline on DST changeover date), leap years, December 31 → January 1 boundary.
-- Files: `app/src/lib/submission-utils.test.ts`
-- Risk: Incorrect overdue calculations on transition dates.
+**Client Management UI Untested:**
+- What's not tested: `ClientsContent`, `ClientModal`
+- Files: `app/src/components/clients/ClientsContent.tsx`, `app/src/components/clients/ClientModal.tsx`
+- Risk: Client create/edit/delete UI flows, retainer field validation, and CSV export have no automated tests
 - Priority: Medium
 
-**No Integration Tests for M365 Sync + Timesheet Creation**
-- What's not tested: End-to-end flow of fetching M365 events and automatically creating time entries.
-- Files: `app/src/app/api/m365/activity/route.test.ts`, `app/src/app/api/timesheets/route.test.ts`
-- Risk: UI and API may be out of sync with actual M365 data.
+**Employee Management UI Untested:**
+- What's not tested: `EmployeesContent`, `EmployeeModal`
+- Files: `app/src/components/employees/EmployeesContent.tsx`, `app/src/components/employees/EmployeeModal.tsx`
+- Risk: Employee deactivation, reactivation, and impersonation trigger flows (which use `alert()` for errors) have no test coverage
 - Priority: Medium
 
-**Missing Error Recovery Tests**
-- What's not tested: Partial failures during bulk operations (e.g., reordering 10 items, half succeed, half fail). What happens to the UI state?
-- Files: `app/src/components/billing/ServiceDescriptionDetail.tsx` (drag-and-drop tests)
-- Risk: Inconsistent UI/database state.
+**Reports Components Untested:**
+- What's not tested: `ReportsContent`, `ByEmployeeTab`, `ByClientTab`, `OverviewTab`, `BarChart`, `DonutChart`, `DateRangePicker`, `ComparisonPicker`
+- Files: `app/src/components/reports/`
+- Risk: Chart rendering and date range selection logic are not tested
+- Priority: Low (display-only components with low mutation risk)
+
+**Topic Management UI Untested:**
+- What's not tested: `TopicsContent`, `TopicModal`, `SubtopicModal`
+- Files: `app/src/components/topics/TopicsContent.tsx`, `app/src/components/topics/TopicModal.tsx`, `app/src/components/topics/SubtopicModal.tsx`
+- Risk: DnD reordering of topics and subtopics, status toggling, and modal form submissions are not tested
 - Priority: Medium
 
 ---

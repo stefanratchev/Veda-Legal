@@ -29,11 +29,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. API response includes `revenue` (hourlyRate x hours) on each `byClient` item
   4. API response includes `revenue` (proportional: employee hours on client x client rate, summed across clients) on each `byEmployee` item
   5. INTERNAL/MANAGEMENT clients have `revenue: 0` and are excluded from revenue-related aggregations
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md — TDD: Extend API route with topic aggregations, revenue rules, and write-off handling
+- [ ] 01-02-PLAN.md — Update server component and frontend TypeScript interfaces to match API route
 
 ### Phase 2: Overview Revenue Charts
 **Goal**: Partners and admins can see revenue distribution across clients and employees directly in the overview tab
@@ -86,7 +86,7 @@ Note: Phases 3 and 4 both depend on Phase 1 only (not on each other or Phase 2).
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Data Layer | 0/? | Not started | - |
+| 1. Data Layer | 0/2 | Not started | - |
 | 2. Overview Revenue Charts | 0/? | Not started | - |
 | 3. Client Drill-Down Enhancements | 0/? | Not started | - |
 | 4. Employee Drill-Down Enhancements | 0/? | Not started | - |

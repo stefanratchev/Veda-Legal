@@ -13,7 +13,7 @@ This milestone enriches the existing Reports section with revenue visibility and
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Data Layer** - Extend reports API with topic aggregations and revenue calculations (completed 2026-02-24)
-- [ ] **Phase 2: Overview Revenue Charts** - Add Revenue by Client and Revenue by Employee charts to the overview tab
+- [x] **Phase 2: Overview Revenue Charts** - Add Revenue by Client and Revenue by Employee charts to the overview tab (completed 2026-02-24)
 - [ ] **Phase 3: Client Drill-Down Enhancements** - Add topic breakdown, hours trend, full entry table with topic column to client drill-down
 - [ ] **Phase 4: Employee Drill-Down Enhancements** - Add cross-client topic breakdown, full entry table with topic column to employee drill-down
 
@@ -47,8 +47,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Create RevenueBarChart component with EUR formatting, top-10 grouping, and comparison badges
-- [ ] 02-02-PLAN.md — Integrate revenue charts into OverviewTab with paired-row layout and admin gating
+- [x] 02-01-PLAN.md — Create RevenueBarChart component with EUR formatting, top-10 grouping, and comparison badges
+- [x] 02-02-PLAN.md — Integrate revenue charts into OverviewTab with paired-row layout and admin gating
 
 ### Phase 3: Client Drill-Down Enhancements
 **Goal**: When drilling into a client, admins can see what topics work was spent on, how hours trended over time, and browse all entries for the period
@@ -88,6 +88,6 @@ Note: Phases 3 and 4 both depend on Phase 1 only (not on each other or Phase 2).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Data Layer | 2/2 | Complete    | 2026-02-24 |
-| 2. Overview Revenue Charts | 0/2 | Not started | - |
+| 2. Overview Revenue Charts | 2/2 | Complete    | 2026-02-24 |
 | 3. Client Drill-Down Enhancements | 0/? | Not started | - |
 | 4. Employee Drill-Down Enhancements | 0/? | Not started | - |

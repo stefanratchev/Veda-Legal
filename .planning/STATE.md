@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 ## Current Position
 
 Phase: 2 of 4 (Overview Revenue Charts)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-24 -- Completed 02-01-PLAN.md
+Plan: 2 of 2 in current phase (PHASE COMPLETE)
+Status: Phase Complete
+Last activity: 2026-02-24 -- Completed 02-02-PLAN.md
 
-Progress: [███░░░░░░░] 30%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 3min
-- Total execution time: 0.13 hours
+- Total plans completed: 4
+- Average duration: 2min
+- Total execution time: 0.17 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-data-layer | 2 | 6min | 3min |
-| 02-overview-revenue-charts | 1 | 2min | 2min |
+| 02-overview-revenue-charts | 2 | 4min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 2min, 2min
-- Trend: improving
+- Last 5 plans: 4min, 2min, 2min, 2min
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -55,6 +55,9 @@ Recent decisions affecting current work:
 - [Phase 02-overview-revenue-charts]: Teal #4ECDC4 as --accent-revenue color (distinct from coral pink hours)
 - [Phase 02-overview-revenue-charts]: LabelList with custom content renderer for per-bar % change badges
 - [Phase 02-overview-revenue-charts]: Module-level Intl.NumberFormat cache for formatEurExact performance
+- [Phase 02-overview-revenue-charts]: Revenue charts use horizontal bars for better scalability with many clients/employees
+- [Phase 02-overview-revenue-charts]: Paired-row layout: Hours by Client | Revenue by Client, Hours by Employee | Revenue by Employee
+- [Phase 02-overview-revenue-charts]: Hours by Client switched from DonutChart to horizontal BarChart for visual consistency
 
 ### Pending Todos
 
@@ -69,5 +72,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 02-01-PLAN.md
+Stopped at: Completed 02-02-PLAN.md (Phase 2 complete)
 Resume file: None

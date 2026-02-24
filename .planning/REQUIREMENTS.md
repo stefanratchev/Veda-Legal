@@ -21,9 +21,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Employee Drill-Down
 
-- [ ] **EDR-01**: When drilling into an employee, a topic breakdown shows hours per topic across all clients
-- [ ] **EDR-02**: When drilling into an employee, the entry table shows ALL entries for the selected date range (not just last 10)
-- [ ] **EDR-03**: The employee drill-down entry table includes a topic column
+- [x] **EDR-01**: When drilling into an employee, a topic breakdown shows hours per topic across all clients
+- [x] **EDR-02**: When drilling into an employee, the entry table shows ALL entries for the selected date range (not just last 10)
+- [x] **EDR-03**: The employee drill-down entry table includes a topic column
 
 ### Data Layer
 
@@ -74,9 +74,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CDR-02 | Phase 3 | Dropped |
 | CDR-03 | Phase 3 | Complete |
 | CDR-04 | Phase 3 | Complete |
-| EDR-01 | Phase 4 | Pending |
-| EDR-02 | Phase 4 | Pending |
-| EDR-03 | Phase 4 | Pending |
+| EDR-01 | Phase 4 | Complete |
+| EDR-02 | Phase 4 | Complete |
+| EDR-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 12 total

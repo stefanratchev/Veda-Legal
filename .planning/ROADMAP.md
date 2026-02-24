@@ -51,19 +51,19 @@ Plans:
 - [x] 02-02-PLAN.md — Integrate revenue charts into OverviewTab with paired-row layout and admin gating
 
 ### Phase 3: Client Drill-Down Enhancements
-**Goal**: When drilling into a client, admins can see what topics work was spent on, how hours trended over time, and browse all entries for the period
+**Goal**: When drilling into a client, admins can see what topics work was spent on and browse all entries for the period
 **Depends on**: Phase 1
-**Requirements**: CDR-01, CDR-02, CDR-03, CDR-04
+**Requirements**: CDR-01, CDR-02 (dropped), CDR-03, CDR-04
 **Success Criteria** (what must be TRUE):
   1. Client drill-down shows a topic breakdown summary (hours per topic) at the top of the detail view
-  2. Client drill-down shows an hours-over-time trend chart for the selected date range
+  2. ~~Client drill-down shows an hours-over-time trend chart for the selected date range~~ (CDR-02 dropped by user decision)
   3. Client drill-down entry table shows ALL entries for the selected date range (not limited to 10), with pagination if the list exceeds ~50 entries
   4. Client drill-down entry table includes a topic column showing the topic name for each entry
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md — Add topic breakdown chart and side-by-side layout with Hours by Employee
+- [ ] 03-02-PLAN.md — Replace entry table with DataTable, add topic column and pagination
 
 ### Phase 4: Employee Drill-Down Enhancements
 **Goal**: When drilling into an employee, admins can see their topic distribution across all clients and browse all entries for the period
@@ -89,5 +89,5 @@ Note: Phases 3 and 4 both depend on Phase 1 only (not on each other or Phase 2).
 |-------|----------------|--------|-----------|
 | 1. Data Layer | 2/2 | Complete    | 2026-02-24 |
 | 2. Overview Revenue Charts | 2/2 | Complete    | 2026-02-24 |
-| 3. Client Drill-Down Enhancements | 0/? | Not started | - |
+| 3. Client Drill-Down Enhancements | 0/2 | Not started | - |
 | 4. Employee Drill-Down Enhancements | 0/? | Not started | - |

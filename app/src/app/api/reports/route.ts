@@ -4,29 +4,41 @@ import { db } from "@/lib/db";
 import { timeEntries, users } from "@/lib/schema";
 import { requireAuth } from "@/lib/api-utils";
 
+interface TopicAggregation {
+  topicName: string;
+  totalHours: number;
+  writtenOffHours: number;
+}
+
 interface EmployeeStats {
   id: string;
   name: string;
   totalHours: number;
+  billableHours: number | null;
+  revenue: number | null;
   clientCount: number;
   topClient: { name: string; hours: number } | null;
   clients: { id: string; name: string; hours: number }[];
   dailyHours: { date: string; hours: number }[];
+  topics: TopicAggregation[];
 }
 
 interface ClientStats {
   id: string;
   name: string;
   hourlyRate: number | null;
+  clientType: "REGULAR" | "INTERNAL" | "MANAGEMENT";
   totalHours: number;
   revenue: number | null;
   employees: { id: string; name: string; hours: number }[];
+  topics: TopicAggregation[];
 }
 
 interface ReportData {
   summary: {
     totalHours: number;
     totalRevenue: number | null;
+    totalWrittenOffHours: number | null;
     activeClients: number;
   };
   byEmployee: EmployeeStats[];
@@ -40,6 +52,9 @@ interface ReportData {
     userName: string;
     clientId: string;
     clientName: string;
+    topicName: string;
+    isWrittenOff: boolean;
+    clientType: "REGULAR" | "INTERNAL" | "MANAGEMENT";
   }[];
 }
 
@@ -106,10 +121,19 @@ export async function GET(request: NextRequest) {
         description: true,
         userId: true,
         clientId: true,
+        topicName: true,
+        isWrittenOff: true,
       },
       with: {
         user: { columns: { id: true, name: true } },
-        client: { columns: { id: true, name: true, hourlyRate: true } },
+        client: {
+          columns: {
+            id: true,
+            name: true,
+            hourlyRate: true,
+            clientType: true,
+          },
+        },
       },
       orderBy: [desc(timeEntries.date)],
     });
@@ -119,8 +143,11 @@ export async function GET(request: NextRequest) {
       id: string;
       name: string;
       totalHours: number;
+      billableHours: number;
+      revenue: number;
       clients: Map<string, { name: string; hours: number }>;
       dailyHours: Map<string, number>;
+      topicMap: Map<string, { totalHours: number; writtenOffHours: number }>;
     }>();
 
     // Aggregate by client
@@ -128,22 +155,36 @@ export async function GET(request: NextRequest) {
       id: string;
       name: string;
       hourlyRate: number | null;
+      clientType: "REGULAR" | "INTERNAL" | "MANAGEMENT";
       totalHours: number;
+      revenue: number;
       employees: Map<string, { name: string; hours: number }>;
+      topicMap: Map<string, { totalHours: number; writtenOffHours: number }>;
     }>();
 
     let totalHours = 0;
-    let totalRevenue: number | null = isAdmin ? 0 : null;
+    let totalRevenue = 0;
+    let totalWrittenOffHours = 0;
     const activeClientIds = new Set<string>();
 
     for (const entry of entries) {
       const hours = Number(entry.hours);
+      const topicName = entry.topicName || "Uncategorized";
+      const isWrittenOff = entry.isWrittenOff ?? false;
+      const clientType = entry.client.clientType as "REGULAR" | "INTERNAL" | "MANAGEMENT";
+      const isBillable = clientType === "REGULAR";
+      const clientRate = entry.client.hourlyRate ? Number(entry.client.hourlyRate) : 0;
+
       totalHours += hours;
       activeClientIds.add(entry.clientId);
 
-      const clientRate = entry.client.hourlyRate ? Number(entry.client.hourlyRate) : null;
-      if (isAdmin && clientRate !== null) {
-        totalRevenue = (totalRevenue ?? 0) + hours * clientRate;
+      if (isWrittenOff) {
+        totalWrittenOffHours += hours;
+      }
+
+      // Revenue: only count when not written-off, billable client, and rate > 0
+      if (!isWrittenOff && isBillable && clientRate > 0) {
+        totalRevenue += hours * clientRate;
       }
 
       // Employee aggregation
@@ -153,12 +194,29 @@ export async function GET(request: NextRequest) {
           id: empId,
           name: entry.user.name || "Unknown",
           totalHours: 0,
+          billableHours: 0,
+          revenue: 0,
           clients: new Map(),
           dailyHours: new Map(),
+          topicMap: new Map(),
         });
       }
       const emp = employeeMap.get(empId)!;
       emp.totalHours += hours;
+
+      // Employee billable hours: REGULAR clients, not written-off
+      if (isBillable && !isWrittenOff) {
+        emp.billableHours += hours;
+        emp.revenue += hours * clientRate;
+      }
+
+      // Employee topic aggregation
+      if (!emp.topicMap.has(topicName)) {
+        emp.topicMap.set(topicName, { totalHours: 0, writtenOffHours: 0 });
+      }
+      const empTopic = emp.topicMap.get(topicName)!;
+      empTopic.totalHours += hours;
+      if (isWrittenOff) empTopic.writtenOffHours += hours;
 
       // entry.date is already a YYYY-MM-DD string in Drizzle
       emp.dailyHours.set(entry.date, (emp.dailyHours.get(entry.date) || 0) + hours);
@@ -174,13 +232,29 @@ export async function GET(request: NextRequest) {
         clientMap.set(clientId, {
           id: clientId,
           name: entry.client.name,
-          hourlyRate: clientRate,
+          hourlyRate: entry.client.hourlyRate ? Number(entry.client.hourlyRate) : null,
+          clientType,
           totalHours: 0,
+          revenue: 0,
           employees: new Map(),
+          topicMap: new Map(),
         });
       }
       const client = clientMap.get(clientId)!;
       client.totalHours += hours;
+
+      // Client revenue: only for REGULAR, not written-off
+      if (!isWrittenOff && isBillable && clientRate > 0) {
+        client.revenue += hours * clientRate;
+      }
+
+      // Client topic aggregation
+      if (!client.topicMap.has(topicName)) {
+        client.topicMap.set(topicName, { totalHours: 0, writtenOffHours: 0 });
+      }
+      const clientTopic = client.topicMap.get(topicName)!;
+      clientTopic.totalHours += hours;
+      if (isWrittenOff) clientTopic.writtenOffHours += hours;
 
       if (!client.employees.has(empId)) {
         client.employees.set(empId, { name: entry.user.name || "Unknown", hours: 0 });
@@ -194,16 +268,22 @@ export async function GET(request: NextRequest) {
         .map(([id, data]) => ({ id, name: data.name, hours: data.hours }))
         .sort((a, b) => b.hours - a.hours);
 
+      const topics: TopicAggregation[] = Array.from(emp.topicMap.entries())
+        .map(([name, data]) => ({ topicName: name, totalHours: data.totalHours, writtenOffHours: data.writtenOffHours }));
+
       return {
         id: emp.id,
         name: emp.name,
         totalHours: emp.totalHours,
+        billableHours: isAdmin ? emp.billableHours : null,
+        revenue: isAdmin ? emp.revenue : null,
         clientCount: clients.length,
         topClient: clients[0] ? { name: clients[0].name, hours: clients[0].hours } : null,
         clients,
         dailyHours: Array.from(emp.dailyHours.entries())
           .map(([date, hours]) => ({ date, hours }))
           .sort((a, b) => a.date.localeCompare(b.date)),
+        topics,
       };
     }).sort((a, b) => b.totalHours - a.totalHours);
 
@@ -212,20 +292,26 @@ export async function GET(request: NextRequest) {
         .map(([id, data]) => ({ id, name: data.name, hours: data.hours }))
         .sort((a, b) => b.hours - a.hours);
 
+      const topics: TopicAggregation[] = Array.from(client.topicMap.entries())
+        .map(([name, data]) => ({ topicName: name, totalHours: data.totalHours, writtenOffHours: data.writtenOffHours }));
+
       return {
         id: client.id,
         name: client.name,
         hourlyRate: client.hourlyRate,
+        clientType: client.clientType,
         totalHours: client.totalHours,
-        revenue: client.hourlyRate !== null ? client.totalHours * client.hourlyRate : null,
+        revenue: client.revenue,
         employees,
+        topics,
       };
     }).sort((a, b) => b.totalHours - a.totalHours);
 
     const response: ReportData = {
       summary: {
         totalHours,
-        totalRevenue,
+        totalRevenue: isAdmin ? totalRevenue : null,
+        totalWrittenOffHours: isAdmin ? totalWrittenOffHours : null,
         activeClients: activeClientIds.size,
       },
       byEmployee: isAdmin ? byEmployee : byEmployee.filter(e => e.id === user.id),
@@ -239,6 +325,9 @@ export async function GET(request: NextRequest) {
         userName: e.user.name || "Unknown",
         clientId: e.clientId,
         clientName: e.client.name,
+        topicName: e.topicName || "Uncategorized",
+        isWrittenOff: e.isWrittenOff ?? false,
+        clientType: e.client.clientType as "REGULAR" | "INTERNAL" | "MANAGEMENT",
       })),
     };
 

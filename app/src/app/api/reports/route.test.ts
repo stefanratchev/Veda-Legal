@@ -77,7 +77,9 @@ function createMockTimeEntryWithRelations(overrides: {
     topicName: overrides.topicName ?? "General Advisory",
     isWrittenOff: overrides.isWrittenOff ?? false,
     user: overrides.user || { id: userId, name: "Test User" },
-    client: overrides.client || { id: clientId, name: "Test Client", hourlyRate: 150, clientType: "REGULAR" as const },
+    client: overrides.client
+      ? { clientType: "REGULAR" as const, ...overrides.client }
+      : { id: clientId, name: "Test Client", hourlyRate: 150, clientType: "REGULAR" as const },
   };
 }
 

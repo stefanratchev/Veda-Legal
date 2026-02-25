@@ -14,11 +14,11 @@ Requirements for Reports Detail View milestone. Each maps to roadmap phases.
 
 ### Filters
 
-- [ ] **FILT-01**: User can filter by multiple clients using a searchable multi-select dropdown
-- [ ] **FILT-02**: User can filter by multiple employees using a searchable multi-select dropdown
-- [ ] **FILT-03**: User can filter by multiple topics using a searchable multi-select dropdown
+- [x] **FILT-01**: User can filter by multiple clients using a searchable multi-select dropdown
+- [x] **FILT-02**: User can filter by multiple employees using a searchable multi-select dropdown
+- [x] **FILT-03**: User can filter by multiple topics using a searchable multi-select dropdown
 - [ ] **FILT-04**: User can clear an individual filter or all filters at once
-- [ ] **FILT-05**: User sees active filter indicators showing which filters are applied
+- [x] **FILT-05**: User sees active filter indicators showing which filters are applied
 - [ ] **FILT-06**: All charts and the entry table update simultaneously when any filter changes
 
 ### Charts
@@ -74,11 +74,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | DTAB-01 | Phase 10 | Pending |
 | DTAB-02 | Phase 11 | Pending |
-| FILT-01 | Phase 9 | Pending |
-| FILT-02 | Phase 9 | Pending |
-| FILT-03 | Phase 9 | Pending |
+| FILT-01 | Phase 9 | Complete |
+| FILT-02 | Phase 9 | Complete |
+| FILT-03 | Phase 9 | Complete |
 | FILT-04 | Phase 9 | Pending |
-| FILT-05 | Phase 9 | Pending |
+| FILT-05 | Phase 9 | Complete |
 | FILT-06 | Phase 10 | Pending |
 | CHRT-01 | Phase 10 | Pending |
 | CHRT-02 | Phase 10 | Pending |

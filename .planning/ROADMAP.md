@@ -66,10 +66,11 @@ Plans:
   2. User can clear an individual selection or clear all selections at once (FILT-04)
   3. User sees active filter indicators (pill badges or count) showing which filters are currently applied (FILT-05)
   4. Component works with any option list (clients, employees, topics) via props -- one component, three instances
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 09-01: TBD
+- [ ] 09-01-PLAN.md — MultiSelectFilter component with search, checkboxes, keyboard nav, and active indicators (TDD)
+- [ ] 09-02-PLAN.md — FilterBar wrapper composing three MultiSelectFilter instances with "Clear all" (TDD)
 
 ### Phase 10: Detail Tab Assembly
 **Goal**: Users can navigate to the Detail tab and explore filtered data through six charts and a full entry table, with all visualizations updating simultaneously when filters change
@@ -114,6 +115,6 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11
 | 6. Core Timesheet Workflow Tests | v1.1 | 3/3 | Complete | 2026-02-25 |
 | 7. CI Integration | v1.1 | 1/1 | Complete | 2026-02-25 |
 | 8. Data Layer Foundation | v1.2 | 2/2 | Complete | 2026-02-25 |
-| 9. Filter Component | v1.2 | 0/TBD | Not started | - |
+| 9. Filter Component | v1.2 | 0/2 | Not started | - |
 | 10. Detail Tab Assembly | v1.2 | 0/TBD | Not started | - |
 | 11. Polish & Interactivity | v1.2 | 0/TBD | Not started | - |

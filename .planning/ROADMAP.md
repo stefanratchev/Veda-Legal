@@ -51,11 +51,11 @@ See: [milestones/v1.1-ROADMAP.md](./milestones/v1.1-ROADMAP.md)
   2. Per-entry revenue is computed server-side and returned as `null` for non-admin users (no client-side rate exposure)
   3. Pure utility functions (`filterEntries`, `aggregateByClient`, `aggregateByEmployee`, `aggregateByTopic`) exist with full unit test coverage, using "empty Set = show all" convention
   4. All existing report tests still pass after type and query changes (zero regressions)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md — Extend ReportEntry with subtopicName and per-entry revenue (TDD)
+- [ ] 08-02-PLAN.md — Filter and aggregation utility functions (TDD)
 
 ### Phase 9: Filter Component
 **Goal**: Users have a polished, reusable multi-select filter component that supports searching, selecting, and clearing options -- tested in isolation before integration
@@ -113,7 +113,7 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11
 | 5. Test Infrastructure | v1.1 | 2/2 | Complete | 2026-02-25 |
 | 6. Core Timesheet Workflow Tests | v1.1 | 3/3 | Complete | 2026-02-25 |
 | 7. CI Integration | v1.1 | 1/1 | Complete | 2026-02-25 |
-| 8. Data Layer Foundation | v1.2 | 0/TBD | Not started | - |
+| 8. Data Layer Foundation | v1.2 | 0/2 | Not started | - |
 | 9. Filter Component | v1.2 | 0/TBD | Not started | - |
 | 10. Detail Tab Assembly | v1.2 | 0/TBD | Not started | - |
 | 11. Polish & Interactivity | v1.2 | 0/TBD | Not started | - |

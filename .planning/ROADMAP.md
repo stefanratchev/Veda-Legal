@@ -37,7 +37,7 @@ See: [milestones/v1.1-ROADMAP.md](./milestones/v1.1-ROADMAP.md)
 
 - [x] **Phase 8: Data Layer Foundation** (2/2 plans) - completed 2026-02-25
 - [x] **Phase 9: Filter Component** (2/2 plans) - completed 2026-02-25
-- [ ] **Phase 10: Detail Tab Assembly** - Complete Detail tab wiring filters, six charts, and entry table
+- [x] **Phase 10: Detail Tab Assembly** (2/2 plans) - completed 2026-02-25
 - [ ] **Phase 11: Polish & Interactivity** - Summary stats row and chart-click-to-filter interaction
 
 ## Phase Details
@@ -85,8 +85,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — DetailTab with FilterBar and six paired charts (TDD)
-- [ ] 10-02-PLAN.md — Entry table with columns, sorting, pagination, admin revenue (TDD)
+- [x] 10-01-PLAN.md — DetailTab with FilterBar and six paired charts (TDD)
+- [x] 10-02-PLAN.md — Entry table with columns, sorting, pagination, admin revenue (TDD)
 
 ### Phase 11: Polish & Interactivity
 **Goal**: Users get at-a-glance summary stats and can explore data by clicking chart bars to drive filters, completing the interactive analytics experience
@@ -116,5 +116,5 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11
 | 7. CI Integration | v1.1 | 1/1 | Complete | 2026-02-25 |
 | 8. Data Layer Foundation | v1.2 | 2/2 | Complete | 2026-02-25 |
 | 9. Filter Component | v1.2 | 2/2 | Complete | 2026-02-25 |
-| 10. Detail Tab Assembly | v1.2 | 0/2 | Not started | - |
+| 10. Detail Tab Assembly | v1.2 | 2/2 | Complete | 2026-02-25 |
 | 11. Polish & Interactivity | v1.2 | 0/TBD | Not started | - |

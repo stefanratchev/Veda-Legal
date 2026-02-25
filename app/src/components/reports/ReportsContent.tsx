@@ -6,6 +6,7 @@ import { ComparisonPicker, ComparisonType } from "./ComparisonPicker";
 import { OverviewTab } from "./OverviewTab";
 import { ByEmployeeTab } from "./ByEmployeeTab";
 import { ByClientTab } from "./ByClientTab";
+import { DetailTab } from "./DetailTab";
 import {
   getMonthRange,
   formatDateISO,
@@ -17,7 +18,7 @@ import type { ReportData, DrillDownEntry } from "@/types/reports";
 
 export type { ReportData };
 
-type TabType = "overview" | "by-employee" | "by-client";
+type TabType = "overview" | "by-employee" | "by-client" | "detail";
 
 interface ReportsContentProps {
   initialData: ReportData;
@@ -200,6 +201,7 @@ export function ReportsContent({
     { id: "overview", label: "Overview" },
     { id: "by-employee", label: "By Employee" },
     { id: "by-client", label: "By Client" },
+    { id: "detail", label: "Detail" },
   ];
 
   return (
@@ -281,6 +283,13 @@ export function ReportsContent({
               isAdmin={isAdmin}
               selectedClientId={selectedClientId}
               onSelectClient={setSelectedClientId}
+            />
+          )}
+          {activeTab === "detail" && (
+            <DetailTab
+              key="detail"
+              entries={data.entries}
+              isAdmin={isAdmin}
             />
           )}
         </>

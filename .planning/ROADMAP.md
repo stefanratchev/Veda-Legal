@@ -82,11 +82,11 @@ Plans:
   3. User sees an entry table with Date, Employee, Client, Topic, Subtopic, Description, Hours columns; admins additionally see a Revenue column (TABL-01, TABL-02)
   4. User can sort and paginate the entry table at 50 entries per page (TABL-03)
   5. All six charts and the entry table update simultaneously when any filter is applied or removed (FILT-06)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
+- [ ] 10-01-PLAN.md — DetailTab with FilterBar and six paired charts (TDD)
+- [ ] 10-02-PLAN.md — Entry table with columns, sorting, pagination, admin revenue (TDD)
 
 ### Phase 11: Polish & Interactivity
 **Goal**: Users get at-a-glance summary stats and can explore data by clicking chart bars to drive filters, completing the interactive analytics experience
@@ -116,5 +116,5 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11
 | 7. CI Integration | v1.1 | 1/1 | Complete | 2026-02-25 |
 | 8. Data Layer Foundation | v1.2 | 2/2 | Complete | 2026-02-25 |
 | 9. Filter Component | v1.2 | 2/2 | Complete | 2026-02-25 |
-| 10. Detail Tab Assembly | v1.2 | 0/TBD | Not started | - |
+| 10. Detail Tab Assembly | v1.2 | 0/2 | Not started | - |
 | 11. Polish & Interactivity | v1.2 | 0/TBD | Not started | - |

@@ -61,6 +61,7 @@ function createMockTimeEntryWithRelations(overrides: {
   userId?: string;
   clientId?: string;
   topicName?: string;
+  subtopicName?: string;
   isWrittenOff?: boolean;
   user?: { id: string; name: string | null };
   client?: { id: string; name: string; hourlyRate: number | null; clientType?: "REGULAR" | "INTERNAL" | "MANAGEMENT" };
@@ -75,6 +76,7 @@ function createMockTimeEntryWithRelations(overrides: {
     userId,
     clientId,
     topicName: overrides.topicName ?? "General Advisory",
+    subtopicName: overrides.subtopicName ?? "Client correspondence:",
     isWrittenOff: overrides.isWrittenOff ?? false,
     user: overrides.user || { id: userId, name: "Test User" },
     client: overrides.client
@@ -1565,6 +1567,207 @@ describe("GET /api/reports", () => {
       const data = await response.json();
 
       expect(data.summary.totalWrittenOffHours).toBeNull();
+    });
+  });
+
+  describe("Entry subtopicName and revenue fields", () => {
+    it("includes subtopicName from entry data", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          userId: user.id,
+          subtopicName: "Client correspondence:",
+          user: { id: user.id, name: user.name },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].subtopicName).toBe("Client correspondence:");
+    });
+
+    it("returns empty string for entries with empty subtopicName", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          userId: user.id,
+          subtopicName: "",
+          user: { id: user.id, name: user.name },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].subtopicName).toBe("");
+    });
+
+    it("admin sees revenue computed for REGULAR entries", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          userId: user.id,
+          hours: "2.5",
+          user: { id: user.id, name: user.name },
+          client: { id: "client-1", name: "Regular Client", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].revenue).toBe(375); // 2.5 * 150
+    });
+
+    it("admin sees null revenue for written-off entries", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          userId: user.id,
+          hours: "2.5",
+          isWrittenOff: true,
+          user: { id: user.id, name: user.name },
+          client: { id: "client-1", name: "Regular Client", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].revenue).toBeNull();
+    });
+
+    it("admin sees null revenue for INTERNAL entries", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          userId: user.id,
+          hours: "2.5",
+          user: { id: user.id, name: user.name },
+          client: { id: "client-int", name: "Internal Work", hourlyRate: null, clientType: "INTERNAL" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].revenue).toBeNull();
+    });
+
+    it("admin sees null revenue for MANAGEMENT entries", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          userId: user.id,
+          hours: "1.0",
+          user: { id: user.id, name: user.name },
+          client: { id: "client-mgmt", name: "Management Tasks", hourlyRate: null, clientType: "MANAGEMENT" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].revenue).toBeNull();
+    });
+
+    it("admin sees null revenue for REGULAR entries with no hourly rate", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          userId: user.id,
+          hours: "2.5",
+          user: { id: user.id, name: user.name },
+          client: { id: "client-1", name: "No Rate Client", hourlyRate: null, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].revenue).toBeNull();
+    });
+
+    it("non-admin sees null revenue for all entries", async () => {
+      const user = createMockUser({ position: "ASSOCIATE" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          userId: user.id,
+          hours: "2.5",
+          user: { id: user.id, name: user.name },
+          client: { id: "client-1", name: "Regular Client", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].revenue).toBeNull();
     });
   });
 });

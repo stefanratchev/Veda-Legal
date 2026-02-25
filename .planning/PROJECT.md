@@ -36,13 +36,17 @@ Partners and admins can quickly understand firm performance — who worked on wh
 
 ### Active
 
-(None — define in next milestone)
+<!-- Current scope: v1.2 Reports Detail View -->
+
+- [ ] Detail tab in Reports with Hours & Revenue charts by Client, Employee, and Topic
+- [ ] Multi-select filters (Client, Employee, Topic) that update charts and entry table
+- [ ] Full entry table with Date, Employee, Client, Topic, Subtopic, Description, Hours, Revenue (admin)
 
 ### Out of Scope
 
 - CSV/PDF export of reports — defer to future milestone
 - Utilization % or billable vs non-billable breakdown — not requested
-- Filtering reports by topic/subtopic — not requested
+- Filtering reports by subtopic — top-level topic filtering added in v1.2, subtopic filtering deferred
 - Non-admin revenue visibility changes — current access control stays as-is
 - Mobile-specific report layouts — not requested
 - Actual billed revenue from service descriptions — user decided rate x hours only
@@ -53,6 +57,16 @@ Partners and admins can quickly understand firm performance — who worked on wh
 - Multi-browser e2e testing — internal app, all Chrome
 - Visual regression testing — dynamic data + Tailwind = false positives
 - Parallel e2e execution — only warranted if >50 tests
+
+## Current Milestone: v1.2 Reports Detail View
+
+**Goal:** Add a Detail tab to Reports that combines all charts (by Client, Employee, Topic) with a full entry table and multi-select filters for deep data exploration.
+
+**Target features:**
+- Hours & Revenue by Client, Employee, and Topic charts (paired)
+- Full entry table (Date, Employee, Client, Topic, Subtopic, Description, Hours, Revenue)
+- Multi-select Client, Employee, and Topic filters that update everything (charts + table)
+- Integration with existing period picker and comparison period
 
 ## Context
 
@@ -91,4 +105,4 @@ Tech stack: Next.js 16, Recharts, Drizzle ORM, PostgreSQL, Tailwind CSS v4, Play
 | POM with portal-aware locators | DurationPicker renders via createPortal at body level | ✓ Good |
 
 ---
-*Last updated: 2026-02-25 after v1.1 milestone*
+*Last updated: 2026-02-25 after v1.2 milestone started*

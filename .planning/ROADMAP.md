@@ -4,6 +4,7 @@
 
 - ✅ **v1.0 Reports Improvements** — Phases 1-4 (shipped 2026-02-24)
 - ✅ **v1.1 E2E Timesheets** — Phases 5-7 (shipped 2026-02-25)
+- 🚧 **v1.2 Reports Detail View** — Phases 8-11 (in progress)
 
 ## Phases
 
@@ -30,7 +31,78 @@ See: [milestones/v1.1-ROADMAP.md](./milestones/v1.1-ROADMAP.md)
 
 </details>
 
+### 🚧 v1.2 Reports Detail View (In Progress)
+
+**Milestone Goal:** Add a Detail tab to Reports with multi-select filters, six paired charts (Hours + Revenue by Client/Employee/Topic), and a full entry table for deep data exploration.
+
+- [ ] **Phase 8: Data Layer Foundation** - Extended types, aggregation utils, and filter logic enabling all downstream components
+- [ ] **Phase 9: Filter Component** - Reusable MultiSelectFilter with search, selection, and active indicators
+- [ ] **Phase 10: Detail Tab Assembly** - Complete Detail tab wiring filters, six charts, and entry table
+- [ ] **Phase 11: Polish & Interactivity** - Summary stats row and chart-click-to-filter interaction
+
+## Phase Details
+
+### Phase 8: Data Layer Foundation
+**Goal**: All data shapes, aggregation logic, and filter utilities are ready for the Detail tab -- types compile, pure functions pass tests, and the API returns per-entry revenue and subtopic names
+**Depends on**: Phase 7 (v1.1 complete)
+**Requirements**: None (infrastructure enabling CHRT-01-06, TABL-01-02, FILT-06)
+**Success Criteria** (what must be TRUE):
+  1. `ReportEntry` type includes `subtopicName` and `revenue` (number | null) fields, and the report-utils query populates them from the database
+  2. Per-entry revenue is computed server-side and returned as `null` for non-admin users (no client-side rate exposure)
+  3. Pure utility functions (`filterEntries`, `aggregateByClient`, `aggregateByEmployee`, `aggregateByTopic`) exist with full unit test coverage, using "empty Set = show all" convention
+  4. All existing report tests still pass after type and query changes (zero regressions)
+**Plans**: TBD
+
+Plans:
+- [ ] 08-01: TBD
+- [ ] 08-02: TBD
+
+### Phase 9: Filter Component
+**Goal**: Users have a polished, reusable multi-select filter component that supports searching, selecting, and clearing options -- tested in isolation before integration
+**Depends on**: Phase 8
+**Requirements**: FILT-01, FILT-02, FILT-03, FILT-04, FILT-05
+**Success Criteria** (what must be TRUE):
+  1. User can open a searchable dropdown, type to narrow options, and select multiple items via checkboxes (FILT-01, FILT-02, FILT-03)
+  2. User can clear an individual selection or clear all selections at once (FILT-04)
+  3. User sees active filter indicators (pill badges or count) showing which filters are currently applied (FILT-05)
+  4. Component works with any option list (clients, employees, topics) via props -- one component, three instances
+**Plans**: TBD
+
+Plans:
+- [ ] 09-01: TBD
+
+### Phase 10: Detail Tab Assembly
+**Goal**: Users can navigate to the Detail tab and explore filtered data through six charts and a full entry table, with all visualizations updating simultaneously when filters change
+**Depends on**: Phase 9
+**Requirements**: DTAB-01, FILT-06, CHRT-01, CHRT-02, CHRT-03, CHRT-04, CHRT-05, CHRT-06, TABL-01, TABL-02, TABL-03
+**Success Criteria** (what must be TRUE):
+  1. User can navigate to a "Detail" tab in Reports alongside the existing Overview, By Client, and By Employee tabs (DTAB-01)
+  2. User sees Hours by Client, Hours by Employee, and Hours by Topic horizontal bar charts; admins additionally see Revenue by Client, Revenue by Employee, and Revenue by Topic charts (CHRT-01-06)
+  3. User sees an entry table with Date, Employee, Client, Topic, Subtopic, Description, Hours columns; admins additionally see a Revenue column (TABL-01, TABL-02)
+  4. User can sort and paginate the entry table at 50 entries per page (TABL-03)
+  5. All six charts and the entry table update simultaneously when any filter is applied or removed (FILT-06)
+**Plans**: TBD
+
+Plans:
+- [ ] 10-01: TBD
+- [ ] 10-02: TBD
+
+### Phase 11: Polish & Interactivity
+**Goal**: Users get at-a-glance summary stats and can explore data by clicking chart bars to drive filters, completing the interactive analytics experience
+**Depends on**: Phase 10
+**Requirements**: DTAB-02, CHRT-07
+**Success Criteria** (what must be TRUE):
+  1. User sees a summary stats row (entry count, total hours; admins see total revenue) that updates in real-time as filters change (DTAB-02)
+  2. User can click a chart bar to toggle that entity as a filter, and clicking again removes it (CHRT-07)
+**Plans**: TBD
+
+Plans:
+- [ ] 11-01: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 8 -> 9 -> 10 -> 11
 
 | Phase | Milestone | Plans | Status | Completed |
 |-------|-----------|-------|--------|-----------|
@@ -41,3 +113,7 @@ See: [milestones/v1.1-ROADMAP.md](./milestones/v1.1-ROADMAP.md)
 | 5. Test Infrastructure | v1.1 | 2/2 | Complete | 2026-02-25 |
 | 6. Core Timesheet Workflow Tests | v1.1 | 3/3 | Complete | 2026-02-25 |
 | 7. CI Integration | v1.1 | 1/1 | Complete | 2026-02-25 |
+| 8. Data Layer Foundation | v1.2 | 0/TBD | Not started | - |
+| 9. Filter Component | v1.2 | 0/TBD | Not started | - |
+| 10. Detail Tab Assembly | v1.2 | 0/TBD | Not started | - |
+| 11. Polish & Interactivity | v1.2 | 0/TBD | Not started | - |

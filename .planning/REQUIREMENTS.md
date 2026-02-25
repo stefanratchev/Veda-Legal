@@ -72,30 +72,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DTAB-01 | — | Pending |
-| DTAB-02 | — | Pending |
-| FILT-01 | — | Pending |
-| FILT-02 | — | Pending |
-| FILT-03 | — | Pending |
-| FILT-04 | — | Pending |
-| FILT-05 | — | Pending |
-| FILT-06 | — | Pending |
-| CHRT-01 | — | Pending |
-| CHRT-02 | — | Pending |
-| CHRT-03 | — | Pending |
-| CHRT-04 | — | Pending |
-| CHRT-05 | — | Pending |
-| CHRT-06 | — | Pending |
-| CHRT-07 | — | Pending |
-| TABL-01 | — | Pending |
-| TABL-02 | — | Pending |
-| TABL-03 | — | Pending |
+| DTAB-01 | Phase 10 | Pending |
+| DTAB-02 | Phase 11 | Pending |
+| FILT-01 | Phase 9 | Pending |
+| FILT-02 | Phase 9 | Pending |
+| FILT-03 | Phase 9 | Pending |
+| FILT-04 | Phase 9 | Pending |
+| FILT-05 | Phase 9 | Pending |
+| FILT-06 | Phase 10 | Pending |
+| CHRT-01 | Phase 10 | Pending |
+| CHRT-02 | Phase 10 | Pending |
+| CHRT-03 | Phase 10 | Pending |
+| CHRT-04 | Phase 10 | Pending |
+| CHRT-05 | Phase 10 | Pending |
+| CHRT-06 | Phase 10 | Pending |
+| CHRT-07 | Phase 11 | Pending |
+| TABL-01 | Phase 10 | Pending |
+| TABL-02 | Phase 10 | Pending |
+| TABL-03 | Phase 10 | Pending |
 
 **Coverage:**
-- v1.2 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19
+- v1.2 requirements: 18 total
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-25*
-*Last updated: 2026-02-25 after initial definition*
+*Last updated: 2026-02-25 after roadmap creation*

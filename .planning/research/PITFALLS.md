@@ -1,213 +1,172 @@
 # Pitfalls Research
 
-**Domain:** Adding Playwright e2e tests to existing Next.js 16 app with Azure AD SSO and PostgreSQL
+**Domain:** Adding multi-select filter-driven Detail tab to existing Reports (charts + table)
 **Researched:** 2026-02-25
-**Confidence:** HIGH
+**Confidence:** HIGH (based on codebase analysis + documented Recharts/React patterns)
 
 ## Critical Pitfalls
 
-### Pitfall 1: Auth Bypass Leaking to Production
+### Pitfall 1: Cascading Re-renders Across All Charts When Any Filter Changes
 
 **What goes wrong:**
-The most common approach for e2e testing with NextAuth is adding a `CredentialsProvider` gated by `NODE_ENV !== "production"`. This bypass allows Playwright to authenticate without Azure AD. The danger: `NODE_ENV` checks are fragile. Next.js sets `NODE_ENV=production` during `next build` even in development, meaning a conditional like `process.env.NODE_ENV !== "production"` evaluates differently at build time vs runtime. A misconfigured deployment could ship the CredentialsProvider to production, giving anyone with the test credentials full access to the app.
-
-This project's auth flow is particularly sensitive: `signIn` callback in `lib/auth.ts` checks the user whitelist in the database and updates `lastLogin`. A test bypass that skips this callback means tests never exercise the real auth path, and worse, a leaked bypass skips the whitelist entirely.
+The Detail tab will have 6 charts (Hours by Client, Revenue by Client, Hours by Employee, Revenue by Employee, Hours by Topic, Revenue by Topic) plus a DataTable. When a single multi-select filter changes (e.g., adding one client), ALL 6 charts and the table re-render because filter state lives in a shared parent. Recharts charts are SVG-heavy -- each chart teardown and rebuild is expensive. With 6 charts rendering simultaneously, a single filter click creates visible lag.
 
 **Why it happens:**
-NextAuth v4 with JWT strategy requires either (a) a real OAuth flow, (b) a CredentialsProvider, or (c) manual JWT cookie injection. Developers choose (b) because it is simplest, but the environment gating is error-prone. The Auth.js official testing guide explicitly warns: "you must be extremely careful that you do not leave insecure authentication methods available in production."
+The existing `ReportsContent.tsx` holds all state at the top level (lines 36-58). Adding filter state (`selectedClients`, `selectedEmployees`, `selectedTopics`) to this same component means every filter change triggers a re-render of the entire component tree. Recharts `ResponsiveContainer` re-renders its chart even when the chart's data has not changed, because the parent re-rendered and new prop references were created. This is a documented Recharts issue (recharts/recharts#300).
 
 **How to avoid:**
-Use approach (c): manual JWT cookie injection. NextAuth v4 exports an `encode` function from `next-auth/jwt` that can produce a valid `next-auth.session-token` cookie. In a Playwright `globalSetup` file:
-
-1. Ensure a test user exists in the database (seeded during setup).
-2. Call `encode({ token: { email: "test@example.com", name: "Test User", sub: "test-user-id" }, secret: process.env.NEXTAUTH_SECRET })` to produce a signed JWT.
-3. Inject the cookie into the Playwright browser context via `context.addCookies()`.
-
-This requires zero changes to production auth code. No CredentialsProvider, no `NODE_ENV` checks, no risk of leaking.
+1. Wrap each chart in `React.memo()` and memoize the data arrays passed to them with `useMemo`. The current OverviewTab already uses `useMemo` for revenue data (lines 85-111) -- follow that pattern for ALL chart data in the Detail tab.
+2. Memoize callback handlers with `useCallback` so chart `onBarClick` props maintain stable references.
+3. Compute filtered data ONCE at the Detail tab level, then derive each chart's data from that single filtered dataset. Do NOT filter independently in each chart component.
+4. Consider isolating the filter bar into its own component that communicates via a callback, so typing in a filter search box does not cascade to charts until a selection is committed.
 
 **Warning signs:**
-- Any `if (process.env.NODE_ENV` check inside `auth.ts` or `authOptions`
-- A CredentialsProvider in the providers array
-- Test-specific secrets or passwords in environment variables
-- Auth bypass code outside the `e2e/` directory
+- Visible flicker or animation restart on charts when clicking a filter checkbox
+- React DevTools Profiler showing all chart components re-rendering on every filter interaction
+- User-perceptible delay (>100ms) between clicking a filter and seeing the UI update
 
 **Phase to address:**
-Phase 1: Infrastructure setup. The auth strategy must be decided and implemented before any test can run.
+Phase 1 (component architecture) -- must establish the memoization pattern before building individual charts, not as a retrofit.
 
 ---
 
-### Pitfall 2: Database State Leakage Between Tests
+### Pitfall 2: Filter State and DataTable Pagination Desync
 
 **What goes wrong:**
-E2e tests create real data in PostgreSQL (time entries, submissions, users). Without cleanup, Test B sees data created by Test A. This causes intermittent failures: tests pass when run alone but fail in sequence. Worse, with Playwright's parallel workers, two tests writing to the same table produce race conditions -- a test asserting "user has 0 entries" fails because a parallel test just created one.
-
-This project's schema has cascading foreign keys (`ON DELETE CASCADE` on `time_entries.userId`), unique constraints (`timesheet_submissions.userId + date`), and status-dependent logic (`ClientStatus`, `UserStatus`). Leaked state from one test can trigger constraint violations or status-dependent behavior in another.
+User is on page 3 of the entry table, then changes a filter. The filtered dataset shrinks from 200 to 15 entries, but pagination state still says "page 3" -- showing an empty page or crashing. The existing `DataTable` (line 72) does handle this via `validCurrentPage = Math.min(currentPage, totalPages)` but the EXTERNAL state driving which entries reach the DataTable might not reset properly.
 
 **Why it happens:**
-Unlike unit tests (which mock the database), e2e tests hit the real database through the real app. Transaction rollback -- the standard isolation technique for integration tests -- does not work for e2e tests because the test process and the app process are separate. The test cannot wrap the app's database operations in a transaction.
+The DataTable component manages its own pagination internally. But filters are external to it. When the `data` prop changes (due to filter), DataTable correctly clamps the page. The real pitfall is if filter changes are batched or debounced, causing a brief moment where the table renders with stale data but updated pagination, or vice versa. Also, if the Detail tab's entry table adds its own external pagination state (instead of relying on DataTable's internal state), the two can desync.
 
 **How to avoid:**
-Use a dedicated test database (`veda_legal_test`) with truncation-based cleanup. In `globalSetup`:
-
-1. Set `DATABASE_URL` to the test database.
-2. Run migrations to ensure schema is current.
-3. Seed reference data (users, clients, topics, subtopics) that tests need.
-
-Between test files (in `beforeEach` or a Playwright fixture):
-
-4. Truncate only mutable tables (`time_entries`, `timesheet_submissions`, `service_descriptions`, `service_description_topics`, `service_description_line_items`) using `TRUNCATE ... CASCADE`.
-5. Re-seed per-test data as needed.
-
-Do NOT truncate reference tables (users, clients, topics) between tests -- seed them once and treat as read-only. This avoids the expensive re-seeding overhead.
-
-For parallel workers: run tests with `fullyParallel: false` initially (serial execution within each spec file). Only enable full parallelism if test suite time justifies the complexity of per-worker database isolation.
+1. Let `DataTable` own pagination state internally -- do NOT add external page state for the Detail tab's table. The existing DataTable already handles this correctly.
+2. Pass the fully-filtered dataset as `data` to DataTable. Let DataTable handle sorting and pagination internally.
+3. Do NOT debounce the data prop to DataTable while the filter state has already updated -- this creates a frame where filters and table are inconsistent.
 
 **Warning signs:**
-- Tests pass individually (`npx playwright test timesheets.spec.ts`) but fail in full suite
-- Tests fail differently on repeated runs
-- Constraint violation errors (`duplicate key value violates unique constraint`)
-- Assertions on "empty state" fail because stale data exists
+- Empty table page after applying a filter
+- "Showing 101-150 of 15" display in pagination
+- Table content flashing between filtered and unfiltered states
 
 **Phase to address:**
-Phase 1: Infrastructure setup. Database isolation strategy must be in place before writing any tests.
+Phase 2 (filter integration) -- when connecting filters to the table, use DataTable's existing internal pagination rather than adding new state.
 
 ---
 
-### Pitfall 3: Testing Against Dev Server Instead of Production Build
+### Pitfall 3: Creating New Object/Array References on Every Render for Chart Data
 
 **What goes wrong:**
-Playwright's `webServer` config makes it easy to start `next dev` and run tests against it. This is misleading: the dev server includes hot-reload, unoptimized bundles, verbose error overlays, and different caching behavior. Tests pass locally against `next dev` but fail in CI against `next build && next start` because:
-
-- Server Components behave differently (no re-render on every request in production)
-- Static pages may be pre-rendered at build time (not fetched live)
-- Error boundaries render differently (no error overlay)
-- API routes have different response timing (no compilation delay)
-
-This project uses `output: "standalone"` in `next.config.ts`, which means the production server runs from `.next/standalone/`, not the source tree. Testing against dev gives no confidence that the standalone build works.
+Chart data arrays like `clientChartData`, `employeeChartData`, `topicChartData` are computed inline using `.map()` and `.filter()` during render. Each render creates new array references even when the underlying data has not changed. This defeats `React.memo()` on chart components because props appear to have changed (referential inequality). Result: memoization of chart components is useless.
 
 **Why it happens:**
-`next dev` starts in ~2 seconds. `next build` takes 30-60 seconds. Developers optimize for fast feedback loops during development and forget to switch the CI config. Playwright's docs show `next dev` in examples for simplicity, reinforcing the bad habit.
+The current ByClientTab (lines 102-129) and ByEmployeeTab (lines 113-135) compute chart data with inline `.reduce()` and `.map()` calls inside the component body, NOT inside `useMemo`. OverviewTab gets it right for revenue (line 85) but not for hours chart data (lines 73-83). Copying the wrong pattern to the Detail tab means 6 charts with unstable data references.
 
 **How to avoid:**
-Configure `playwright.config.ts` with:
+1. ALL chart data derivations in the Detail tab MUST be wrapped in `useMemo` with correct dependencies.
+2. The dependency should be the filtered entries array (itself memoized), NOT raw props.
+3. Pattern:
 ```typescript
-webServer: {
-  command: 'npm run build && npm run start',
-  url: 'http://localhost:3000',
-  reuseExistingServer: !process.env.CI,
-  timeout: 120000, // build can take time
-}
+const filteredEntries = useMemo(() =>
+  data.entries.filter(e =>
+    (selectedClients.length === 0 || selectedClients.includes(e.clientId)) &&
+    (selectedEmployees.length === 0 || selectedEmployees.includes(e.userId)) &&
+    (selectedTopics.length === 0 || selectedTopics.includes(e.topicName))
+  ),
+  [data.entries, selectedClients, selectedEmployees, selectedTopics]
+);
+
+const clientChartData = useMemo(() =>
+  aggregateByField(filteredEntries, 'clientId', 'clientName'),
+  [filteredEntries]
+);
 ```
-
-In local development, `reuseExistingServer: true` lets you run `npm run dev` manually and point Playwright at it for fast iteration. In CI, the full build runs every time.
+4. Use a shared aggregation helper to avoid duplicating reduce logic across 6 chart data computations.
 
 **Warning signs:**
-- `webServer.command` contains `next dev` or `npm run dev`
-- Tests pass locally but fail in CI with hydration or rendering errors
-- No `next build` step in the CI workflow
+- React DevTools shows chart components re-rendering even when their visible data has not changed
+- Profiler shows consistent ~50ms+ render times for the Detail tab on every filter interaction
 
 **Phase to address:**
-Phase 1: Infrastructure setup. The Playwright config must be correct from the start.
+Phase 1 (component architecture) -- establish memoized data derivation as the pattern from the start.
 
 ---
 
-### Pitfall 4: Over-Testing What Unit Tests Already Cover
+### Pitfall 4: Multi-Select Filter Arrays Causing Infinite useMemo Invalidation
 
 **What goes wrong:**
-The project has 965 unit/integration tests across 46 files. The timesheet components already have unit tests: `EntryForm.test.tsx`, `WeekStrip.test.tsx`, `EntriesList.test.tsx`. A common mistake is writing e2e tests that duplicate this coverage -- testing input validation rules, date formatting, hour parsing, description length checks. These are cheaper and faster to test at the unit level. An e2e test that verifies "description under 10 characters shows error" adds maintenance burden without meaningful confidence gain over the existing `isValidDescription` unit test.
-
-E2e test suites that grow past 50-100 tests typically become the slowest part of CI, and teams start skipping or ignoring them. The project's CI already runs 965 unit tests; adding a bloated e2e suite could double the pipeline time.
+Filter state is stored as arrays (e.g., `selectedClients: string[]`). When creating new arrays on state update (even with the same contents), useMemo dependencies see a new reference and recompute. Worse: if a parent component reconstructs the filter arrays on each render (e.g., from URL params), every render invalidates every useMemo that depends on filters.
 
 **Why it happens:**
-E2e tests are satisfying to write -- you see the browser doing things. Developers treat each form field as a test case rather than focusing on the workflow that connects them. The testing pyramid inverts: e2e tests cover what unit tests should, and unit tests cover what the e2e tests already exercise.
+JavaScript arrays are compared by reference in useMemo dependencies (`Object.is`). `['a', 'b'] !== ['a', 'b']`. If the filter state setter creates a new array each time (which React's `useState` does correctly for actual changes), this is fine. But problems arise when:
+- Filter arrays are derived from another data source on each render
+- "Clear all" creates `[]` which IS a new reference each time (though this is benign since the empty-array useMemo result is cheap to recompute)
+- URL search params are parsed to arrays on each render
 
 **How to avoid:**
-E2e tests should cover **workflows that cross boundaries**, not individual component behaviors:
-
-**DO test with e2e:**
-- "User creates a time entry, sees it in the list, edits it, deletes it" (full CRUD workflow)
-- "User navigates to a different day via WeekStrip, creates an entry, navigates back, entry is gone from view" (navigation + data persistence)
-- "User submits a day, sees submission indicator, revokes, can edit again" (multi-step state machine)
-
-**DO NOT test with e2e:**
-- Input validation edge cases (unit test on `isValidDescription`, `isValidHours`)
-- Date formatting display (unit test on `formatHours`, `parseHoursToComponents`)
-- Component rendering variants (unit test with React Testing Library)
-- API error responses (unit test on route handlers)
-
-Target 10-20 e2e tests for the timesheets feature, not 50+.
+1. Store filter state with `useState` directly -- this naturally gives stable references when values have not actually changed.
+2. Do NOT derive filter arrays from URL params or other sources inside the render body without memoizing them.
+3. If adding URL sync later, parse params in a `useMemo` or custom hook that only updates when the URL actually changes.
+4. For "select all" / "clear all" operations, set the state to a new array only once -- do not toggle each item individually in a loop (which would cause N state updates and N re-renders).
 
 **Warning signs:**
-- E2e test file has >15 `test()` blocks for a single page
-- Test names reference specific validation rules ("rejects hours > 12")
-- Tests assert text formatting or CSS classes rather than user outcomes
-- E2e suite takes >5 minutes to run
+- useMemo dependencies array in DevTools shows filter arrays changing on every render
+- Selecting "clear all" causes a visible cascade of re-renders instead of one
+- Performance degrades when more filters are active (more array comparisons)
 
 **Phase to address:**
-Phase 2: Test writing. Define a test plan before writing tests. Each e2e test should map to a user workflow, not a component behavior.
+Phase 1 (filter state design) -- get the state shape right before building filter UI.
 
 ---
 
-### Pitfall 5: Fragile Selectors That Break on UI Changes
+### Pitfall 5: Revenue Data Leaking to Non-Admin Users in Filtered Views
 
 **What goes wrong:**
-Tests use CSS class selectors (`page.locator('.bg-elevated .text-accent-pink')`), DOM structure (`page.locator('div > div > button')`), or auto-generated attributes that change between builds. When the design system evolves (this project uses Tailwind v4 with CSS variables), every class rename breaks e2e tests. The Tailwind v4 migration alone could invalidate dozens of selectors.
-
-This project's components use Tailwind utility classes extensively (e.g., `bg-[var(--bg-elevated)]`, `text-[var(--accent-pink)]`). These are implementation details that should never appear in tests.
+The existing reports API already strips revenue data for non-admins (report-utils.ts lines 293-303). But client-side filtering in the Detail tab could accidentally expose revenue by computing `hours * hourlyRate` locally, or by including a Revenue column in the table that is conditionally hidden but still present in the DOM (inspectable via DevTools).
 
 **Why it happens:**
-Developers inspect the DOM in DevTools, copy a selector that works, and paste it into the test. It works today but is coupled to the current markup. Role-based and text-based selectors require knowing what the component does, not how it looks.
+The current pattern passes `isAdmin` throughout the component tree (OverviewTab line 129, ByClientTab line 283). But adding a new Detail tab with 6 charts and a table creates more places where the `isAdmin` check can be forgotten. The revenue charts and revenue column must be COMPLETELY absent for non-admins, not just visually hidden.
 
 **How to avoid:**
-Use Playwright's recommended locator hierarchy:
-1. `page.getByRole('button', { name: 'Save Entry' })` -- accessible role + visible text
-2. `page.getByLabel('Hours')` -- form field labels
-3. `page.getByText('No entries for this day')` -- visible text content
-4. `page.getByTestId('entry-card-123')` -- explicit test IDs for dynamic content
-
-Add `data-testid` attributes to components that have no accessible role or unique text:
-- `EntryCard` -> `data-testid="entry-card-{id}"`
-- `WeekStrip` day buttons -> already have accessible day names
-- Submission button -> already has button text
-
-Avoid: `page.locator('.entry-card')`, `page.locator('[class*="elevated"]')`, `page.locator('div:nth-child(3)')`.
+1. Follow the existing pattern: the API returns `revenue: null` for non-admins. Chart components should not render at all when data is empty/null, not render with hidden values.
+2. Revenue columns in the Detail table must be conditionally EXCLUDED from the columns array (not hidden with CSS), matching the ByClientTab pattern (line 283-285 uses `{isAdmin && <th>}`).
+3. The "Revenue by X" charts should not mount at all when `isAdmin` is false -- use conditional rendering, not `display: none`.
+4. Do NOT compute revenue client-side from hourlyRate. Use the server-computed values.
 
 **Warning signs:**
-- Tests import Tailwind class names or CSS variable names
-- Selectors contain `>`, `:nth-child`, or class names
-- A design change (color, spacing, layout) breaks e2e tests
-- Multiple tests break from a single component refactor
+- Non-admin view shows revenue chart containers (even if empty)
+- DOM inspection reveals revenue values in hidden elements
+- Client-side code references `hourlyRate` directly instead of using pre-computed `revenue` field
 
 **Phase to address:**
-Phase 1-2: Add `data-testid` attributes during infrastructure setup; enforce locator patterns during test writing via code review.
+Phase 2 (chart implementation) -- enforce during code review that revenue components are excluded, not hidden.
 
 ---
 
-### Pitfall 6: Flaky Tests from Timing and Animation Assumptions
+### Pitfall 6: Inconsistent "No Filter = Show All" vs "No Filter = Show None" Semantics
 
 **What goes wrong:**
-The project uses `animate-fade-up` for modals and dropdowns (per `CLAUDE.md` animation rule). Tests that click a button and immediately assert on the modal content fail intermittently because the animation has not completed. Similarly, API calls for creating/editing time entries have variable latency -- a test that clicks "Save" and immediately checks the entries list may see stale data.
-
-The `TopicCascadeSelect` component involves a multi-step dropdown interaction (select topic, then subtopic). Each step involves a dropdown animation and potentially a network request. Race conditions between clicks and UI updates are the primary source of flaky e2e tests.
+Multi-select filters have an ambiguous empty state. Does `selectedClients = []` mean "no clients selected, show nothing" or "no filter applied, show all clients"? If different parts of the codebase interpret this differently, the charts show all data while the table shows nothing (or vice versa).
 
 **Why it happens:**
-Tests work locally (fast machine, instant API) but fail in CI (slower runner, network variability). Developers add `page.waitForTimeout(500)` as a band-aid, which makes tests slow AND still flaky (500ms is not always enough, and it wastes time when the UI is ready in 50ms).
+There is no established convention in the existing codebase for multi-select filter semantics because the current drill-down tabs use single-select (one employee or one client at a time). The transition from single-select to multi-select introduces this new ambiguity. Different developers (or the same developer at different times) may implement opposite interpretations.
 
 **How to avoid:**
-Never use `page.waitForTimeout()` except for debugging. Instead:
-- Use auto-waiting assertions: `await expect(page.getByRole('dialog')).toBeVisible()` waits for the modal to appear, regardless of animation duration.
-- Wait for network idle after mutations: `await page.waitForResponse(resp => resp.url().includes('/api/timesheets') && resp.status() === 201)` after creating an entry.
-- For the cascade select: wait for each dropdown to be visible before clicking the next option.
-- For entry list updates after CRUD: wait for the entry card to appear/disappear rather than waiting for a fixed time.
+1. Establish ONE convention and document it: **empty array = no filter = show all**. This is the standard UX pattern for dashboard filters and avoids the confusing state where the user opens the Detail tab and sees nothing because no filters are selected.
+2. Implement filtering with a single guard pattern used everywhere:
+```typescript
+const matchesFilter = (items: string[], value: string) =>
+  items.length === 0 || items.includes(value);
+```
+3. Extract this into a shared utility, not inline in each component.
+4. Test the empty-filter case explicitly in unit tests.
 
 **Warning signs:**
-- Any `page.waitForTimeout()` call in test code
-- Tests that pass 9/10 times (flaky rate >1%)
-- CI logs showing "element not found" or "element not visible" errors
-- Tests with `{ timeout: 30000 }` overrides
+- Opening the Detail tab for the first time shows empty charts/table
+- Clearing all filters shows nothing instead of everything
+- Different charts show different data when all filters are cleared
 
 **Phase to address:**
-Phase 2: Test writing. Establish wait patterns in shared test utilities/fixtures.
+Phase 1 (filter state design) -- define and document the convention before any implementation.
 
 ---
 
@@ -215,96 +174,105 @@ Phase 2: Test writing. Establish wait patterns in shared test utilities/fixtures
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| CredentialsProvider for auth bypass | Fast to implement, no JWT encoding needed | Security risk if leaked to production; tests skip real middleware path | Never -- JWT cookie injection is equally simple and carries zero production risk |
-| `page.waitForTimeout()` instead of proper waits | Fixes flaky test immediately | Slows suite, still flaky under load, masks real timing bugs | Never -- always wait for a specific condition |
-| Testing against `next dev` | Fast startup, quick iteration | Misses production-only bugs (hydration, caching, standalone build) | Local development only, with `reuseExistingServer: true`; CI must use production build |
-| Sharing database state across tests (no cleanup) | No setup/teardown code to write | Cascading failures, order-dependent tests, impossible to parallelize | Never -- truncation between test files is cheap and essential |
-| Duplicating unit test coverage in e2e | "More coverage feels safer" | 3x slower CI, 3x more tests to maintain, no additional confidence | Never -- e2e tests should cover workflows, not individual behaviors |
-| Hardcoded test data (dates, IDs) in specs | Quick to write | Breaks when run on different dates; collides with other tests | Only for truly static reference data (e.g., user positions); use factories for mutable data |
+| Inline filter logic in each chart component | Faster initial implementation | 6 copies of filtering logic that can drift apart; bug fixes need 6 changes | Never -- extract shared filtering from the start |
+| Filtering entries client-side without memoization | Works for ~200 clients, ~10 employees | Re-filtering on every keystroke in filter search; becomes slow with more data | Acceptable for MVP but useMemo should be trivial to add |
+| Duplicating column definitions across Detail tab and drill-down tabs | Avoids prop-threading of column configs | Column formatting changes need updates in 3+ places | Acceptable if extracted to shared config within same milestone |
+| Skipping `React.memo` on chart wrapper components | Fewer lines of code | Every parent re-render causes 6 SVG chart teardown/rebuilds | Never for charts with >50 data points |
+| Computing revenue per-entry client-side instead of using API data | Avoids API changes to add entry-level revenue | Different rounding, different written-off logic, different billable checks vs API; numbers will not match | Never -- always use server-computed revenue |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| NextAuth JWT + Playwright | Setting cookie on wrong domain (`localhost` vs `127.0.0.1`) or missing `httpOnly`/`secure` flags | Use exact domain from `baseURL`; set `httpOnly: true`, `sameSite: 'Lax'`, `secure: false` for localhost; cookie name is `next-auth.session-token` (no `__Secure-` prefix on HTTP) |
-| NextAuth middleware + Playwright | Middleware blocks API requests during test setup (seed endpoints) | Either seed data via direct DB connection (bypassing the app) or add seed endpoints gated by `E2E_TEST=true` env var (never exposed in production) |
-| PostgreSQL TRUNCATE + foreign keys | `TRUNCATE time_entries` fails due to FK from `service_description_line_items` | Use `TRUNCATE ... CASCADE` or truncate tables in dependency order (line_items, topics, SDs, submissions, entries) |
-| Next.js Server Components + Playwright | `page.goto()` returns before Server Components finish rendering; assertions on server-fetched data fail | Wait for a specific element that only renders after data loads (e.g., `await expect(page.getByText('Client Name')).toBeVisible()`) rather than trusting `page.goto()` completion |
-| Drizzle ORM in test setup | Importing `db` from `lib/db.ts` in Playwright setup uses the app's connection pool, which may conflict with the running server | Create a separate Drizzle client in test utilities pointing to the test database, independent of the app's pool |
-| Impersonation cookie + e2e tests | Setting both `next-auth.session-token` and `impersonate_user_id` cookies but the test user is not ADMIN, so impersonation is silently ignored | Ensure the JWT token's email matches an ADMIN user in the test database if testing impersonation flows |
+| Detail tab + existing date picker | Detail tab filters reset when date range changes, but date picker does not reset filters -- user expects both to be independent | Keep filter state independent of date/comparison state. Date change refetches data but preserves filter selections. Only clear filters that reference items no longer in the new data range. |
+| Detail tab + existing OverviewTab data | Duplicating the data fetch for the Detail tab (two API calls for same period) | Both tabs consume the same `data` state from `ReportsContent`. Detail tab filters data CLIENT-SIDE from the already-fetched `data.entries` array. No new API calls needed. |
+| Multi-select filters + comparison period | Comparison data lacks the same filter dimensions, leading to broken % change calculations | Do NOT show comparison badges on the Detail tab charts initially. The comparison data from the API is pre-aggregated and cannot be re-filtered to match the Detail tab's multi-select filter state. |
+| Topic filter + "Uncategorized" entries | Entries with `topicName: null` become "Uncategorized" (report-utils.ts line 128). Topic filter dropdown may not include "Uncategorized" as an option | Include "Uncategorized" in the topic filter dropdown if any entries have null topicName. Filter matching must handle the "Uncategorized" string, not null. |
+| DataTable `defaultSort` + filter changes | DataTable preserves sort state across data changes (it is internal state). After filtering, the sort column may not make sense (e.g., sorted by revenue but revenue column removed for non-admins) | Always use `defaultSort={{ columnId: "date", direction: "desc" }}` which is always present regardless of admin status or filters. |
+| Existing tab navigation + new Detail tab | Adding a fourth tab to the `tabs` array in ReportsContent but not handling `activeTab === "detail"` routing to the selected drill-down or filter state | The Detail tab is independent of the drill-down tabs. Switching from Detail to By-Employee should NOT carry over filter selections. Each tab owns its own state. |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Running `next build` on every test run locally | 30-60 second startup before first test runs | Use `reuseExistingServer: true` locally; only build in CI | Always in development; use `npm run dev` locally with reuse |
-| Not caching Playwright browser binaries in CI | 2-3 minute download of Chromium on every CI run | Cache `~/.cache/ms-playwright` with `actions/cache@v4` keyed on Playwright version | Every CI run without cache |
-| Running all browsers (chromium, firefox, webkit) | 3x test execution time | Run chromium-only in CI; cross-browser testing is unnecessary for an internal app with known user browsers | >20 tests with all 3 browsers |
-| Full database re-seed between every test | Each test spends 2-3 seconds on setup | Seed reference data once in `globalSetup`; truncate only mutable tables between specs | >10 tests with per-test full seed |
-| Not parallelizing test files | Suite runs serially, wasting CI time | Use `fullyParallel: true` at file level once database isolation is solid | >15 spec files running serially |
+| Re-aggregating chart data on every render without memoization | ~10-30ms per chart data computation x 6 charts = ~60-180ms frame time | useMemo on all aggregation. Single filtered dataset, derived chart data. | At current scale (~2000 entries/month) this is borderline; at 3+ months of data it becomes noticeable |
+| Recharts ResponsiveContainer resize listener firing on every parent layout shift | Chart animation restarts on unrelated DOM changes | Set `debounce` prop on ResponsiveContainer (e.g., `debounce={100}`) | When filter bar expand/collapse changes layout |
+| Rendering all 6 charts even when only 2-3 are visible (non-admin sees only hours charts) | 2x SVG nodes for invisible admin-only charts | Conditional rendering with `isAdmin &&`, not CSS visibility | Immediate -- always render only what is needed |
+| DataTable sorting 2000+ entries on every filter change | Table sort runs on new data array even if sort criteria unchanged | DataTable's useMemo on sortedData (line 39) already handles this IF the data reference is stable when filters have not changed; ensure parent memoizes the entries passed to DataTable | With 6-month date ranges (~12000 entries) |
+| Creating multi-select filter dropdowns that render all 200 client names without virtualization | Filter dropdown feels sluggish to open, especially on mobile | For 200 items, native rendering is fine. Virtualization needed only at 500+. But DO include a search/filter within the dropdown (like existing ClientSelect does). | Not at current ~200 client scale |
+| Re-rendering the entire Detail tab (charts + table) when only the filter search input text changes | Typing in filter search causes 6 chart re-renders per keystroke | Isolate the filter dropdown component so internal search state does not propagate to parent until a selection is committed | Immediately if filters have search inputs |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| CredentialsProvider gated by `NODE_ENV` | Production build sets `NODE_ENV=production` during build but bypass could leak via misconfigured runtime env | Do not add any auth bypass to production code; use JWT cookie injection in Playwright setup only |
-| Test secrets committed to repository | `NEXTAUTH_SECRET` for test environment in source code could be used to forge sessions | Use a separate, disposable `NEXTAUTH_SECRET` for tests (e.g., `"test-secret-do-not-use-in-production"`); set via CI env vars, not committed files |
-| Test database accessible from production network | If test DB is on the same server as production, a connection string leak could expose test data or allow test operations on production | Use a completely separate database instance or at minimum a different database name with no cross-access |
-| Seed API endpoints without authentication | Adding `/api/test/seed` for e2e setup creates an unauthenticated endpoint that could reset production data | Gate seed endpoints with a specific env var (`E2E_TEST_MODE=true`) that is NEVER set in production; better yet, seed via direct DB connection in Playwright setup |
+| Computing revenue client-side from hourlyRate for filtered subsets | Non-admin user could inspect network response or component state to find hourly rates if they are included in the entries response | The API already excludes revenue for non-admins (report-utils.ts line 303). The Detail tab must use pre-computed revenue from the API. If entry-level revenue is needed, add it server-side with admin gating. |
+| Including hourlyRate in the entries array sent to non-admins | Non-admin can see billing rates via DevTools | Verify that `ReportEntry` type and the serialized API response do NOT include hourlyRate for non-admin requests. Current `ReportEntry` type does not include hourlyRate -- keep it that way. |
+| Rendering revenue columns as `display: none` instead of excluding from DOM | Revenue values visible via DOM inspection | Use conditional rendering (`isAdmin &&`) to exclude revenue elements entirely from the rendered output |
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Multi-select dropdown with no search/typeahead for 200 clients | User must scroll through 200 client names to find one | Include a search input in the dropdown (like existing ClientSelect pattern at lines 146-161). Filter options as user types. |
+| No visual indicator of active filters | User forgets filters are applied, wonders why charts show less data than Overview tab | Show filter pills/badges above the charts showing active selections (e.g., "Client: Acme Corp, Beta Ltd [x]"). Include a "Clear all filters" action. |
+| Charts animate on every filter change | Distracting bounce/slide animation 6 times whenever a filter checkbox is toggled | Disable Recharts entry animations (`isAnimationActive={false}`) on filter-driven updates. Only animate on initial mount or full data refresh. |
+| Filter dropdowns covering the charts below them | On smaller screens, a 200-item dropdown overlays chart content | Use `z-50` and absolute positioning with proper overflow scroll (matching existing ClientSelect pattern). Ensure dropdown maxHeight is bounded (`max-h-56` from ClientSelect line 164). |
+| Summary cards not reflecting filter state | User applies a client filter expecting totals to update, but summary shows unfiltered period totals | Either omit summary cards from Detail tab (Overview handles that) or show filtered summary that matches the visible charts/table. Recommendation: show filtered totals in a compact header. |
+| "All" vs "None" confusion in multi-select | User clicks "Select All" expecting to see everything, but then deselecting one item feels wrong -- are they now filtering or not? | Start with all items unselected (= show all, no filter active). Only show filter as "active" when items are explicitly selected. "Clear filters" returns to empty selection = show all. |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Auth bypass:** Verify no `CredentialsProvider` or `NODE_ENV` check was added to `lib/auth.ts` -- auth bypass must live entirely in Playwright test setup code
-- [ ] **Cookie domain:** Confirm `next-auth.session-token` cookie domain matches the `baseURL` in `playwright.config.ts` -- mismatch causes silent auth failure (no error, just redirected to login)
-- [ ] **Test database:** Verify tests run against `veda_legal_test`, not the development database -- check `DATABASE_URL` in the test environment config
-- [ ] **CI pipeline:** Confirm CI workflow includes PostgreSQL service container, `next build`, Playwright browser install, and runs e2e tests as a separate job from unit tests
-- [ ] **Cleanup between tests:** Verify `TRUNCATE CASCADE` runs on mutable tables between test files -- run the full suite twice in sequence and check for failures on second run
-- [ ] **Production build tested:** Verify `playwright.config.ts` `webServer.command` uses `build && start`, not `dev`
-- [ ] **Data-testid attributes:** Confirm `EntryCard`, `EntryForm`, and submission button have `data-testid` attributes -- inspect rendered HTML in a test trace
-- [ ] **No waitForTimeout:** Search test files for `waitForTimeout` -- should return zero results
-- [ ] **Trace on failure:** Verify `playwright.config.ts` has `trace: 'on-first-retry'` so CI failures produce actionable traces
-- [ ] **Existing unit tests still pass:** Run `npm run test -- --run` after adding e2e infrastructure to confirm vitest and Playwright configs do not conflict
+- [ ] **Multi-select filters:** Empty state (no filters applied) shows ALL data, not empty state -- test by opening Detail tab fresh without selecting anything
+- [ ] **Revenue charts:** Completely absent (not rendered) for non-admin users -- inspect DOM, not just visual
+- [ ] **Topic filter options:** Include "Uncategorized" if any entries have null topicName -- test with data that has entries without topics
+- [ ] **DataTable pagination:** Resets to page 1 when filters change the dataset below current page -- test by going to page 3, then applying a restrictive filter
+- [ ] **Chart data:** All 6 chart data arrays are memoized with useMemo -- check React DevTools Profiler for unnecessary re-renders
+- [ ] **Filter + date range interaction:** Changing date range preserves filter selections (unless a filtered item no longer exists in new range) -- test by filtering to one client, then changing month
+- [ ] **"Other" bucket in charts:** When filtered data still has >15 items, the top-15 + "Other" grouping applies correctly -- test with 3+ clients selected that collectively have >15 topics
+- [ ] **Comparison period:** Detail tab either hides comparison badges entirely or correctly re-filters comparison data -- do NOT show stale/unfiltered comparison percentages alongside filtered current data
+- [ ] **Chart heights:** Topic chart with many topics still gets dynamic height (`Math.max(256, items * 40)` pattern from ByClientTab line 132) -- test with a filter that shows 20+ topics
+- [ ] **Loading state:** Filter changes do NOT trigger the loading spinner (they are client-side filtering, not API calls) -- verify no flash of "Loading..." when toggling a filter
+- [ ] **Non-admin table columns:** Revenue column excluded from columns array (not hidden with CSS) when isAdmin is false -- verify via DOM inspection
+- [ ] **Tab switching:** Switching between Overview and Detail preserves Detail filter state -- navigate away and back
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| CredentialsProvider shipped to production | HIGH | Immediately remove the provider and redeploy; audit access logs for unauthorized logins; rotate NEXTAUTH_SECRET; rewrite to JWT cookie injection approach |
-| Database state leakage causing cascading failures | MEDIUM | Add `TRUNCATE CASCADE` in `beforeEach`; re-run full suite to verify; may need to adjust test data factories to use unique identifiers |
-| Tests built against dev server fail on production build | MEDIUM | Switch `webServer.command` to build+start; fix hydration/rendering differences one by one; most fixes are in the app code, not the tests |
-| Over-tested suite (50+ e2e tests, 10+ minute CI) | HIGH | Audit each test against unit test coverage; delete tests that duplicate unit coverage; consolidate multi-step tests that test the same workflow separately; may lose weeks of test-writing effort |
-| Fragile selectors break on design change | MEDIUM | Add `data-testid` attributes to components; rewrite selectors to use role/label/testid; one-time effort that prevents recurring breakage |
-| Flaky tests from timing issues | LOW-MEDIUM | Replace `waitForTimeout` with auto-waiting assertions; add `waitForResponse` after mutations; enable `trace: 'on-first-retry'` to diagnose remaining flakes |
+| Cascading re-renders across all charts | LOW | Wrap chart components in React.memo, memoize data arrays. No architectural change needed. |
+| Pagination desync | LOW | Already handled by DataTable's internal clamping. If external pagination was added, remove it and use DataTable's internal state. |
+| Unstable object references defeating memoization | LOW | Add useMemo wrappers around data derivations. Mechanical change, no logic change. |
+| Revenue data leaking to non-admins | MEDIUM | Audit all chart/table renders for isAdmin guards. Add unit test that verifies DOM does not contain revenue values for non-admin session. |
+| Inconsistent empty-filter semantics | MEDIUM | Find and fix all filter checks to use `items.length === 0 || items.includes(value)`. If some used the opposite, data may have been misinterpreted by users already. |
+| Comparison badges showing unfiltered data | LOW | Remove comparison badges from Detail tab or gate them behind "no filters active" check. |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Auth bypass leaking to production | Phase 1: Infrastructure | `git grep CredentialsProvider` returns zero results in `src/`; auth bypass code exists only in `e2e/` directory |
-| Database state leakage | Phase 1: Infrastructure | Full suite passes when run twice in sequence (`npx playwright test && npx playwright test`) |
-| Testing against dev server | Phase 1: Infrastructure | CI workflow shows `next build && next start` in webServer command; no `next dev` in Playwright config |
-| Over-testing unit-covered behavior | Phase 2: Test writing | E2e test count is 10-20; each test maps to a user workflow documented in test plan; no test duplicates an existing unit test assertion |
-| Fragile selectors | Phase 1-2: Infrastructure + test writing | Zero CSS class selectors in test files; all interactive elements use role, label, or testid locators |
-| Flaky timing issues | Phase 2: Test writing | Zero `waitForTimeout` calls; CI flake rate <2% over 10 consecutive runs |
+| Cascading re-renders | Phase 1: Component architecture | React DevTools Profiler shows only affected charts re-render when a filter changes |
+| Pagination desync | Phase 2: Filter-table integration | DataTable pagination resets when filtered data changes; no external pagination state exists |
+| Unstable references | Phase 1: Component architecture | All chart data arrays are inside useMemo; dependency arrays are minimal |
+| Filter array invalidation | Phase 1: Filter state design | Filter state uses useState directly; no derived-from-URL-on-each-render pattern |
+| Revenue leaking | Phase 2: Chart implementation | Unit test: non-admin render of Detail tab has no revenue elements in DOM |
+| Empty-filter semantics | Phase 1: Filter state design | Unit test: Detail tab with no filters shows same data count as Overview tab |
+| Topic "Uncategorized" | Phase 2: Filter dropdown population | Filter dropdown includes "Uncategorized" when entries with null topicName exist |
+| Comparison badges | Phase 2: Chart implementation | Detail tab does not show comparison % when any filter is active |
+| Summary cards consistency | Phase 1: Component architecture | Decision documented; if filtered summaries, they match table row count |
+| Chart re-animation | Phase 2: Chart implementation | Charts do not re-animate on filter change (only on initial mount or data fetch) |
 
 ## Sources
 
-- [Auth.js Testing Guide](https://authjs.dev/guides/testing) -- official recommendation for CredentialsProvider approach with security warnings
-- [Playwright Best Practices](https://playwright.dev/docs/best-practices) -- test isolation, locator strategy, anti-patterns
-- [Playwright Authentication](https://playwright.dev/docs/auth) -- storageState, global setup, cookie injection
-- [Next.js Playwright Testing Guide](https://nextjs.org/docs/pages/guides/testing/playwright) -- webServer config, production build recommendation
-- [NextAuth GitHub Issue #6796](https://github.com/nextauthjs/next-auth/issues/6796) -- community discussion on e2e testing approaches
-- [NextAuth GitHub Issue #12179](https://github.com/nextauthjs/next-auth/issues/12179) -- Playwright integration patterns
-- [Playwright GitHub Issue #33699](https://github.com/microsoft/playwright/issues/33699) -- database isolation strategies for e2e tests
-- [Playwright GitHub Issue #21207](https://github.com/microsoft/playwright/issues/21207) -- cookie injection with NextAuth
-- [Next.js GitHub Discussion #62254](https://github.com/vercel/next.js/discussions/62254) -- testing user sessions with cookies
-- Codebase analysis: `app/src/lib/auth.ts` (JWT strategy, Azure AD provider, signIn callback with whitelist)
-- Codebase analysis: `app/src/middleware.ts` (NextAuth middleware with route matching)
-- Codebase analysis: `app/src/lib/api-utils.ts` (requireAuth with JWT fallback, impersonation support)
-- Codebase analysis: `app/src/lib/schema.ts` (FK constraints, unique indexes, cascade deletes)
-- Codebase analysis: `app/src/lib/user.ts` (getCurrentUser with impersonation cookie)
-- Codebase analysis: `app/vitest.config.ts` (existing test infrastructure to avoid conflicts)
+- Recharts performance guide: https://recharts.github.io/en-US/guide/performance/
+- Recharts multiple charts performance issue #1266: https://github.com/recharts/recharts/issues/1266
+- Recharts chart redraw on state change issue #300: https://github.com/recharts/recharts/issues/300
+- React useMemo documentation: https://react.dev/reference/react/useMemo
+- React "You Might Not Need an Effect": https://react.dev/learn/you-might-not-need-an-effect
+- DigitalOcean guide on React performance pitfalls with memo/useMemo/useCallback: https://www.digitalocean.com/community/tutorials/how-to-avoid-performance-pitfalls-in-react-with-memo-usememo-and-usecallback
+- React rendering bottleneck case study (60% re-render reduction): https://medium.com/@sosohappy/react-rendering-bottleneck-how-i-cut-re-renders-by-60-in-a-complex-dashboard-ed14d5891c72
+- Codebase analysis: `ReportsContent.tsx`, `OverviewTab.tsx`, `ByClientTab.tsx`, `ByEmployeeTab.tsx`, `report-utils.ts`, `DataTable.tsx`, `BarChart.tsx`, `RevenueBarChart.tsx`
 
 ---
-*Pitfalls research for: adding Playwright e2e tests to existing Next.js/NextAuth/PostgreSQL app*
+*Pitfalls research for: v1.2 Reports Detail View with multi-select filters*
 *Researched: 2026-02-25*

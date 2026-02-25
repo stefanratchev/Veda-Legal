@@ -1,441 +1,239 @@
 # Stack Research
 
-**Domain:** E2E testing infrastructure for Next.js legal timesheet app with Azure AD SSO
+**Domain:** Reports Detail View -- multi-select filters, chart-filter interactivity, topic aggregation
 **Researched:** 2026-02-25
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Playwright 1.57.0 and `@playwright/test` 1.57.0 are already installed as dependencies. The primary work is configuration and auth bypass infrastructure, not new package installation. The auth bypass strategy uses NextAuth's built-in `encode()` from `next-auth/jwt` to programmatically create valid JWE session tokens and inject them as cookies via Playwright's `storageState` -- no third-party auth testing libraries needed. Database seeding uses the existing Drizzle ORM connection directly (no `drizzle-seed` package needed -- test data is hand-crafted, not random). The Next.js experimental test mode (`testProxy`) is intentionally skipped: it is designed for mocking fetch requests, not for auth bypass, and remains experimental with no stability guarantees.
+No new npm packages are needed. The v1.2 Detail tab requires three capabilities -- multi-select filter dropdowns, filter-driven chart/table updates, and topic-level aggregation -- all achievable with existing dependencies and patterns already established in the codebase.
+
+**Multi-select filters:** Build a custom `MultiSelect` component following the existing `ClientSelect` pattern (dropdown with search, keyboard navigation, `useClickOutside`). The project has ~10 employees, ~200 clients, and ~30 topics -- trivially small lists that do not need virtualization or a heavyweight select library. The existing component handles the hard UX problems (search, keyboard nav, scroll-into-view, close-on-outside-click) and extending it to multi-select is ~50 lines of delta.
+
+**Chart-filter state management:** React `useState` with `useMemo`-derived filtered data, matching the existing pattern in `ReportsContent.tsx`. Filter state is three arrays (`selectedClientIds: string[]`, `selectedEmployeeIds: string[]`, `selectedTopicNames: string[]`). Filtered entries flow through `useMemo` into both charts and the DataTable. No state management library, URL state sync, or context provider needed -- the Detail tab is a single component tree with one source of truth.
+
+**Topic aggregation:** The API already returns `topicName` on every `ReportEntry` and `topics: TopicAggregation[]` on both `ClientStats` and `EmployeeStats`. The Detail tab's "by Topic" charts aggregate from the filtered entries client-side using `Array.reduce()` -- the same pattern used by `ByClientTab` and `ByEmployeeTab` for their drill-down charts. No API changes needed.
 
 ## Recommended Stack
 
-### Core Technologies (Already Installed -- No New Packages)
+### Core Technologies (Already Installed -- No Changes)
 
-| Technology | Version | Purpose | Status |
-|------------|---------|---------|--------|
-| `@playwright/test` | 1.57.0 | Test runner, assertions, browser automation | Already installed. No changes. |
-| `playwright` | 1.57.0 | Browser engine binaries (Chromium, Firefox, WebKit) | Already installed. Browsers downloaded. |
-| `next-auth` | 4.24.13 | `encode()` from `next-auth/jwt` creates valid JWE tokens for auth bypass | Already installed. Use existing export. |
-| Drizzle ORM | 0.45.1 | Direct DB seeding/cleanup in test fixtures via existing `db` instance | Already installed. No changes. |
-| `@paralleldrive/cuid2` | 3.0.4 | Generate IDs for test data (matches production ID format) | Already installed. |
-| `dotenv` | 17.2.3 | Load `.env.test` for test database URL | Already installed. |
+| Technology | Version | Purpose | Why Sufficient |
+|------------|---------|---------|----------------|
+| React | 19.2.1 | `useState` + `useMemo` for filter state and derived filtered data | 3 filter arrays + 1 `useMemo` per chart. Same pattern as existing `OverviewTab`. No state library needed for this complexity. |
+| Recharts | 3.6.0 | `BarChart` and `RevenueBarChart` components for all six Detail charts | Existing chart components accept `data: BarChartItem[]` -- pass filtered/aggregated data. No new chart types. |
+| Next.js | 16.0.10 | App Router, client components | Detail tab is a client component like existing tabs. No server component changes. |
+| TypeScript | 5.x | Type-safe filter state, aggregation functions | Existing `ReportEntry`, `ReportData`, `TopicAggregation` types cover all data shapes. |
+| Tailwind CSS | 4.x | Multi-select dropdown styling | Follow existing `ClientSelect` CSS patterns (dark theme variables, `animate-fade-up`). |
 
-**Confidence: HIGH** -- All versions verified from `package.json` and `node_modules`.
+**Confidence: HIGH** -- All versions verified from `package.json`. All patterns verified from existing components.
 
 ### Supporting Libraries (None Needed)
 
 No new npm packages are required. Here is why each potential addition was rejected:
 
-| Considered | Version | Purpose | Why NOT Needed |
-|------------|---------|---------|----------------|
-| `drizzle-seed` | 0.3.x | Automated schema-aware random seeding | Overkill. E2e tests need 1 user, 1 client, 1 topic, 1 subtopic -- hand-crafted Drizzle inserts are simpler, more readable, and deterministic. `drizzle-seed` generates random data; we need specific, predictable test data. |
-| `playwright-test-coverage` | any | Code coverage for e2e tests | E2e tests measure user workflow correctness, not code coverage. Coverage is already handled by Vitest (965 unit tests). |
-| `@faker-js/faker` | any | Generate realistic test data | Same reasoning as `drizzle-seed`. We need 5-10 specific records, not 1000 random ones. |
-| `testcontainers` | any | Spin up PostgreSQL in Docker per test | Over-engineered for a 10-user app. Use the local PostgreSQL instance with a dedicated `veda_test` database and transaction rollback cleanup. CI can add a PostgreSQL service container. |
-| `msw` (Mock Service Worker) | any | Mock external API calls | E2e tests should hit the real Next.js server and real database. Mocking defeats the purpose. The only "external" dependency is Azure AD, which is bypassed via JWT injection, not mocking. |
-| `next/experimental/testmode/playwright` | N/A | Next.js test proxy for fetch mocking | Experimental, no stability guarantees. Designed for mocking server-side fetch, which we do not need. Auth bypass is handled at the cookie layer, not the fetch layer. |
+| Considered | Purpose | Why NOT Needed |
+|------------|---------|----------------|
+| `react-select` | Multi-select dropdown with search, tags, clear-all | 47KB gzipped. Requires custom theme/styling to match the dark design system. The existing `ClientSelect` already solves search, keyboard nav, scroll-into-view, and close-on-click-outside. Extending it to multi-select (checkboxes + selected count badge) is less work than restyling react-select. |
+| `cmdk` (command menu) | Composable combobox/command palette | Designed for command palettes, not filter dropdowns. No built-in multi-select. Would need wrapping and styling. Adds complexity for no benefit. |
+| `@headlessui/react` (Combobox/Listbox) | Accessible, unstyled select primitives | Headless UI Combobox supports single select only. Listbox supports `multiple` but without search filtering. Combining both is more complex than extending the existing custom component. |
+| `nuqs` | URL-synced state for filters | Useful for shareable report URLs, but not requested. Filter state resets when navigating away -- acceptable for an internal tool with ~10 users. Can be added later if needed without architecture changes. |
+| `zustand` / `jotai` | Global state management | Filter state is local to the Detail tab component. No cross-component or cross-tab state sharing needed. React `useState` is the right tool. |
+| `@tanstack/react-table` | Feature-rich table with built-in filtering, sorting, pagination | The existing `DataTable` component already handles sorting and pagination. Adding TanStack Table for filtering alone is overkill. Client-side `Array.filter()` before passing `data` to `DataTable` achieves the same result with zero new dependencies. |
+| `lodash` / `remeda` | Utility functions for grouping, aggregation | `Array.reduce()`, `Map`, and `Object.values()` handle all aggregation. The existing drill-down tabs already use this pattern successfully. |
+| `use-debounce` | Debounce filter changes | With ~10 employees and ~200 clients, filtering is instant. No debounce needed. Even with 1000 entries, `Array.filter()` on three conditions is sub-millisecond. |
 
-**Confidence: HIGH** -- Each rejection based on specific project requirements and existing infrastructure.
+**Confidence: HIGH** -- Each rejection based on codebase analysis and specific data scale (~10 employees, ~200 clients, ~30 topics).
 
 ### Development Tools
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
-| `npx playwright test` | Run e2e tests | Add `test:e2e` script to package.json |
-| `npx playwright test --ui` | Interactive test runner with time-travel debugging | Best for local development. Shows browser, DOM, network. |
-| `npx playwright codegen` | Record browser interactions to generate test code | Useful for initial test scaffolding, then refine manually. |
-| `npx playwright show-report` | View HTML report after test run | Auto-opens on failure. Includes screenshots, traces, logs. |
-| `npx playwright install --with-deps` | Install browser binaries + OS deps (for CI) | Required in CI. Locally, browsers are already downloaded. |
+| Vitest | Test filter logic, aggregation functions, component rendering | Existing test infrastructure. New tests follow existing patterns in `ByClientTab.test.tsx`. |
+| React Testing Library | Test multi-select interactions (open, search, select, deselect) | Already installed. Use `fireEvent` (not `userEvent` -- not installed, per CLAUDE.md). |
 
-## Auth Bypass Strategy
+## Architecture: How Filters Drive Charts and Table
 
-### Why JWT Cookie Injection (Not CredentialsProvider)
+### Data Flow
 
-Two approaches exist for bypassing Azure AD SSO in e2e tests:
+```
+ReportsContent (fetches data, manages date range)
+  |
+  +-- DetailTab (new)
+        |-- filter state: selectedClientIds[], selectedEmployeeIds[], selectedTopicNames[]
+        |
+        |-- useMemo: filteredEntries = entries.filter(matchesAllActiveFilters)
+        |
+        |-- useMemo: byClient = aggregateByClient(filteredEntries)
+        |-- useMemo: byEmployee = aggregateByEmployee(filteredEntries)
+        |-- useMemo: byTopic = aggregateByTopic(filteredEntries)
+        |
+        |-- MultiSelect (clients)  -- populates from data.byClient
+        |-- MultiSelect (employees) -- populates from data.byEmployee
+        |-- MultiSelect (topics)   -- populates from unique topicNames in entries
+        |
+        |-- BarChart (hours by client)      <-- byClient
+        |-- RevenueBarChart (rev by client) <-- byClient (admin only)
+        |-- BarChart (hours by employee)    <-- byEmployee
+        |-- RevenueBarChart (rev by employee) <-- byEmployee (admin only)
+        |-- BarChart (hours by topic)       <-- byTopic
+        |-- RevenueBarChart (rev by topic)  <-- byTopic (admin only)
+        |
+        |-- DataTable (filtered entries)    <-- filteredEntries
+```
 
-**Option A: Add a test-only CredentialsProvider** -- Conditionally add `Credentials({...})` to the NextAuth providers array when `NODE_ENV !== "production"`. Tests log in via the `/login` page with a test password.
+### Filter Logic
 
-**Option B: Programmatic JWT cookie injection** -- Use `next-auth/jwt`'s `encode()` to create a valid JWE token containing the test user's email/name, then inject it as a `next-auth.session-token` cookie into the Playwright browser context before tests run.
-
-**Recommendation: Option B (JWT cookie injection)** because:
-
-1. **No production code changes.** Option A modifies `auth.ts`, adding a code path that must never reach production. Option B is entirely test-side code.
-2. **Faster.** Option A still requires a page load + form submission + redirect per auth setup. Option B sets a cookie in < 1ms.
-3. **Simpler.** No need to guard against the CredentialsProvider leaking to production. No extra UI on the login page.
-4. **Already proven.** The `encode()` function is a public API of `next-auth/jwt` (verified: exports `encode`, `decode`, `getToken`). The resulting JWE is identical to what NextAuth produces during real login.
-
-### JWT Encode Implementation
+Filters are AND-combined (entries must match ALL active filters), but within each filter they are OR-combined (entry matches if it matches ANY selected value in that filter). When a filter has no selections, it is treated as "all" (no restriction).
 
 ```typescript
-// e2e/helpers/auth.ts
-import { encode } from "next-auth/jwt";
-
-const TEST_SECRET = process.env.NEXTAUTH_SECRET!;
-
-export async function createAuthCookie(user: { name: string; email: string }) {
-  const token = await encode({
-    token: {
-      name: user.name,
-      email: user.email,
-      sub: user.email, // NextAuth uses email as sub for JWT strategy
-    },
-    secret: TEST_SECRET,
-    // salt defaults to "next-auth.session-token" when not provided
-    maxAge: 8 * 60 * 60, // Match authOptions session maxAge (8 hours)
+const filteredEntries = useMemo(() => {
+  return entries.filter((entry) => {
+    const matchesClient = selectedClientIds.length === 0
+      || selectedClientIds.includes(entry.clientId);
+    const matchesEmployee = selectedEmployeeIds.length === 0
+      || selectedEmployeeIds.includes(entry.userId);
+    const matchesTopic = selectedTopicNames.length === 0
+      || selectedTopicNames.includes(entry.topicName);
+    return matchesClient && matchesEmployee && matchesTopic;
   });
-
-  return {
-    name: "next-auth.session-token",
-    value: token,
-    domain: "localhost",
-    path: "/",
-    httpOnly: true,
-    sameSite: "Lax" as const,
-    expires: Math.floor(Date.now() / 1000) + 8 * 60 * 60,
-  };
-}
+}, [entries, selectedClientIds, selectedEmployeeIds, selectedTopicNames]);
 ```
 
-**Cookie name:** `next-auth.session-token` (not `__Secure-next-auth.session-token` because `NEXTAUTH_URL` is `http://localhost:3000` in test, triggering the non-secure prefix).
+### Topic Aggregation Pattern
 
-**Confidence: HIGH** -- `encode()` signature verified from `next-auth/jwt/types.d.ts` in node_modules. Cookie name behavior verified from NextAuth docs (secure prefix only for HTTPS URLs).
-
-### Auth Setup in Playwright
+Topic aggregation for charts follows the same `Array.reduce()` pattern already used in `ByClientTab.tsx` (lines 102-115) and `ByEmployeeTab.tsx` (lines 113-126):
 
 ```typescript
-// e2e/auth.setup.ts
-import { test as setup } from "@playwright/test";
-import { createAuthCookie } from "./helpers/auth";
-
-const STORAGE_STATE_PATH = "e2e/.auth/user.json";
-
-setup("authenticate as test user", async ({ context }) => {
-  const cookie = await createAuthCookie({
-    name: "E2E Test User",
-    email: "e2e-test@vedalegal.bg",
-  });
-  await context.addCookies([cookie]);
-  await context.storageState({ path: STORAGE_STATE_PATH });
-});
-```
-
-## Database Seeding Strategy
-
-### Approach: Direct Drizzle Inserts with Transaction Cleanup
-
-E2e tests hit the real database. The seeding strategy:
-
-1. **Dedicated test database:** `veda_test` PostgreSQL database (separate from `veda_dev`).
-2. **Global setup:** Insert a fixed set of test data (1 user, 2 clients, 2 topics, 3 subtopics) before all tests.
-3. **Per-test cleanup:** Delete time entries and submissions created during each test. Keep reference data (users, clients, topics) stable across tests.
-4. **Global teardown:** Truncate all tables after the full test suite completes.
-
-### Why Not Per-Test Database Reset
-
-Full database reset between tests is unnecessary because:
-- Time entry CRUD tests create entries, then clean them up individually.
-- Reference data (users, clients, topics) is read-only during tests.
-- Worker count set to 1 (serial execution) avoids race conditions.
-
-### Seeding Code Pattern
-
-```typescript
-// e2e/helpers/seed.ts
-import { db } from "@/lib/db";
-import { users, clients, topics, subtopics } from "@/lib/schema";
-import { createId } from "@paralleldrive/cuid2";
-
-export const TEST_USER = {
-  id: createId(),
-  email: "e2e-test@vedalegal.bg",
-  name: "E2E Test User",
-  position: "ASSOCIATE" as const,
-  status: "ACTIVE" as const,
-  updatedAt: new Date().toISOString(),
-};
-
-export const TEST_CLIENT = {
-  id: createId(),
-  name: "E2E Test Client Ltd",
-  clientType: "REGULAR" as const,
-  status: "ACTIVE" as const,
-  hourlyRate: "150.00",
-  updatedAt: new Date().toISOString(),
-};
-
-// ... topics, subtopics similarly
-
-export async function seedTestData() {
-  await db.insert(users).values(TEST_USER).onConflictDoNothing();
-  await db.insert(clients).values(TEST_CLIENT).onConflictDoNothing();
-  // ... topics, subtopics
-}
-
-export async function cleanupTestData() {
-  // Delete in reverse FK order
-  await db.delete(timeEntries).where(eq(timeEntries.userId, TEST_USER.id));
-  await db.delete(timesheetSubmissions).where(eq(timesheetSubmissions.userId, TEST_USER.id));
-  // Keep reference data for subsequent test runs
-}
-```
-
-**Why direct Drizzle, not API calls for seeding:**
-- API routes require authentication, creating a chicken-and-egg problem.
-- Direct DB access is faster and more reliable than HTTP round-trips.
-- Uses the same ORM and schema types as production code -- type-safe.
-
-**Confidence: HIGH** -- Drizzle insert/delete API is well-documented and already used throughout the codebase.
-
-## Playwright Configuration
-
-### Key Configuration Decisions
-
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| `workers` | 1 | Serial execution. Single test database, no parallel isolation needed for ~10 tests. Avoids race conditions. |
-| `retries` | 0 (local), 1 (CI) | No retries locally for fast feedback. One retry in CI to handle rare flakiness. |
-| `timeout` | 30000 (30s) | Generous for dev server cold starts. Individual actions have shorter timeouts. |
-| `webServer.command` | `npm run dev` | Use dev server, not production build. Faster iteration. CI can override to `npm run build && npm run start`. |
-| `webServer.reuseExistingServer` | `!process.env.CI` | Reuse running dev server locally (faster). Always start fresh in CI. |
-| `projects` | Setup + Chromium only | Single browser sufficient for internal tool with ~10 users all on modern browsers. Add Firefox/WebKit later if needed. |
-| `testDir` | `./e2e` | Separate from `src/` where Vitest unit tests live. Clear boundary. |
-| `outputDir` | `./e2e/test-results` | Keep artifacts near test files. |
-| `use.baseURL` | `http://localhost:3000` | Matches `NEXTAUTH_URL` and dev server. |
-| `use.trace` | `on-first-retry` | Capture traces only when tests fail and retry. Saves disk space. |
-| `use.screenshot` | `only-on-failure` | Automatic screenshots on failure for debugging. |
-
-### Configuration File
-
-```typescript
-// playwright.config.ts
-import { defineConfig, devices } from "@playwright/test";
-import dotenv from "dotenv";
-import path from "path";
-
-dotenv.config({ path: path.resolve(__dirname, ".env.test") });
-
-export default defineConfig({
-  testDir: "./e2e",
-  outputDir: "./e2e/test-results",
-  fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
-  workers: 1,
-  reporter: process.env.CI ? "github" : "html",
-  timeout: 30_000,
-
-  use: {
-    baseURL: "http://localhost:3000",
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
-  },
-
-  projects: [
-    {
-      name: "setup",
-      testMatch: /.*\.setup\.ts/,
-    },
-    {
-      name: "chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-        storageState: "e2e/.auth/user.json",
-      },
-      dependencies: ["setup"],
-    },
-  ],
-
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
-});
-```
-
-**Why not use Next.js experimental test mode (`testProxy`):**
-The `next/experimental/testmode/playwright` config wrapper adds fetch-level request interception for mocking server-side fetches. This project does not need fetch mocking -- the test server hits the real database. Using the standard `@playwright/test` config keeps things simple, stable, and documented.
-
-**Confidence: HIGH** -- Configuration pattern follows Playwright official docs and Next.js Playwright guide.
-
-## File Structure
-
-```
-app/
-  playwright.config.ts          # Playwright configuration
-  .env.test                     # Test environment variables (DATABASE_URL for veda_test)
-  e2e/
-    .auth/
-      user.json                 # Persisted auth state (gitignored)
-    helpers/
-      auth.ts                   # createAuthCookie() using next-auth/jwt encode
-      seed.ts                   # Database seeding and cleanup utilities
-    auth.setup.ts               # Global auth setup (runs before all tests)
-    global.setup.ts             # Database seeding (runs before all tests)
-    global.teardown.ts          # Database cleanup (runs after all tests)
-    timesheets/
-      create-entry.spec.ts      # Create time entry tests
-      edit-entry.spec.ts        # Edit time entry tests
-      delete-entry.spec.ts      # Delete time entry tests
-      week-strip.spec.ts        # Date navigation tests
-      submission.spec.ts        # Submit/revoke daily timesheet tests
-```
-
-## Environment Configuration
-
-### .env.test
-
-```bash
-# Separate test database (not dev, not prod)
-DATABASE_URL=postgresql://stefan@localhost:5432/veda_test
-
-# Same NextAuth config as dev (needed for JWT encode/decode)
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=<same-as-dev-or-separate-test-secret>
-
-# Azure AD credentials not needed -- auth is bypassed via JWT injection
-# AZURE_AD_CLIENT_ID, AZURE_AD_CLIENT_SECRET, AZURE_AD_TENANT_ID are NOT required
-```
-
-### package.json Scripts
-
-```json
-{
-  "scripts": {
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:report": "playwright show-report",
-    "test:e2e:codegen": "playwright codegen http://localhost:3000",
-    "db:create-test": "createdb veda_test 2>/dev/null; DATABASE_URL=postgresql://stefan@localhost:5432/veda_test npx drizzle-kit migrate"
+const byTopic = useMemo(() => {
+  const map = new Map<string, { name: string; value: number; revenue: number }>();
+  for (const entry of filteredEntries) {
+    const existing = map.get(entry.topicName);
+    if (existing) {
+      existing.value += entry.hours;
+      // revenue calculation follows existing pattern from report-utils.ts
+    } else {
+      map.set(entry.topicName, { name: entry.topicName, value: entry.hours, revenue: 0 });
+    }
   }
+  return Array.from(map.values()).sort((a, b) => b.value - a.value);
+}, [filteredEntries]);
+```
+
+**Revenue per topic** requires the client's hourly rate, which is available on `ReportEntry.clientType` and can be looked up from `data.byClient`. Entries for non-REGULAR clients or written-off entries produce zero revenue -- matching the existing `report-utils.ts` logic.
+
+## MultiSelect Component Design
+
+### Why Custom (Not a Library)
+
+The existing `ClientSelect` component (202 lines) already implements:
+- Dropdown open/close with animation (`animate-fade-up`)
+- Search input with filtering
+- Keyboard navigation (ArrowUp, ArrowDown, Enter, Escape)
+- Scroll highlighted item into view
+- Close on outside click (`useClickOutside` hook)
+- Dark theme styling with design system CSS variables
+
+Converting this to multi-select requires:
+1. Change `value: string` to `value: string[]` (or `Set<string>`)
+2. Add checkbox indicators next to each item
+3. Show selected count badge on the trigger button (e.g., "3 selected")
+4. Keep dropdown open after selection (don't close on item click)
+5. Add "Clear all" button when selections exist
+
+This is approximately 50-70 lines of changes to the existing pattern, versus 200+ lines of react-select theme customization to match the dark design system.
+
+### Props Interface
+
+```typescript
+interface MultiSelectProps {
+  options: { id: string; label: string }[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+  placeholder: string;       // e.g., "All Clients"
+  searchPlaceholder: string; // e.g., "Search clients..."
+  className?: string;
 }
 ```
 
-## CI Integration
+### Populating Filter Options from API Data
 
-### GitHub Actions Addition
+Filter options are derived from the already-fetched `ReportData`:
 
-```yaml
-# Add to .github/workflows/ci.yml
-  e2e:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: veda_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: app/package-lock.json
-      - run: npm ci
-        working-directory: ./app
-      - run: npx playwright install --with-deps chromium
-        working-directory: ./app
-      - run: npx drizzle-kit migrate
-        working-directory: ./app
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/veda_test
-      - run: npx playwright test
-        working-directory: ./app
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/veda_test
-          NEXTAUTH_URL: http://localhost:3000
-          NEXTAUTH_SECRET: e2e-test-secret-not-real
-          CI: true
-```
+| Filter | Source | Extraction |
+|--------|--------|------------|
+| Clients | `data.byClient` | `data.byClient.map(c => ({ id: c.id, label: c.name }))` |
+| Employees | `data.byEmployee` | `data.byEmployee.map(e => ({ id: e.id, label: e.name }))` |
+| Topics | `data.entries` | `[...new Set(data.entries.map(e => e.topicName))].map(t => ({ id: t, label: t }))` |
 
-**Key CI detail:** Only install Chromium (`--with-deps chromium`), not all three browsers. Saves ~2 minutes of download time. Internal tool does not need cross-browser e2e coverage.
-
-## Alternatives Considered
-
-| Recommended | Alternative | Why Not |
-|-------------|-------------|---------|
-| JWT cookie injection | CredentialsProvider for test env | Modifies production auth code. Risk of test-only provider leaking to prod. Cookie injection is test-side only. |
-| JWT cookie injection | Full OAuth login flow in tests | Requires Azure AD test tenant, MFA handling, token refresh. Fragile, slow, and unnecessary for an internal tool. |
-| Standard Playwright config | `next/experimental/testmode/playwright` | Experimental, no stability guarantees, designed for fetch mocking (not auth). Adds complexity with no benefit. |
-| Single `veda_test` database | Per-test Docker containers | Over-engineered. 10-user app with serial test execution. PostgreSQL service in CI is sufficient. |
-| Serial execution (workers: 1) | Parallel with database isolation | Not enough tests to justify parallelization. Serial is simpler, avoids race conditions. |
-| Chromium only | Multi-browser (Chromium + Firefox + WebKit) | Internal tool used by ~10 people on managed devices. Cross-browser testing adds CI time with near-zero ROI. |
-| Dev server for tests | Production build + start | Dev server is faster to start and supports HMR for test development. CI can override. |
-| `storageState` file persistence | `context.addCookies()` per test | `storageState` is Playwright's recommended pattern. Shared across all tests in a project. More efficient. |
-| Hand-crafted Drizzle inserts | `drizzle-seed` package | Need deterministic, specific test data (known IDs, names, positions). Random data makes assertions fragile. |
+No additional API call needed. Filter options update automatically when the date range changes (since `data` is re-fetched).
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| Cypress | Playwright is already installed and configured. Adding Cypress creates tooling confusion, duplicate config, and two test runners to maintain. | Playwright 1.57.0 (already installed) |
-| `next/experimental/testmode` | Still experimental. Designed for server-side fetch mocking, not auth bypass. Could break on any Next.js update. | Standard `@playwright/test` config with `webServer` |
-| `msw` for e2e tests | E2e tests should exercise the full stack (browser -> API -> database). Mocking API responses in e2e tests defeats the purpose. | Real Next.js server hitting real test database |
-| `testcontainers` | Docker-per-test overhead is not justified for ~10 tests on a small dataset. PostgreSQL service in CI covers isolation. | Local `veda_test` database + CI PostgreSQL service |
-| `playwright-test-coverage` | E2e tests validate user workflows, not code coverage. Coverage is Vitest's job (965 existing tests). | Vitest `--coverage` for code coverage metrics |
-| Multi-role auth storage states | Only one role (ASSOCIATE) needed for timesheet e2e tests. Admin tests can be added later with a second storage state. | Single `user.json` storage state |
+| `react-select` | 47KB gzipped. Requires extensive theme customization for the dark design system. Default styling clashes with `--bg-surface`, `--border-subtle`, `--accent-pink` variables. | Custom `MultiSelect` extending existing `ClientSelect` pattern |
+| `@tanstack/react-table` | DataTable already handles sort + pagination. Adding TanStack Table for filtering adds 50KB+ and requires rewriting the table component. Filter logic is 5 lines of `Array.filter()`. | `Array.filter()` before passing data to existing `DataTable` |
+| URL state sync (`nuqs`, `URLSearchParams`) | Not requested. Filter state resets on tab change -- acceptable behavior. URL sync adds complexity (serialization, hydration, browser history pollution) with minimal benefit for ~10 internal users. | React `useState` for filter arrays |
+| `useReducer` for filter state | Three independent `useState` calls are simpler and more readable than a reducer with action types. No complex state transitions -- just add/remove IDs from arrays. | Three `useState<string[]>` calls |
+| Server-side filtering (API params) | All entries are already fetched for the date range. Client-side filtering on ~1000 entries is instant. Server-side filtering would require API changes, add network latency per filter change, and complicate comparison period logic. | Client-side `useMemo` with `Array.filter()` |
+| Virtualized dropdown lists | Largest list is ~200 clients. Search narrows this to <20 items. No performance benefit from virtualization at this scale. | Standard `overflow-y-auto` with `max-h-56` (existing pattern) |
+
+## Alternatives Considered
+
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| Custom `MultiSelect` | `react-select` | When styling doesn't need to match a custom design system, or when you need advanced features (async loading, creatable options, grouped options). Not this project. |
+| Client-side filtering | Server-side filter params | When datasets exceed ~10K entries and filtering causes visible UI lag. At ~200 clients x ~30 days = ~6000 entries max, client-side is fine. |
+| `useState` arrays | URL state (`nuqs`) | When reports need shareable URLs with filter state preserved. Could be added later as an enhancement without architecture changes. |
+| `useMemo` derived data | Separate state for filtered data | Never. Derived state should always be computed, not stored. Storing filtered data in state creates sync bugs. |
+| AND-combined filters | OR-combined filters | AND is the standard expectation for dashboard filters ("show entries that match Client X AND Employee Y AND Topic Z"). OR-combination within a single filter ("Client X OR Client Y") is handled by `Array.includes()`. |
 
 ## Version Compatibility
 
-| Package | Version | Compatible With | Notes |
-|---------|---------|-----------------|-------|
-| `@playwright/test@1.57.0` | 1.57.0 | Node.js 22, Next.js 16.0.10 | Latest stable. Chrome for Testing builds (not Chromium). |
-| `playwright@1.57.0` | 1.57.0 | `@playwright/test@1.57.0` | Must match exactly. Already in sync. |
-| `next-auth@4.24.13` | 4.24.13 | `next-auth/jwt` `encode()` function | Verified export: `{ decode, encode, getToken }`. JWE uses A256GCM encryption. |
-| `drizzle-orm@0.45.1` | 0.45.1 | `pg@8.16.3` | Seeding uses existing `db` instance and schema. No version concerns. |
-| `dotenv@17.2.3` | 17.2.3 | `.env.test` loading | Already installed. Used in playwright.config.ts. |
+No version concerns. All technologies are already installed and working together:
+
+| Package | Version | Relevant API | Notes |
+|---------|---------|--------------|-------|
+| `react@19.2.1` | 19.2.1 | `useState`, `useMemo`, `useCallback` | Hooks API stable since React 16.8. No concerns. |
+| `recharts@3.6.0` | 3.6.0 | `BarChart`, `Bar`, `Cell`, `ResponsiveContainer` | Existing chart components work unchanged. Pass different data, get different charts. |
+| `typescript@5.x` | 5.x | Generic types for `MultiSelect<T>` | Standard TypeScript generics. |
+| `tailwindcss@4.x` | 4.x | CSS variables for dark theme | Existing design system variables. No new Tailwind config needed. |
 
 ## Installation
 
 ```bash
 # No new packages needed. Zero npm installs.
-
-# One-time setup: create test database
-createdb veda_test
-DATABASE_URL=postgresql://stefan@localhost:5432/veda_test npx drizzle-kit migrate
-
-# One-time setup: install Playwright browsers (already done, but for reference)
-npx playwright install
-
-# Verify everything works
-npx playwright test --ui
+# All capabilities come from React 19 + existing components + custom code.
 ```
 
-## .gitignore Additions
+## Types to Add
 
-```
-# Playwright
-e2e/.auth/
-e2e/test-results/
-playwright-report/
-.env.test
+The existing types in `@/types/reports.ts` already cover most needs. One small addition for the Detail tab:
+
+```typescript
+// In @/types/reports.ts -- extend ReportEntry if needed for topic revenue
+// Already has: topicName, clientType, isWrittenOff, hours
+// Revenue per entry can be computed from entry.hours * client.hourlyRate
+// where client is looked up from data.byClient
+
+// New type for topic chart data (if not using BarChartItem directly)
+export interface TopicChartData {
+  name: string;      // topicName
+  value: number;     // total hours
+  revenue: number;   // total revenue (admin only)
+}
 ```
 
 ## Sources
 
-- [Playwright Authentication Docs](https://playwright.dev/docs/auth) -- storageState pattern, setup projects, cookie injection (HIGH confidence)
-- [Playwright Best Practices](https://playwright.dev/docs/best-practices) -- test isolation, webServer config, web-first assertions (HIGH confidence)
-- [Playwright Release Notes](https://playwright.dev/docs/release-notes) -- v1.57.0 features: Chrome for Testing, `--fail-on-flaky-tests`, webServer `wait` field (HIGH confidence)
-- [Next.js Playwright Guide](https://nextjs.org/docs/app/guides/testing/playwright) -- webServer configuration, CI recommendations (HIGH confidence)
-- [Auth.js Testing Guide](https://authjs.dev/guides/testing) -- CredentialsProvider approach for development, session validation patterns (HIGH confidence)
-- [NextAuth.js JWT Options](https://next-auth.js.org/configuration/options) -- `encode()`/`decode()` function signatures, cookie naming conventions, `__Secure-` prefix behavior (HIGH confidence)
-- [Auth.js JWT Reference](https://authjs.dev/reference/core/jwt) -- `encode()` params: `token`, `secret`, `salt`, `maxAge`. A256CBC-HS512 encryption (HIGH confidence)
-- `next-auth/jwt/types.d.ts` in node_modules -- verified `JWTEncodeParams` interface: `token?: JWT`, `salt?: string`, `secret: string | Buffer`, `maxAge?: number` (HIGH confidence)
-- `next-auth/jwt/index.d.ts` in node_modules -- verified exports: `encode`, `decode`, `getToken` (HIGH confidence)
-- [Next.js Experimental Test Mode README](https://github.com/vercel/next.js/blob/canary/packages/next/src/experimental/testmode/playwright/README.md) -- `testProxy: true` config, fetch interception API, explicitly experimental (MEDIUM confidence)
-- [Database Rollback Strategies in Playwright](https://www.thegreenreport.blog/articles/database-rollback-strategies-in-playwright/database-rollback-strategies-in-playwright.html) -- cleanup patterns, beforeEach/afterEach hooks (MEDIUM confidence)
+- `app/src/components/ui/ClientSelect.tsx` -- Existing single-select with search, keyboard nav, click-outside (202 lines). Pattern to extend for multi-select. (HIGH confidence)
+- `app/src/components/reports/ReportsContent.tsx` -- Existing filter/state management pattern using `useState` + `useMemo`. (HIGH confidence)
+- `app/src/components/reports/ByClientTab.tsx` -- Existing `Array.reduce()` aggregation pattern for drill-down charts (lines 102-130). (HIGH confidence)
+- `app/src/lib/report-utils.ts` -- Existing server-side aggregation showing data shapes and revenue calculation logic. (HIGH confidence)
+- `app/src/types/reports.ts` -- Existing types: `ReportEntry` (has `topicName`, `clientType`, `isWrittenOff`), `ReportData`, `TopicAggregation`. (HIGH confidence)
+- `app/package.json` -- Current dependencies verified: React 19.2.1, Recharts 3.6.0, no select or state management libraries. (HIGH confidence)
 
 ---
-*Stack research for: E2E testing infrastructure (Playwright + auth bypass + database seeding)*
+*Stack research for: v1.2 Reports Detail View (multi-select filters, chart-filter interactivity, topic aggregation)*
 *Researched: 2026-02-25*

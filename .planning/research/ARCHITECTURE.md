@@ -1,628 +1,531 @@
 # Architecture Research
 
-**Domain:** Playwright e2e test integration with Next.js 16 + NextAuth v4 (JWT) + PostgreSQL/Drizzle
+**Domain:** Reports Detail View -- multi-select filters, topic aggregation, chart-filter interactivity in Next.js 16 + Recharts
 **Researched:** 2026-02-25
 **Confidence:** HIGH
 
 ## System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     Playwright Test Runner                               │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐  │
-│  │ auth.setup  │  │ timesheet   │  │ submission  │  │  weekstrip   │  │
-│  │   .ts       │  │  .spec.ts   │  │  .spec.ts   │  │  .spec.ts    │  │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘  │
-│         │                │               │                │           │
-│         │  ┌─────────────┴───────────────┴────────────────┴────────┐  │
-│         │  │          Shared Fixtures & Helpers                     │  │
-│         │  │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐     │  │
-│         │  │  │ auth     │  │ db-seed  │  │ page-objects     │     │  │
-│         │  │  │ fixture  │  │ fixture  │  │ (TimesheetsPage) │     │  │
-│         │  │  └──────────┘  └──────────┘  └──────────────────┘     │  │
-│         │  └──────────────────────┬────────────────────────────────┘  │
-│         │                        │                                    │
-├─────────┴────────────────────────┼────────────────────────────────────┤
-│                    storageState  │  DB seeding/cleanup                │
-│                    (JWT cookie)  │  (direct Drizzle)                  │
-│                        │         │                                    │
-├────────────────────────┼─────────┼────────────────────────────────────┤
-│               Next.js Dev Server │(port 3001)                         │
-│  ┌─────────────────────┼─────────┼──────────────────────────────┐    │
-│  │          Middleware  │         │                               │    │
-│  │    (withAuth - JWT   │         │                               │    │
-│  │     validation)      │         │                               │    │
-│  │          │           │         │                               │    │
-│  │  ┌───────┴─────┐    │    ┌────┴───────┐                       │    │
-│  │  │ Server      │    │    │ API Routes │                       │    │
-│  │  │ Components  │    │    │ (requireAuth│                       │    │
-│  │  │ (getCurrent │    │    │  via JWT)   │                       │    │
-│  │  │  User)      │    │    └────┬───────┘                       │    │
-│  │  └─────────────┘    │         │                               │    │
-│  └─────────────────────┼─────────┼───────────────────────────────┘    │
-│                        │         │                                    │
-├────────────────────────┼─────────┼────────────────────────────────────┤
-│                   Test Database  │(veda_legal_test)                    │
-│  ┌─────────────────────┼─────────┼───────────────────────────────┐    │
-│  │         PostgreSQL   │         │                               │    │
-│  │  ┌──────────┐  ┌────┴────┐  ┌─┴────────┐  ┌──────────────┐   │    │
-│  │  │ users    │  │ clients │  │ time_    │  │ timesheet_  │   │    │
-│  │  │          │  │         │  │ entries  │  │ submissions │   │    │
-│  │  └──────────┘  └─────────┘  └──────────┘  └──────────────┘   │    │
-│  └───────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                  ReportsContent (existing)                            │
+│  ┌──────────────┐  ┌──────────────────┐  ┌────────────────────────┐ │
+│  │ DateRange    │  │ ComparisonPicker │  │ Tab Bar                │ │
+│  │ Picker       │  │                  │  │ [Overview|Detail|      │ │
+│  │ (existing)   │  │ (existing)       │  │  By Employee|By Client]│ │
+│  └──────┬───────┘  └────────┬─────────┘  └────────────┬───────────┘ │
+│         │                   │                         │             │
+│  ┌──────┴───────────────────┴─────────────────────────┴───────────┐ │
+│  │                     Data Layer (existing)                       │ │
+│  │  data: ReportData  │  comparisonData: ReportData | null         │ │
+│  └────────────────────────────┬───────────────────────────────────┘ │
+│                               │                                     │
+│  ┌────────────────────────────┴───────────────────────────────────┐ │
+│  │                     DetailTab (NEW)                             │ │
+│  │  ┌───────────────────────────────────────────────────────────┐ │ │
+│  │  │           Filter Bar (NEW)                                 │ │ │
+│  │  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐      │ │ │
+│  │  │  │ MultiSelect  │ │ MultiSelect  │ │ MultiSelect  │      │ │ │
+│  │  │  │ Client       │ │ Employee     │ │ Topic        │      │ │ │
+│  │  │  └──────────────┘ └──────────────┘ └──────────────┘      │ │ │
+│  │  └────────────────────────┬──────────────────────────────────┘ │ │
+│  │                           │ filteredEntries                    │ │
+│  │  ┌────────────────────────┴──────────────────────────────────┐ │ │
+│  │  │           Charts Section                                   │ │ │
+│  │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐                  │ │ │
+│  │  │  │ByClient  │ │ByEmployee│ │ByTopic   │  (Hours row)     │ │ │
+│  │  │  │BarChart  │ │BarChart  │ │BarChart  │                  │ │ │
+│  │  │  └──────────┘ └──────────┘ └──────────┘                  │ │ │
+│  │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐                  │ │ │
+│  │  │  │ByClient  │ │ByEmployee│ │ByTopic   │  (Revenue row,   │ │ │
+│  │  │  │Revenue   │ │Revenue   │ │Revenue   │   admin only)    │ │ │
+│  │  │  └──────────┘ └──────────┘ └──────────┘                  │ │ │
+│  │  └───────────────────────────────────────────────────────────┘ │ │
+│  │  ┌───────────────────────────────────────────────────────────┐ │ │
+│  │  │           Entry DataTable                                  │ │ │
+│  │  │  Date | Employee | Client | Topic | Subtopic | Desc |     │ │ │
+│  │  │  Hours | Revenue(admin)                                    │ │ │
+│  │  └───────────────────────────────────────────────────────────┘ │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Responsibilities
 
-| Component | Responsibility | Implementation |
-|-----------|----------------|----------------|
-| Auth Setup Project | Generate JWT cookie, save as storageState | `next-auth/jwt` `encode()` + `storageState` file |
-| DB Seed Fixture | Insert/clean test data around each test | Direct Drizzle ORM connection to test database |
-| Page Object Models | Encapsulate page interactions | Playwright locator wrappers per page |
-| Test Specs | Assert user-visible behavior | Playwright test files using fixtures |
-| Web Server | Serve the app under test | `npm run dev` on port 3001 with test env vars |
-| Test Database | Isolated PostgreSQL database | Same schema as dev, seeded per-test |
+| Component | Responsibility | New/Modified |
+|-----------|----------------|--------------|
+| ReportsContent | Tab state, date range, data fetching, passes data to tabs | MODIFIED -- add "detail" tab type |
+| DetailTab | Filter state, derive filtered data, render charts + table | NEW |
+| MultiSelectFilter | Dropdown with checkboxes, search, select all/none, pill display | NEW reusable component |
+| FilterBar | Compose 3 MultiSelectFilter instances, derive option lists from data | NEW (part of DetailTab or separate) |
+| BarChart | Render horizontal bar chart from data array | EXISTING -- no changes |
+| RevenueBarChart | Render horizontal bar chart with EUR formatting | EXISTING -- no changes |
+| DataTable | Sortable, paginated table | EXISTING -- no changes |
+
+## Recommended Integration Approach
+
+### Key Decision: Client-Side Filtering (No API Changes)
+
+The existing API already returns all entries for the period in `data.entries` (type `ReportEntry[]`). The Detail tab filters and re-aggregates this data client-side. This is the correct approach because:
+
+1. **Data is already loaded.** `ReportData.entries` contains every time entry for the date range. No additional fetch needed.
+2. **~10 employees, ~200 clients, 1 month** = at most a few thousand entries. Client-side filtering is instant.
+3. **Filters are interactive.** Users toggle filters rapidly. A round-trip per toggle would feel sluggish and wasteful.
+4. **Re-aggregation is simple.** Sum hours/revenue by client/employee/topic from the filtered entry set. Same logic as `report-utils.ts` but in the component.
+
+No changes to `/api/reports` route or `report-utils.ts` query logic are needed for filtering.
+
+### API Change: Add `subtopicName` to ReportEntry
+
+The Detail tab's entry table requires a Subtopic column. The `subtopicName` field exists on `timeEntries` in the schema but is not currently included in the report-utils query or `ReportEntry` type.
+
+**Changes required:**
+1. `types/reports.ts` -- Add `subtopicName: string` to `ReportEntry`
+2. `lib/report-utils.ts` -- Add `subtopicName` to query columns and to the `entries` mapping
+
+This is a backward-compatible addition (new field on an existing response).
 
 ## Recommended Project Structure
 
 ```
-app/
-├── e2e/                           # All Playwright e2e files (OUTSIDE src/)
-│   ├── playwright.config.ts       # Playwright configuration
-│   ├── .env.test                  # Test-specific env vars (DATABASE_URL, NEXTAUTH_SECRET)
-│   ├── fixtures/
-│   │   ├── auth.ts                # Auth fixture: JWT encode + cookie injection
-│   │   ├── db.ts                  # Database fixture: seed/cleanup helpers
-│   │   └── test.ts                # Extended test with all fixtures composed
-│   ├── helpers/
-│   │   ├── seed-data.ts           # Test data factories (users, clients, topics, entries)
-│   │   └── db-utils.ts            # Drizzle client for test DB + migration runner
-│   ├── page-objects/
-│   │   └── timesheets.page.ts     # TimesheetsPage: locators + action methods
-│   ├── setup/
-│   │   └── auth.setup.ts          # Setup project: generate storageState files
-│   └── specs/
-│       ├── timesheet-entry.spec.ts    # Create, edit, delete time entries
-│       ├── weekstrip-nav.spec.ts      # Date navigation via WeekStrip
-│       └── submission.spec.ts         # Daily submit/revoke flow
-├── src/                           # Existing source (unchanged)
-│   ├── test/                      # Existing Vitest test helpers (unchanged)
-│   └── ...
-└── vitest.config.ts               # Existing Vitest config (unchanged)
+src/
+├── components/
+│   ├── reports/
+│   │   ├── ReportsContent.tsx          # MODIFIED: add "detail" tab
+│   │   ├── DetailTab.tsx               # NEW: filter state + layout
+│   │   ├── DetailFilterBar.tsx         # NEW: composes 3 MultiSelectFilters
+│   │   ├── OverviewTab.tsx             # existing (unchanged)
+│   │   ├── ByClientTab.tsx             # existing (unchanged)
+│   │   ├── ByEmployeeTab.tsx           # existing (unchanged)
+│   │   └── charts/
+│   │       ├── BarChart.tsx            # existing (unchanged)
+│   │       └── RevenueBarChart.tsx     # existing (unchanged)
+│   └── ui/
+│       ├── MultiSelectFilter.tsx       # NEW: reusable multi-select dropdown
+│       ├── MultiSelectFilter.test.tsx  # NEW: tests
+│       ├── DataTable.tsx               # existing (unchanged)
+│       └── ...
+├── lib/
+│   ├── report-utils.ts                # MODIFIED: add subtopicName to query
+│   └── detail-tab-utils.ts            # NEW: pure aggregation + filtering logic
+├── types/
+│   └── reports.ts                      # MODIFIED: add subtopicName to ReportEntry
+└── ...
 ```
 
 ### Structure Rationale
 
-- **`e2e/` at app root (not inside `src/`):** Playwright tests are a separate test runner from Vitest. Keeping them outside `src/` prevents Vitest from picking them up (vitest.config.ts includes `src/**/*.test.ts`) and avoids confusion. Playwright has its own config file.
-- **`fixtures/`:** Playwright fixtures are the idiomatic way to share setup/teardown logic. Composing auth + db fixtures into a custom `test` export gives every spec file automatic auth and data isolation.
-- **`page-objects/`:** Encapsulating page interactions (fill client dropdown, click save, wait for entry card) keeps specs readable and reduces maintenance when UI changes.
-- **`setup/`:** Playwright's setup project pattern (preferred over `globalSetup` since Playwright 1.31+) generates auth state files that downstream test projects depend on. This runs once, not per-test.
-- **`specs/`:** Test files grouped by feature, matching the milestone scope.
+- **`MultiSelectFilter` in `ui/`:** It is a general-purpose component (dropdown with checkboxes, search, pills). Other pages could reuse it. Follows the pattern of `ClientSelect` in `ui/`.
+- **`DetailTab` in `reports/`:** Page-specific component, same level as `OverviewTab`, `ByClientTab`, `ByEmployeeTab`.
+- **`DetailFilterBar` in `reports/`:** Composes MultiSelectFilter instances with report-specific logic (deriving option lists from `ReportData`). Not general-purpose, so lives in `reports/`.
+- **`detail-tab-utils.ts` in `lib/`:** Pure functions for filtering entries, aggregating by dimension, computing revenue. Separating from the component enables unit testing without rendering.
 
 ## Architectural Patterns
 
-### Pattern 1: JWT Cookie Injection (Auth Bypass)
+### Pattern 1: Client-Side Filter + Re-Aggregate
 
-**What:** Generate a valid NextAuth JWT token using `encode()` from `next-auth/jwt`, inject it as a `next-auth.session-token` cookie via Playwright's `storageState` mechanism. This bypasses Azure AD SSO entirely -- no browser-based OAuth flow needed.
+**What:** Store filter selections as `Set<string>` in DetailTab state. Derive `filteredEntries` via `useMemo`. Derive chart data from `filteredEntries` via separate `useMemo` calls. All downstream visualizations receive derived data as props.
 
-**Why this works for this project:** The app uses NextAuth v4 with `strategy: "jwt"` (confirmed in `lib/auth.ts`). JWT sessions are self-contained encrypted tokens -- no database session table exists. The middleware (`withAuth`) and API routes (`getToken()`, `getServerSession()`) both validate the JWT from the cookie. By encoding a token with the same `NEXTAUTH_SECRET`, the generated cookie is indistinguishable from a real login.
+**When to use:** When the full dataset is already in memory and small enough for instant filtering (< 10K rows).
 
-**Why NOT use Next.js experimental testmode:** Next.js 16 ships `next/experimental/testmode/playwright` which can intercept server-side fetch calls. However, it is explicitly experimental, primarily designed for fetch mocking (not auth bypass), and does not help with the core problem of authenticated page access. The JWT cookie approach is simpler, stable, and well-documented.
-
-**Why NOT use a Credentials Provider for test:** Adding a test-only CredentialsProvider introduces production-risk code paths. The JWT encode approach requires zero changes to production code.
-
-**Trade-offs:** Requires `NEXTAUTH_SECRET` to be available in the test environment (acceptable since this is a private internal app). Token must include fields that `signIn` callback and `jwt` callback would normally set (email, name).
+**Trade-offs:**
+- PRO: Zero latency on filter changes, no loading states, no API complexity
+- PRO: Comparison data filtering follows the same path
+- CON: If the dataset ever grew to 50K+ entries, would need server-side filtering (not a concern for ~200 clients, ~10 employees, 1-month window)
 
 **Example:**
 
 ```typescript
-// e2e/fixtures/auth.ts
-import { encode } from "next-auth/jwt";
-import { test as base, type BrowserContext } from "@playwright/test";
-import path from "path";
-
-const TEST_USER = {
-  email: "test@vedalegal.bg",
-  name: "Test User",
-};
-
-const STORAGE_STATE_PATH = path.join(__dirname, "../.auth/user.json");
-
-export async function createSessionToken(user: { email: string; name: string }) {
-  const token = await encode({
-    token: {
-      email: user.email,
-      name: user.name,
-      sub: user.email, // NextAuth uses sub as user identifier
-    },
-    secret: process.env.NEXTAUTH_SECRET!,
-    maxAge: 8 * 60 * 60, // Match app's 8-hour session
-  });
-  return token;
+// DetailTab.tsx (simplified)
+interface DetailTabProps {
+  data: ReportData;
+  comparison: ReportData | null;
+  isAdmin: boolean;
 }
 
-// Setup project writes storageState to disk
-// e2e/setup/auth.setup.ts
-import { test as setup } from "@playwright/test";
-import { createSessionToken } from "../fixtures/auth";
+export function DetailTab({ data, comparison, isAdmin }: DetailTabProps) {
+  // Filter state: empty Set means "all selected" (no filter active)
+  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
+  const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
+  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
 
-setup("authenticate test user", async ({ browser }) => {
-  const token = await createSessionToken({
-    email: "test@vedalegal.bg",
-    name: "Test User",
-  });
-
-  const context = await browser.newContext();
-  await context.addCookies([
-    {
-      name: "next-auth.session-token",
-      value: token,
-      domain: "localhost",
-      path: "/",
-      httpOnly: true,
-      sameSite: "Lax",
-      secure: false, // localhost is not HTTPS
-      expires: Math.floor(Date.now() / 1000) + 8 * 60 * 60,
-    },
-  ]);
-
-  await context.storageState({ path: STORAGE_STATE_PATH });
-  await context.close();
-});
-```
-
-**Integration points with existing code:**
-- `middleware.ts`: `withAuth` validates JWT via `next-auth/jwt` internally -- the injected cookie satisfies this check with no middleware changes needed.
-- `lib/api-utils.ts`: `requireAuth()` calls `getServerSession()` then falls back to `getToken()`. Both will decode the injected JWT successfully.
-- `lib/user.ts`: `getCurrentUser()` calls `getServerSession()` then looks up the user by email in the database. The test user MUST exist in the test database for this to work.
-- `lib/auth.ts`: The `signIn` callback checks user existence in the database -- but this callback only runs during actual OAuth sign-in, not during JWT validation. No interaction during e2e tests.
-
-**Confidence:** HIGH -- This pattern is well-documented across multiple sources and aligns exactly with NextAuth v4's JWT validation path. Verified that `next-auth/jwt` exports `encode` in the installed version (4.24.13).
-
-### Pattern 2: Test Database Isolation
-
-**What:** Use a separate PostgreSQL database (`veda_legal_test`) for e2e tests. Seed required data before tests, clean up after. The test database has the same schema as dev (applied via Drizzle migrations) but contains only test-specific data.
-
-**Why a separate database (not the dev database):** E2e tests create, modify, and delete records. Using the dev database would corrupt development data and make tests non-deterministic (existing data interferes with assertions).
-
-**Why NOT use transactions for isolation:** The app runs in a separate process (Next.js dev server). The test runner and the server are in different processes -- they cannot share a database transaction. Transaction-based isolation only works when test code and app code share the same process.
-
-**Trade-offs:** Requires creating a test database and running migrations against it. Tests must run sequentially (single worker) since they share database state. This is acceptable for ~10-15 timesheet-focused tests.
-
-**Example:**
-
-```typescript
-// e2e/helpers/db-utils.ts
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import * as schema from "../../src/lib/schema";
-
-let pool: Pool | null = null;
-
-export function getTestDb() {
-  if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.TEST_DATABASE_URL,
-      max: 5,
+  // Derive filtered entries
+  const filteredEntries = useMemo(() => {
+    return filterEntries(data.entries, {
+      clientIds: selectedClients,
+      employeeIds: selectedEmployees,
+      topicNames: selectedTopics,
     });
-  }
-  return drizzle(pool, { schema });
-}
+  }, [data.entries, selectedClients, selectedEmployees, selectedTopics]);
 
-export async function runMigrations() {
-  const db = getTestDb();
-  await migrate(db, { migrationsFolder: "./drizzle" });
-}
+  // Derive chart data from filtered entries
+  const byClient = useMemo(() => aggregateByClient(filteredEntries, isAdmin), [filteredEntries, isAdmin]);
+  const byEmployee = useMemo(() => aggregateByEmployee(filteredEntries, isAdmin), [filteredEntries, isAdmin]);
+  const byTopic = useMemo(() => aggregateByTopic(filteredEntries, isAdmin), [filteredEntries, isAdmin]);
 
-export async function closePool() {
-  if (pool) {
-    await pool.end();
-    pool = null;
-  }
+  // ... render filter bar, charts, table
 }
 ```
 
-```typescript
-// e2e/fixtures/db.ts
-import { test as base } from "@playwright/test";
-import { getTestDb } from "../helpers/db-utils";
-import { seedTestUser, seedTestClients, seedTestTopics, cleanupTestData } from "../helpers/seed-data";
+### Pattern 2: "Empty Set = All" Filter Convention
 
-type DbFixtures = {
-  seedDb: { userId: string; clientId: string };
-};
+**What:** An empty `Set<string>` means no filter is active (all items pass). A non-empty set means only items matching the set pass. This avoids pre-populating the set with every possible value.
 
-export const test = base.extend<DbFixtures>({
-  seedDb: async ({}, use) => {
-    const db = getTestDb();
+**When to use:** Multi-select filters where the default state is "show everything."
 
-    // Seed required data
-    const userId = await seedTestUser(db);
-    const clientId = await seedTestClients(db);
-    await seedTestTopics(db);
-
-    // Provide IDs to test
-    await use({ userId, clientId });
-
-    // Cleanup after test
-    await cleanupTestData(db);
-  },
-});
-```
-
-**Confidence:** HIGH -- Direct database access via Drizzle ORM for seeding/cleanup is the standard pattern for Playwright + PostgreSQL. The existing Drizzle schema and migrations make this straightforward.
-
-### Pattern 3: Playwright Setup Project (Not globalSetup)
-
-**What:** Use Playwright's project dependency feature to define a "setup" project that runs auth setup before test projects. This replaces the older `globalSetup` pattern.
-
-**Why setup project over globalSetup:** Setup projects produce traces, appear in HTML reports, can use fixtures, and support the Playwright inspector. `globalSetup` runs outside Playwright's test infrastructure and lacks these features. Playwright's official documentation now recommends setup projects as the preferred approach.
-
-**Trade-offs:** Slightly more config in `playwright.config.ts`, but better debugging experience.
+**Trade-offs:**
+- PRO: Initial state is trivial (`new Set()`)
+- PRO: Checking "is filter active?" is `set.size > 0`
+- PRO: "Clear filter" is `setFilter(new Set())`
+- CON: Filter function has a conditional check, but it is simple
 
 **Example:**
 
 ```typescript
-// e2e/playwright.config.ts
-import { defineConfig, devices } from "@playwright/test";
-import dotenv from "dotenv";
-import path from "path";
-
-// Load test-specific env vars
-dotenv.config({ path: path.resolve(__dirname, ".env.test") });
-
-export default defineConfig({
-  testDir: "./specs",
-  fullyParallel: false, // Sequential -- shared test database
-  workers: 1,           // Single worker -- database isolation
-  retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? "github" : "html",
-  timeout: 30_000,
-
-  use: {
-    baseURL: "http://localhost:3001",
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
-  },
-
-  projects: [
-    // Setup project: generate auth state
-    {
-      name: "setup",
-      testDir: "./setup",
-      testMatch: "**/*.setup.ts",
-    },
-
-    // Main test project: depends on setup
-    {
-      name: "chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-        storageState: ".auth/user.json",
-      },
-      dependencies: ["setup"],
-    },
-  ],
-
-  webServer: {
-    command: "npm run dev -- --port 3001",
-    port: 3001,
-    reuseExistingServer: !process.env.CI,
-    env: {
-      DATABASE_URL: process.env.TEST_DATABASE_URL!,
-      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET!,
-      NEXTAUTH_URL: "http://localhost:3001",
-    },
-    timeout: 60_000,
-  },
-});
+// detail-tab-utils.ts
+export function filterEntries(
+  entries: ReportEntry[],
+  filters: {
+    clientIds: Set<string>;
+    employeeIds: Set<string>;
+    topicNames: Set<string>;
+  }
+): ReportEntry[] {
+  return entries.filter((entry) => {
+    if (filters.clientIds.size > 0 && !filters.clientIds.has(entry.clientId)) return false;
+    if (filters.employeeIds.size > 0 && !filters.employeeIds.has(entry.userId)) return false;
+    if (filters.topicNames.size > 0 && !filters.topicNames.has(entry.topicName)) return false;
+    return true;
+  });
+}
 ```
 
-**Key detail -- webServer `env`:** The `env` option passes environment variables to the dev server process. This is how the Next.js server connects to the test database instead of the dev database. The `DATABASE_URL` points to `veda_legal_test`, not the dev database.
+### Pattern 3: Topic Aggregation from Entries (Not Pre-Computed)
 
-**Confidence:** HIGH -- Setup projects are the documented best practice since Playwright 1.31+. Installed version is 1.57.0.
+**What:** The existing `ReportData` has topic data nested inside `byClient[].topics` and `byEmployee[].topics`, but NOT as a top-level `byTopic` array. For the Detail tab's "by Topic" charts, aggregate directly from the filtered `entries` array rather than trying to re-derive from nested structures.
 
-### Pattern 4: Page Object Model for Timesheets
+**When to use:** When filters invalidate pre-computed aggregations. If the user filters to 2 of 10 employees, the existing `byClient[].topics` totals are wrong because they include all employees.
 
-**What:** Encapsulate page interactions in a class that maps to the Timesheets page. Methods like `createEntry()`, `editEntry()`, `deleteEntry()`, `navigateToDate()`, and `submitDay()` abstract away locator details.
-
-**Why:** The timesheet page has complex interactions (dropdowns, duration picker, cascading topic selects). Encoding these as reusable methods prevents test fragility and makes specs readable.
-
-**Trade-offs:** Slight upfront effort to build the page object, but pays off immediately since all 3 spec files interact with the same page.
+**Trade-offs:**
+- PRO: Always correct regardless of which filters are active
+- PRO: Consistent approach for all three dimensions (client, employee, topic)
+- CON: Re-aggregation on every filter change -- but trivial cost for hundreds/low-thousands of entries
 
 **Example:**
 
 ```typescript
-// e2e/page-objects/timesheets.page.ts
-import { type Page, type Locator } from "@playwright/test";
+// detail-tab-utils.ts
+interface TopicChartItem {
+  name: string;
+  value: number;  // hours
+  revenue: number;
+}
 
-export class TimesheetsPage {
-  readonly page: Page;
-  readonly clientSelect: Locator;
-  readonly topicSelect: Locator;
-  readonly durationPicker: Locator;
-  readonly descriptionInput: Locator;
-  readonly saveButton: Locator;
-  readonly entryCards: Locator;
-  readonly submitButton: Locator;
-  readonly weekStrip: Locator;
+export function aggregateByTopic(
+  entries: ReportEntry[],
+  isAdmin: boolean
+): TopicChartItem[] {
+  const map = new Map<string, { hours: number; revenue: number }>();
 
-  constructor(page: Page) {
-    this.page = page;
-    this.clientSelect = page.getByTestId("client-select");
-    this.topicSelect = page.getByTestId("topic-cascade-select");
-    this.durationPicker = page.getByTestId("duration-picker");
-    this.descriptionInput = page.getByPlaceholder(/description/i);
-    this.saveButton = page.getByRole("button", { name: /save/i });
-    this.entryCards = page.getByTestId("entry-card");
-    this.submitButton = page.getByRole("button", { name: /submit/i });
-    this.weekStrip = page.getByTestId("week-strip");
+  for (const entry of entries) {
+    const existing = map.get(entry.topicName) ?? { hours: 0, revenue: 0 };
+    existing.hours += entry.hours;
+    // Revenue needs client rate -- must be available on entry
+    // (see "Revenue Calculation" section below)
+    map.set(entry.topicName, existing);
   }
 
-  async goto() {
-    await this.page.goto("/timesheets");
-    await this.page.waitForLoadState("networkidle");
-  }
-
-  async createEntry(opts: {
-    client: string;
-    topic: string;
-    subtopic?: string;
-    hours: string;
-    description: string;
-  }) {
-    // Select client from dropdown
-    await this.clientSelect.click();
-    await this.page.getByRole("option", { name: opts.client }).click();
-
-    // Select topic (and subtopic if provided)
-    await this.topicSelect.click();
-    await this.page.getByRole("option", { name: opts.topic }).click();
-    if (opts.subtopic) {
-      await this.page.getByRole("option", { name: opts.subtopic }).click();
-    }
-
-    // Set duration
-    await this.durationPicker.fill(opts.hours);
-
-    // Enter description
-    await this.descriptionInput.fill(opts.description);
-
-    // Save
-    await this.saveButton.click();
-
-    // Wait for entry to appear
-    await this.page.waitForResponse("**/api/timesheets");
-  }
+  return Array.from(map.entries())
+    .map(([name, data]) => ({
+      name,
+      value: data.hours,
+      revenue: isAdmin ? data.revenue : 0,
+    }))
+    .sort((a, b) => b.value - a.value);
 }
 ```
 
-**Note on `data-testid` attributes:** The current components likely do NOT have `data-testid` attributes. Adding them to key interactive elements (client select, topic select, duration picker, entry cards, submit button, week strip days) is a minimal, non-breaking change to production code that dramatically improves test stability over CSS selectors or text matching. This is the single production code change needed for e2e test support.
+### Pattern 4: Reusable MultiSelectFilter Component
 
-**Confidence:** HIGH -- Page Object Model is the standard Playwright pattern for complex page interactions.
+**What:** A dropdown component with checkboxes, search input, select-all/clear-all actions, and pill display of selections. Modeled after the existing `ClientSelect` pattern (dropdown with search, keyboard navigation, `useClickOutside`).
+
+**When to use:** Any filter where users need to select multiple items from a list.
+
+**Interface design:**
+
+```typescript
+interface MultiSelectFilterProps {
+  label: string;                         // "Client", "Employee", "Topic"
+  options: { value: string; label: string }[];
+  selected: Set<string>;                 // empty = all (no filter)
+  onChange: (selected: Set<string>) => void;
+  placeholder?: string;                  // "All Clients"
+}
+```
+
+**Key UX details:**
+- Trigger button shows "All [Label]s" when empty set, or "N selected" / pill names when filtered
+- Dropdown has search input at top (reuse pattern from ClientSelect)
+- Checkboxes next to each option
+- "Select All" / "Clear All" links at top of list
+- Close on outside click (reuse `useClickOutside` hook)
+- `animate-fade-up` on dropdown open (matches app animation rule)
+
+**Trade-offs:**
+- PRO: Consistent with existing dropdown patterns in the codebase
+- PRO: Reusable for future filter needs
+- CON: More complex than a simple `<select multiple>` -- but native multi-select has terrible UX
 
 ## Data Flow
 
-### Authentication Flow (Test vs Production)
+### Filter-to-Visualization Pipeline
 
 ```
-PRODUCTION:
-  Browser → /login → Azure AD OAuth → Redirect → NextAuth signIn callback
-    → JWT encoded → Set next-auth.session-token cookie → Authenticated
-
-TEST:
-  auth.setup.ts → encode() with NEXTAUTH_SECRET → Set cookie in storageState
-    → storageState loaded by test browser context → Authenticated
-    (No Azure AD interaction, no signIn callback, no OAuth redirect)
+ReportData.entries (full dataset from API)
+    |
+    v
+DetailTab State:
+  selectedClients: Set<string>
+  selectedEmployees: Set<string>
+  selectedTopics: Set<string>
+    |
+    v
+filterEntries(entries, { clientIds, employeeIds, topicNames })
+    |
+    v
+filteredEntries: ReportEntry[]
+    |
+    +---> aggregateByClient(filteredEntries)  --> BarChart + RevenueBarChart
+    +---> aggregateByEmployee(filteredEntries) --> BarChart + RevenueBarChart
+    +---> aggregateByTopic(filteredEntries)    --> BarChart + RevenueBarChart
+    +---> DataTable (filteredEntries directly, with sorting/pagination)
 ```
 
-### Test Data Flow
+### Filter Option Derivation
 
 ```
-Before Each Test:
-  db fixture → connect to veda_legal_test → INSERT test user, clients,
-    topics, subtopics → pass IDs to test
-
-During Test:
-  Playwright browser → Next.js (port 3001) → API routes → Drizzle ORM
-    → veda_legal_test database (reads/writes)
-
-After Each Test:
-  db fixture → DELETE FROM time_entries, timesheet_submissions
-    → (optionally) DELETE test users/clients/topics
+ReportData
+    |
+    +---> data.byClient.map(c => ({ value: c.id, label: c.name }))  --> Client MultiSelect options
+    +---> data.byEmployee.map(e => ({ value: e.id, label: e.name })) --> Employee MultiSelect options
+    +---> uniqueTopics(data.entries)                                  --> Topic MultiSelect options
 ```
 
-### Key Data Flows
+Important: Filter options come from the UNFILTERED data (full period), not from filtered entries. If the user selects Employee A, the Client filter still shows all clients in the period (not just Employee A's clients). This prevents the "filter cascade" problem where selecting one filter narrows options in other filters, making it confusing to undo.
 
-1. **Auth state reuse:** Setup project encodes JWT once, writes `storageState` to `.auth/user.json`. All test specs load this file via Playwright config `use.storageState`. No per-test auth overhead.
+### Revenue Calculation in Filtered Aggregations
 
-2. **Database seeding:** Each test spec (or test) uses the `seedDb` fixture to insert required reference data (user, client, topic, subtopic). Time entries and submissions are created by the tests themselves through the UI, then verified via assertions on the page AND optionally queried from the test database for validation.
+The existing `ReportEntry` type includes `clientId` and `clientType` but NOT `hourlyRate`. Revenue is pre-computed in `report-utils.ts` at the `byClient` and `byEmployee` level but not on individual entries.
 
-3. **Cleanup ordering:** `cleanupTestData()` must delete in reverse FK order: `timesheet_submissions` -> `time_entries` -> (optionally reference data). Since `time_entries` has FK constraints to `users`, `clients`, `topics`, `subtopics`, and `service_description_line_items` has FK to `time_entries`, cleanup must respect this dependency chain.
+**Solution:** Add an `hourlyRate` field to `ReportEntry` (or compute revenue inline). Since `report-utils.ts` already has access to `entry.client.hourlyRate`, include a computed `revenue` field on each `ReportEntry`:
 
-## Integration Points with Existing Architecture
+```typescript
+// In ReportEntry type (modified)
+export interface ReportEntry {
+  // ... existing fields ...
+  subtopicName: string;       // NEW
+  revenue: number | null;     // NEW: pre-computed per-entry revenue (admin only)
+}
+```
 
-### NextAuth Middleware (No Changes Needed)
+Then in `report-utils.ts`, compute `revenue` per entry:
+```typescript
+revenue: isAdmin && !e.isWrittenOff && (e.client.clientType === "REGULAR") && e.client.hourlyRate
+  ? Number(e.hours) * Number(e.client.hourlyRate)
+  : null
+```
 
-| Component | File | Integration | Changes Required |
-|-----------|------|-------------|------------------|
-| Middleware | `src/middleware.ts` | `withAuth` validates JWT from cookie | NONE -- injected JWT passes validation |
-| Auth Options | `src/lib/auth.ts` | `signIn` callback not invoked during JWT validation | NONE |
-| API Auth | `src/lib/api-utils.ts` | `requireAuth()` calls `getToken()` which decodes JWT | NONE |
-| User Lookup | `src/lib/user.ts` | `getCurrentUser()` looks up user by email from session | NONE -- but test user MUST exist in test DB |
-| Session Type | `src/types/next-auth.d.ts` | Extended session fields (accessToken, error) | NONE -- e2e tests don't use M365 features |
+This avoids having to join hourly rate data during client-side re-aggregation. Each entry carries its own revenue, making aggregation a simple sum.
 
-### Database (New Test Database Required)
+### Comparison Data and Filters
 
-| Component | File | Integration | Changes Required |
-|-----------|------|-------------|------------------|
-| Drizzle Client | `src/lib/drizzle.ts` | Reads `DATABASE_URL` env var | NONE -- webServer `env` overrides to test DB |
-| Schema | `src/lib/schema.ts` | Same schema for test DB | NONE |
-| Migrations | `drizzle/*.sql` | Applied to test DB during setup | NONE -- existing migrations work as-is |
-| Drizzle Config | `drizzle.config.ts` | Reads `DATABASE_URL` env var | NONE -- test setup uses programmatic migration |
+The comparison period data (`comparisonData`) should be filtered with the same filter selections. However, comparison filtering must match by entity (client ID, employee ID, topic name), NOT by entry content. The comparison period may have different clients/employees active.
 
-### UI Components (Minimal Changes)
+```
+comparisonData.entries --> filterEntries(same filters) --> aggregate
+    --> pass as comparisonData to RevenueBarChart
+```
 
-| Component | File | Change | Purpose |
-|-----------|------|--------|---------|
-| ClientSelect | `src/components/ui/ClientSelect.tsx` | Add `data-testid="client-select"` | Stable locator for Playwright |
-| TopicCascadeSelect | `src/components/ui/TopicCascadeSelect.tsx` | Add `data-testid="topic-cascade-select"` | Stable locator |
-| DurationPicker | `src/components/ui/DurationPicker.tsx` | Add `data-testid="duration-picker"` | Stable locator |
-| EntryCard | `src/components/timesheets/EntryCard.tsx` | Add `data-testid="entry-card"` | Stable locator |
-| WeekStrip | `src/components/timesheets/WeekStrip.tsx` | Add `data-testid="week-strip"` | Stable locator |
-| Submit button | `src/components/timesheets/TimesheetsContent.tsx` | Add `data-testid="submit-button"` | Stable locator |
+### State Reset on Date/Period Change
 
-### Build & CI
+When the user changes the date range or comparison period, filters should reset to empty (show all). This follows the existing pattern where `handleDateChange` resets `selectedEmployeeId` and `selectedClientId`. The filter state lives inside `DetailTab`, so remounting the tab on data change achieves this automatically. Alternatively, use a `useEffect` keyed on `data` to reset filters.
 
-| Component | File | Integration | Changes Required |
-|-----------|------|-------------|------------------|
-| CI Workflow | `.github/workflows/ci.yml` | Add Playwright test step after unit tests | NEW step needed |
-| Package Scripts | `app/package.json` | Add `test:e2e` script | NEW script |
-| Git Ignore | `app/.gitignore` | Ignore Playwright artifacts | ADD entries |
+Recommended: Use a `key` prop on `DetailTab` tied to the data identity (e.g., date range string) so React unmounts/remounts it on date change, resetting all state naturally.
 
-## Scaling Considerations
+```typescript
+// In ReportsContent.tsx
+{activeTab === "detail" && (
+  <DetailTab
+    key={`${formatDateISO(startDate)}-${formatDateISO(endDate)}`}
+    data={data}
+    comparison={comparisonData}
+    comparisonLabel={getComparisonLabel()}
+    isAdmin={isAdmin}
+  />
+)}
+```
 
-| Concern | Current Scale (~15 tests) | Future Scale (~100 tests) |
-|---------|---------------------------|---------------------------|
-| Execution time | ~30-60 seconds with 1 worker | Consider parallel workers with per-worker DB schemas |
-| Database isolation | Single DB, sequential tests | Worker-indexed schemas or testcontainers |
-| Auth state | Single test user sufficient | Multiple storageState files per role |
-| CI resources | Local PostgreSQL in CI | GitHub Actions service container for PostgreSQL |
+## Integration Points
 
-### Scaling Priorities
+### Modified Files
 
-1. **First bottleneck (unlikely for this milestone):** Test execution time. With ~15 tests and 1 worker, total run time should be under 2 minutes. Not a concern yet.
-2. **Second bottleneck (future milestones):** If e2e coverage expands to billing, reports, client management -- consider worker-level database isolation to enable parallel execution.
+| File | Change | Reason |
+|------|--------|--------|
+| `types/reports.ts` | Add `subtopicName: string` and `revenue: number \| null` to `ReportEntry` | Detail table needs subtopic column; aggregation needs per-entry revenue |
+| `lib/report-utils.ts` | Add `subtopicName` to query columns; add `revenue` to entry mapping | Supply data for new ReportEntry fields |
+| `components/reports/ReportsContent.tsx` | Add `"detail"` to `TabType` union; add tab button; render `DetailTab` | New tab in existing tab bar |
+
+### New Files
+
+| File | Purpose | Depends On |
+|------|---------|------------|
+| `components/ui/MultiSelectFilter.tsx` | Reusable multi-select dropdown with search + checkboxes | `useClickOutside` hook |
+| `components/ui/MultiSelectFilter.test.tsx` | Unit tests for MultiSelectFilter | MultiSelectFilter |
+| `lib/detail-tab-utils.ts` | Pure functions: `filterEntries`, `aggregateByClient`, `aggregateByEmployee`, `aggregateByTopic` | `ReportEntry` type |
+| `lib/detail-tab-utils.test.ts` | Unit tests for aggregation and filtering logic | detail-tab-utils |
+| `components/reports/DetailTab.tsx` | Detail tab layout: filter bar + charts + table | MultiSelectFilter, detail-tab-utils, BarChart, RevenueBarChart, DataTable |
+| `components/reports/DetailTab.test.tsx` | Integration tests for DetailTab | DetailTab |
+
+### Unchanged Files
+
+| File | Why Unchanged |
+|------|---------------|
+| `app/api/reports/route.ts` | No new API parameters needed; filtering is client-side |
+| `components/reports/OverviewTab.tsx` | Separate tab, not affected |
+| `components/reports/ByClientTab.tsx` | Separate tab, not affected |
+| `components/reports/ByEmployeeTab.tsx` | Separate tab, not affected |
+| `components/reports/charts/BarChart.tsx` | Already supports the needed interface |
+| `components/reports/charts/RevenueBarChart.tsx` | Already supports the needed interface |
+| `components/ui/DataTable.tsx` | Already supports custom columns, sorting, pagination |
+| `app/(authenticated)/(admin)/reports/page.tsx` | Server component; no changes needed for new client-side tab |
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Testing Against Dev Database
+### Anti-Pattern 1: Server-Side Filtering via API Query Params
 
-**What people do:** Run Playwright tests against the same PostgreSQL database used for development.
-**Why it's wrong:** Tests create/delete data, corrupting dev state. Tests become non-deterministic because pre-existing data affects assertions. A developer running the app locally during a test run causes data conflicts.
-**Do this instead:** Create a dedicated `veda_legal_test` database. Point the Next.js dev server at it via `webServer.env.DATABASE_URL` in Playwright config.
+**What people do:** Add `?clientIds=X,Y&employeeIds=A,B&topicNames=T1,T2` query params to the API and filter in SQL.
+**Why it's wrong for this case:** The full dataset is already fetched (needed by Overview, By Employee, By Client tabs). Adding filter params would mean a second API call for the Detail tab, returning a subset of data already in memory. Adds API complexity, loading states, and latency for zero benefit at this data scale.
+**Do this instead:** Filter the in-memory `entries` array client-side with a `useMemo`.
 
-### Anti-Pattern 2: Adding a CredentialsProvider for Test Auth
+### Anti-Pattern 2: Cascading Filter Options
 
-**What people do:** Add a `CredentialsProvider` to `authOptions` that accepts test credentials, gated by `process.env.NODE_ENV === 'test'`.
-**Why it's wrong:** Introduces a code path that ONLY exists for testing. Risk of accidentally enabling it in production. Adds complexity to `auth.ts`. Unnecessary when JWT encode achieves the same result without any production code changes.
-**Do this instead:** Use `encode()` from `next-auth/jwt` to create a valid session token. Zero production code changes.
+**What people do:** When Employee A is selected, narrow the Client dropdown to only clients Employee A worked on.
+**Why it's wrong:** Creates a confusing dependency chain. If you select Employee A then Client X, then deselect Employee A, does Client X stay selected even though the option disappears? Users cannot explore data combinations freely. "Why did my client options change?" becomes a FAQ.
+**Do this instead:** Derive filter options from the UNFILTERED dataset. All filters are independent. Selecting Employee A filters the charts and table, but Client and Topic dropdowns still show all options from the full period.
 
-### Anti-Pattern 3: Intercepting /api/auth/session in Playwright
+### Anti-Pattern 3: Separate State for Each Chart's Data
 
-**What people do:** Use `page.route("**/api/auth/session", ...)` to return a mock session object.
-**Why it's wrong:** Only intercepts client-side requests. Server components and server-side `getServerSession()` calls still need a real JWT cookie. The middleware validates the JWT before the route handler ever runs. Client-side interception alone does not provide authenticated access.
-**Do this instead:** Inject the JWT cookie so ALL auth checks pass -- middleware, server components, and API routes.
+**What people do:** Compute and store `byClientChartData`, `byEmployeeChartData`, `byTopicChartData` as separate state variables, updating each when filters change.
+**Why it's wrong:** Duplicates derived state. Risk of charts showing inconsistent data if one state update is missed. More state = more bugs.
+**Do this instead:** Single source of truth: `filteredEntries` derived via `useMemo`. Each chart's data derived from `filteredEntries` via separate `useMemo` calls. React handles re-rendering automatically.
 
-### Anti-Pattern 4: Using `globalSetup` for Auth
+### Anti-Pattern 4: Putting Filter Logic Inside the MultiSelectFilter Component
 
-**What people do:** Use Playwright's `globalSetup` function to set up auth and seed the database.
-**Why it's wrong:** `globalSetup` runs outside Playwright's test infrastructure. No traces, no HTML report entries, no fixture support, no Playwright inspector access. Makes debugging setup failures much harder.
-**Do this instead:** Use a setup project with `dependencies` in `playwright.config.ts`. This is Playwright's recommended approach since v1.31.
-
-### Anti-Pattern 5: Seeding Data Through the UI
-
-**What people do:** Create test data (users, clients, topics) by navigating through the admin pages in Playwright before running actual tests.
-**Why it's wrong:** Extremely slow (multiple page navigations per setup). Fragile (UI changes break data setup, not just test assertions). Creates coupling between unrelated features.
-**Do this instead:** Seed data directly via Drizzle ORM in fixtures. Reserve UI interactions for the features actually being tested.
+**What people do:** Have the MultiSelectFilter component own the filtering logic (accepting the full dataset and returning filtered data).
+**Why it's wrong:** Couples a generic UI component to report-specific data shapes. Makes the component non-reusable. Makes testing harder.
+**Do this instead:** MultiSelectFilter is purely a UI component: receives options, selected set, and onChange callback. The parent (DetailTab) owns filter state and derives filtered data.
 
 ## Build Order (Dependency-Aware)
 
-The following build order respects dependencies -- each phase depends on the previous:
+### Phase 1: Data Layer Changes
 
-### Phase 1: Infrastructure (No tests yet)
+1. **`types/reports.ts`** -- Add `subtopicName: string` and `revenue: number | null` to `ReportEntry`
+2. **`lib/report-utils.ts`** -- Add `subtopicName` to query columns; compute `revenue` per entry in mapping
+3. **Update existing report-utils tests** if they assert on the entry shape
 
-1. Create test database (`veda_legal_test`) and document setup
-2. Create `e2e/` directory structure
-3. Write `e2e/playwright.config.ts` with webServer, setup project, and chromium project
-4. Write `e2e/.env.test` with `TEST_DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`
-5. Write `e2e/helpers/db-utils.ts` (Drizzle client for test DB, migration runner)
-6. Write `e2e/helpers/seed-data.ts` (test data factories)
-7. Write `e2e/fixtures/auth.ts` (JWT encode helper)
-8. Write `e2e/setup/auth.setup.ts` (generate storageState)
-9. Write `e2e/fixtures/db.ts` (seed/cleanup fixture)
-10. Write `e2e/fixtures/test.ts` (composed test export with auth + db)
-11. Add `data-testid` attributes to key UI components
-12. Add `test:e2e` script to `package.json`
-13. Add Playwright artifacts to `.gitignore`
-14. Verify: one smoke test (`page.goto("/timesheets")` renders without redirect to `/login`)
+**Why first:** All downstream components depend on the correct data shape. Changing the type first surfaces any type errors across the codebase.
 
-**Why this order:** Auth bypass must work before any test can run. Database seeding must work before tests can create entries (need client/topic reference data). The smoke test validates the entire infrastructure chain.
+### Phase 2: Pure Logic Layer
 
-### Phase 2: Core Timesheet Tests
+4. **`lib/detail-tab-utils.ts`** -- `filterEntries`, `aggregateByClient`, `aggregateByEmployee`, `aggregateByTopic`
+5. **`lib/detail-tab-utils.test.ts`** -- Unit tests for all pure functions
 
-15. Write `e2e/page-objects/timesheets.page.ts`
-16. Write `e2e/specs/timesheet-entry.spec.ts` (create, edit, delete entries)
-17. Write `e2e/specs/weekstrip-nav.spec.ts` (date navigation)
-18. Write `e2e/specs/submission.spec.ts` (submit/revoke daily timesheet)
+**Why second:** These are pure functions with no React dependency. Easiest to write and test in isolation. Every downstream component depends on them.
 
-**Why this order:** Page object first because all specs use it. Entry CRUD before submission because submission depends on having entries.
+### Phase 3: MultiSelectFilter Component
 
-### Phase 3: CI Integration
+6. **`components/ui/MultiSelectFilter.tsx`** -- Reusable dropdown with checkboxes, search, select-all/clear
+7. **`components/ui/MultiSelectFilter.test.tsx`** -- Unit tests (render, toggle, search, select all, clear)
 
-19. Add Playwright step to `.github/workflows/ci.yml` (PostgreSQL service container, run migrations, run tests)
-20. Verify CI pipeline passes
+**Why third:** DetailTab needs this component, but it can be built and tested independently.
 
-## Environment Configuration
+### Phase 4: DetailTab Assembly
 
-### Required Environment Variables for Tests
+8. **`components/reports/DetailTab.tsx`** -- Filter bar (3x MultiSelectFilter), charts section (6 charts: 3 hours + 3 revenue), entry DataTable
+9. **`components/reports/DetailTab.test.tsx`** -- Integration tests (filter changes update charts/table)
+10. **`components/reports/ReportsContent.tsx`** -- Add "Detail" tab to tab bar and render DetailTab
 
-```bash
-# e2e/.env.test
-TEST_DATABASE_URL=postgresql://localhost:5432/veda_legal_test
-NEXTAUTH_SECRET=test-secret-at-least-32-chars-long-for-e2e
-NEXTAUTH_URL=http://localhost:3001
+**Why last:** Depends on all previous phases. This is pure assembly -- wiring together existing BarChart/RevenueBarChart/DataTable with the new filter state and aggregation utils.
 
-# Note: AZURE_AD_* vars are NOT needed -- tests bypass OAuth entirely
+### Summary of Changes by Category
+
+| Category | Files Changed | Files Created |
+|----------|---------------|---------------|
+| Types | 1 (`reports.ts`) | 0 |
+| Data/API | 1 (`report-utils.ts`) | 0 |
+| Pure Logic | 0 | 2 (`detail-tab-utils.ts` + test) |
+| UI Component | 0 | 2 (`MultiSelectFilter.tsx` + test) |
+| Report Components | 1 (`ReportsContent.tsx`) | 2 (`DetailTab.tsx` + test) |
+| **Total** | **3 modified** | **6 new** |
+
+## Scaling Considerations
+
+| Concern | Current Scale (~200 clients, ~10 employees) | If Scale Grew 10x |
+|---------|----------------------------------------------|---------------------|
+| Client-side filtering | Instant (< 5K entries/month) | Still fine (< 50K). Consider server-side only at 100K+ entries. |
+| Chart rendering | 6 Recharts charts, each < 200 items | Top-15 grouping already handles this. No concern. |
+| Filter option lists | ~200 clients, ~10 employees, ~30 topics | Still instant. Only virtualize at 1K+ options. |
+| DataTable pagination | 50 rows/page, standard sorting | Already paginated. No concern. |
+
+### Scaling Priorities
+
+1. **First bottleneck (unlikely):** If entry count per period exceeds ~50K, the `entries` array in the API response becomes large. Solution: Add optional server-side filtering to `/api/reports` at that point. Not needed now.
+2. **Second bottleneck (very unlikely):** If topic count exceeds ~100, the "by Topic" chart would need top-N grouping (same `maxBars` pattern already used in BarChart). Easy to add.
+
+## Detail Tab Layout Specification
+
+### Chart Grid (3 Columns)
+
+```
+┌────────────────┬────────────────┬────────────────┐
+│ Hours by       │ Hours by       │ Hours by       │
+│ Client         │ Employee       │ Topic          │
+│ (BarChart)     │ (BarChart)     │ (BarChart)     │
+├────────────────┼────────────────┼────────────────┤
+│ Revenue by     │ Revenue by     │ Revenue by     │  (admin only row)
+│ Client         │ Employee       │ Topic          │
+│ (RevenueBar)   │ (RevenueBar)   │ (RevenueBar)   │
+└────────────────┴────────────────┴────────────────┘
 ```
 
-### Test Database Setup (One-Time)
+On smaller screens (`md` breakpoint), collapse to 1 column. Use `grid grid-cols-1 lg:grid-cols-3 gap-4` to match the existing 2-column pattern in OverviewTab but expanded to 3 for the detail view.
 
-```bash
-# Create the test database (run once)
-createdb veda_legal_test
+### Entry Table Columns
 
-# Apply migrations (automated in test setup, but can be done manually)
-DATABASE_URL=postgresql://localhost:5432/veda_legal_test npm run db:migrate
-```
+| Column | Source Field | Sortable | Admin Only |
+|--------|-------------|----------|------------|
+| Date | `entry.date` | Yes | No |
+| Employee | `entry.userName` | Yes | No |
+| Client | `entry.clientName` | Yes | No |
+| Topic | `entry.topicName` | Yes | No |
+| Subtopic | `entry.subtopicName` | Yes | No |
+| Description | `entry.description` | No | No |
+| Hours | `entry.hours` | Yes | No |
+| Revenue | `entry.revenue` | Yes | Yes |
 
-### CI Configuration (GitHub Actions)
-
-```yaml
-# In .github/workflows/ci.yml
-services:
-  postgres:
-    image: postgres:17
-    env:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: veda_legal_test
-    ports:
-      - 5432:5432
-    options: >-
-      --health-cmd pg_isready
-      --health-interval 10s
-      --health-timeout 5s
-      --health-retries 5
-```
+Reuse the existing `DataTable` with `ColumnDef<ReportEntry>[]`. Page size 50 (matches drill-down tabs).
 
 ## Sources
 
-- [Playwright Authentication Docs](https://playwright.dev/docs/auth) -- storageState pattern, setup projects
-- [Playwright Web Server Docs](https://playwright.dev/docs/test-webserver) -- webServer config, reuseExistingServer
-- [Playwright Global Setup and Teardown](https://playwright.dev/docs/test-global-setup-teardown) -- why setup projects are preferred
-- [NextAuth Issue #6796](https://github.com/nextauthjs/next-auth/issues/6796) -- community patterns for e2e testing with NextAuth
-- [Authenticated tests with Playwright, Prisma, Postgres, and NextAuth](https://dev.to/amandamartindev/authenticated-tests-with-playwright-prisma-postgres-and-nextauth-12pc) -- JWT encode + cookie injection pattern
-- [Playwright with Next-Auth and Prisma](https://echobind.com/post/playwright-with-next-auth) -- storageState approach with NextAuth
-- [Auth.js Testing Guide](https://authjs.dev/guides/testing) -- official testing recommendations
-- [Next.js Experimental Test Mode README](https://github.com/vercel/next.js/blob/canary/packages/next/src/experimental/testmode/playwright/README.md) -- evaluated and rejected for this use case
-- [A better global setup in Playwright](https://dev.to/playwright/a-better-global-setup-in-playwright-reusing-login-with-project-dependencies-14) -- setup project vs globalSetup comparison
-- Verified: `next-auth/jwt` exports `encode`, `decode`, `getToken` in installed version 4.24.13
-- Verified: Playwright installed version 1.57.0 supports setup projects
-- Verified: Next.js 16.0.10 `withAuth` middleware validates JWT from cookie
+- Existing codebase analysis (HIGH confidence -- direct code reading)
+- `ReportsContent.tsx`: Tab architecture, data flow, state management patterns
+- `report-utils.ts`: Query shape, aggregation logic, entry mapping
+- `types/reports.ts`: ReportData, ReportEntry, EmployeeStats, ClientStats types
+- `BarChart.tsx`, `RevenueBarChart.tsx`: Chart component interfaces, maxBars grouping
+- `DataTable.tsx`, `table-types.ts`: Table component interface, ColumnDef, sorting
+- `ClientSelect.tsx`: Dropdown pattern with search, useClickOutside, keyboard nav
+- `schema.ts`: `timeEntries.subtopicName` field exists, ready to query
 
 ---
-*Architecture research for: Playwright e2e test integration with Next.js 16 + NextAuth + PostgreSQL*
+*Architecture research for: Reports Detail View with multi-select filters, topic aggregation, chart-filter interactivity*
 *Researched: 2026-02-25*

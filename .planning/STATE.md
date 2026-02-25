@@ -60,5 +60,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Roadmap created for v1.2 milestone
-Resume file: None
+Stopped at: Phase 8 context gathered
+Resume file: .planning/phases/08-data-layer-foundation/08-CONTEXT.md

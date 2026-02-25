@@ -107,7 +107,7 @@ export function ClientSelect({
   };
 
   return (
-    <div ref={dropdownRef} className={`relative ${className}`}>
+    <div ref={dropdownRef} className={`relative ${className}`} data-testid="client-select">
       {/* Trigger Button */}
       <button
         type="button"

@@ -13,62 +13,11 @@ import {
   getPreviousYear,
   formatMonthShort,
 } from "@/lib/date-utils";
+import type { ReportData, DrillDownEntry } from "@/types/reports";
+
+export type { ReportData };
 
 type TabType = "overview" | "by-employee" | "by-client";
-
-interface EmployeeStats {
-  id: string;
-  name: string;
-  totalHours: number;
-  clientCount: number;
-  topClient: { name: string; hours: number } | null;
-  clients: { id: string; name: string; hours: number }[];
-  dailyHours: { date: string; hours: number }[];
-}
-
-interface ClientStats {
-  id: string;
-  name: string;
-  hourlyRate: number | null;
-  totalHours: number;
-  revenue: number | null;
-  employees: { id: string; name: string; hours: number }[];
-}
-
-interface Entry {
-  id: string;
-  date: string;
-  hours: number;
-  description: string;
-  client: {
-    id: string;
-    name: string;
-  };
-  employee: {
-    id: string;
-    name: string;
-  };
-}
-
-export interface ReportData {
-  summary: {
-    totalHours: number;
-    totalRevenue: number | null;
-    activeClients: number;
-  };
-  byEmployee: EmployeeStats[];
-  byClient: ClientStats[];
-  entries: {
-    id: string;
-    date: string;
-    hours: number;
-    description: string;
-    userId: string;
-    userName: string;
-    clientId: string;
-    clientName: string;
-  }[];
-}
 
 interface ReportsContentProps {
   initialData: ReportData;
@@ -231,11 +180,12 @@ export function ReportsContent({
   };
 
   // Transform entries for tab components
-  const transformedEntries: Entry[] = data.entries.map((e) => ({
+  const transformedEntries: DrillDownEntry[] = data.entries.map((e) => ({
     id: e.id,
     date: e.date,
     hours: e.hours,
     description: e.description,
+    topicName: e.topicName,
     client: {
       id: e.clientId,
       name: e.clientName,

@@ -1,126 +1,213 @@
 # Pitfalls Research
 
-**Domain:** Legal practice reporting dashboard enhancements (revenue views, drill-downs, topic breakdowns)
-**Researched:** 2026-02-24
+**Domain:** Adding Playwright e2e tests to existing Next.js 16 app with Azure AD SSO and PostgreSQL
+**Researched:** 2026-02-25
 **Confidence:** HIGH
 
 ## Critical Pitfalls
 
-### Pitfall 1: Estimated vs Actual Revenue Numbers Will Diverge and Confuse Users
+### Pitfall 1: Auth Bypass Leaking to Production
 
 **What goes wrong:**
-The overview will show two revenue figures per client: estimated (hours x hourlyRate) and actual (from finalized service descriptions). These numbers will almost never match due to discounts, caps, waivers, retainer logic, and FIXED-fee topics. Partners will see a client with 50h at 200 EUR/h showing 10,000 EUR estimated but 7,200 EUR actual (after a cap + discount), and assume something is broken.
+The most common approach for e2e testing with NextAuth is adding a `CredentialsProvider` gated by `NODE_ENV !== "production"`. This bypass allows Playwright to authenticate without Azure AD. The danger: `NODE_ENV` checks are fragile. Next.js sets `NODE_ENV=production` during `next build` even in development, meaning a conditional like `process.env.NODE_ENV !== "production"` evaluates differently at build time vs runtime. A misconfigured deployment could ship the CredentialsProvider to production, giving anyone with the test credentials full access to the app.
+
+This project's auth flow is particularly sensitive: `signIn` callback in `lib/auth.ts` checks the user whitelist in the database and updates `lastLogin`. A test bypass that skips this callback means tests never exercise the real auth path, and worse, a leaked bypass skips the whitelist entirely.
 
 **Why it happens:**
-The billing system has at least six mechanisms that cause actual billed amounts to differ from naive rate-times-hours: topic-level caps (`capHours`), topic-level discounts (`discountType`/`discountValue`), SD-level discounts, waived line items (`EXCLUDED`/`ZERO`), retainer allowances (`retainerFee`/`retainerHours` with overage billing), and FIXED-fee topics. Each of these legitimately changes the billed amount. Developers often add dual metrics without explaining the gap.
+NextAuth v4 with JWT strategy requires either (a) a real OAuth flow, (b) a CredentialsProvider, or (c) manual JWT cookie injection. Developers choose (b) because it is simplest, but the environment gating is error-prone. The Auth.js official testing guide explicitly warns: "you must be extremely careful that you do not leave insecure authentication methods available in production."
 
 **How to avoid:**
-- Label estimated revenue as "Estimated (Rate x Hours)" and actual as "Billed (Finalized)" with clear visual distinction (e.g., different colors or a dashed vs solid line).
-- Only show actual revenue for periods where finalized SDs exist. Show a "No finalized bills" indicator when actual is unavailable rather than 0 EUR (which implies zero billing rather than no data).
-- Consider a tooltip or info icon explaining why the numbers differ on the revenue chart.
-- Do NOT attempt to reconcile them in a single combined figure.
+Use approach (c): manual JWT cookie injection. NextAuth v4 exports an `encode` function from `next-auth/jwt` that can produce a valid `next-auth.session-token` cookie. In a Playwright `globalSetup` file:
+
+1. Ensure a test user exists in the database (seeded during setup).
+2. Call `encode({ token: { email: "test@example.com", name: "Test User", sub: "test-user-id" }, secret: process.env.NEXTAUTH_SECRET })` to produce a signed JWT.
+3. Inject the cookie into the Playwright browser context via `context.addCookies()`.
+
+This requires zero changes to production auth code. No CredentialsProvider, no `NODE_ENV` checks, no risk of leaking.
 
 **Warning signs:**
-- User asks "why doesn't the revenue match?" within the first week.
-- Actual revenue shows as 0 EUR for recent months (SDs not yet finalized).
-- Clients with retainers show wildly different estimated vs actual.
+- Any `if (process.env.NODE_ENV` check inside `auth.ts` or `authOptions`
+- A CredentialsProvider in the providers array
+- Test-specific secrets or passwords in environment variables
+- Auth bypass code outside the `e2e/` directory
 
 **Phase to address:**
-Revenue charts phase. The UI labeling and empty-state handling must be defined before implementation.
+Phase 1: Infrastructure setup. The auth strategy must be decided and implemented before any test can run.
 
 ---
 
-### Pitfall 2: Application-Side Aggregation Will Not Scale When Adding Topic Breakdowns and Full Entry Tables
+### Pitfall 2: Database State Leakage Between Tests
 
 **What goes wrong:**
-The current reports API (`/api/reports`) fetches all raw time entries into Node.js memory and aggregates using JavaScript Maps (lines 117-189 in `route.ts`, duplicated in `page.tsx` lines 57-181). Adding topic breakdowns and removing the 10-entry limit means this pattern must now handle: (a) a new aggregation dimension (topic), (b) all entries for the period instead of slicing to 10, and (c) potentially SD data for actual revenue. The response payload grows significantly and the in-memory aggregation becomes a three-dimensional cross-product (employee x client x topic).
+E2e tests create real data in PostgreSQL (time entries, submissions, users). Without cleanup, Test B sees data created by Test A. This causes intermittent failures: tests pass when run alone but fail in sequence. Worse, with Playwright's parallel workers, two tests writing to the same table produce race conditions -- a test asserting "user has 0 entries" fails because a parallel test just created one.
+
+This project's schema has cascading foreign keys (`ON DELETE CASCADE` on `time_entries.userId`), unique constraints (`timesheet_submissions.userId + date`), and status-dependent logic (`ClientStatus`, `UserStatus`). Leaked state from one test can trigger constraint violations or status-dependent behavior in another.
 
 **Why it happens:**
-The original implementation was reasonable for a simple hours-only report with ~10 employees and monthly periods (~500-2000 entries). But each new breakdown dimension multiplies the Maps and the response payload. The all-entries table removes the natural limit. Developers tend to bolt on new aggregations to the existing pattern rather than rethinking the data flow.
+Unlike unit tests (which mock the database), e2e tests hit the real database through the real app. Transaction rollback -- the standard isolation technique for integration tests -- does not work for e2e tests because the test process and the app process are separate. The test cannot wrap the app's database operations in a transaction.
 
 **How to avoid:**
-- Move aggregation to SQL with `GROUP BY` for the new topic dimension. PostgreSQL handles multi-dimensional aggregation (SUM, GROUP BY client, employee, topic) far more efficiently than JavaScript Maps, especially with the existing indexes on `time_entries.topicId`, `clientId`, `userId`, and `date`.
-- Keep raw entries as a separate concern from aggregated summaries. The drill-down entry table should be a filtered query, not a full dump embedded in the main response.
-- Consider splitting the API: `/api/reports/summary` for aggregated stats, `/api/reports/entries?clientId=X` for drill-down entries. This avoids sending all entries on every tab switch.
+Use a dedicated test database (`veda_legal_test`) with truncation-based cleanup. In `globalSetup`:
+
+1. Set `DATABASE_URL` to the test database.
+2. Run migrations to ensure schema is current.
+3. Seed reference data (users, clients, topics, subtopics) that tests need.
+
+Between test files (in `beforeEach` or a Playwright fixture):
+
+4. Truncate only mutable tables (`time_entries`, `timesheet_submissions`, `service_descriptions`, `service_description_topics`, `service_description_line_items`) using `TRUNCATE ... CASCADE`.
+5. Re-seed per-test data as needed.
+
+Do NOT truncate reference tables (users, clients, topics) between tests -- seed them once and treat as read-only. This avoids the expensive re-seeding overhead.
+
+For parallel workers: run tests with `fullyParallel: false` initially (serial execution within each spec file). Only enable full parallelism if test suite time justifies the complexity of per-worker database isolation.
 
 **Warning signs:**
-- Response payload exceeds 500KB for a monthly report.
-- The API handler grows past 300 lines with nested Map operations.
-- Client-side `transformedEntries` computed on every render even when the entries tab is not visible.
-- Code duplication between server-side `page.tsx` and API `route.ts` aggregation logic (already exists, lines 14-249 in `page.tsx` mirror `route.ts`).
+- Tests pass individually (`npx playwright test timesheets.spec.ts`) but fail in full suite
+- Tests fail differently on repeated runs
+- Constraint violation errors (`duplicate key value violates unique constraint`)
+- Assertions on "empty state" fail because stale data exists
 
 **Phase to address:**
-API refactoring phase, before adding topic breakdowns. The SQL migration should happen first so topic breakdowns are built on the right foundation.
+Phase 1: Infrastructure setup. Database isolation strategy must be in place before writing any tests.
 
 ---
 
-### Pitfall 3: Querying Finalized SD Totals for Revenue Charts Will Be Expensive Without Denormalization
+### Pitfall 3: Testing Against Dev Server Instead of Production Build
 
 **What goes wrong:**
-To show "actual billed revenue by client" in the overview, the API needs to: (1) find all FINALIZED service descriptions overlapping the date range, (2) load all their topics and line items, (3) run `calculateGrandTotal()` or `calculateRetainerGrandTotal()` for each SD. This mirrors the existing N+1 problem already documented in CONCERNS.md for the billing list page (`GET /api/billing` lines 66-102). For a quarterly report covering 50+ clients with finalized SDs, this could mean loading hundreds of topics and thousands of line items just to compute a set of totals.
+Playwright's `webServer` config makes it easy to start `next dev` and run tests against it. This is misleading: the dev server includes hot-reload, unoptimized bundles, verbose error overlays, and different caching behavior. Tests pass locally against `next dev` but fail in CI against `next build && next start` because:
+
+- Server Components behave differently (no re-render on every request in production)
+- Static pages may be pre-rendered at build time (not fetched live)
+- Error boundaries render differently (no error overlay)
+- API routes have different response timing (no compilation delay)
+
+This project uses `output: "standalone"` in `next.config.ts`, which means the production server runs from `.next/standalone/`, not the source tree. Testing against dev gives no confidence that the standalone build works.
 
 **Why it happens:**
-The billing system deliberately computes totals on-the-fly from raw line item data (no `cachedTotal` column on `service_descriptions`). This design ensures totals are always correct after edits, but it means every consumer of total data must load the full nested structure. The CONCERNS.md already identifies this as a performance bottleneck for the billing list.
+`next dev` starts in ~2 seconds. `next build` takes 30-60 seconds. Developers optimize for fast feedback loops during development and forget to switch the CI config. Playwright's docs show `next dev` in examples for simplicity, reinforcing the bad habit.
 
 **How to avoid:**
-- Add a `cachedTotal` column to `service_descriptions` (or a separate `sd_totals` materialized view). Update it when a SD is finalized. Since finalized SDs are immutable (status cannot revert to DRAFT without admin unlock), the cached value will not drift.
-- For the reports API, query only `SELECT client_id, SUM(cached_total) FROM service_descriptions WHERE status = 'FINALIZED' AND period_start >= ? AND period_end <= ? GROUP BY client_id`. This is a single indexed query instead of loading nested structures.
-- If denormalization is deferred, at minimum use the billing list API's existing pattern (load only `{ hours, waiveMode }` from line items, not full descriptions) to minimize data transfer.
+Configure `playwright.config.ts` with:
+```typescript
+webServer: {
+  command: 'npm run build && npm run start',
+  url: 'http://localhost:3000',
+  reuseExistingServer: !process.env.CI,
+  timeout: 120000, // build can take time
+}
+```
+
+In local development, `reuseExistingServer: true` lets you run `npm run dev` manually and point Playwright at it for fast iteration. In CI, the full build runs every time.
 
 **Warning signs:**
-- Reports API response time exceeds 2 seconds when date range spans 3+ months.
-- The reports API imports billing calculation functions from `billing-pdf.tsx`.
-- Memory spikes on the server during report generation.
+- `webServer.command` contains `next dev` or `npm run dev`
+- Tests pass locally but fail in CI with hydration or rendering errors
+- No `next build` step in the CI workflow
 
 **Phase to address:**
-Schema/migration phase before revenue chart implementation. Adding the `cachedTotal` column and backfilling for existing finalized SDs should be a prerequisite.
+Phase 1: Infrastructure setup. The Playwright config must be correct from the start.
 
 ---
 
-### Pitfall 4: SD Period Overlap Creates Ambiguous Revenue Attribution
+### Pitfall 4: Over-Testing What Unit Tests Already Cover
 
 **What goes wrong:**
-Service descriptions have `periodStart` and `periodEnd` fields that define the billing period. When the user selects "February 2026" in the reports date picker, the query must decide: include SDs where `periodStart` falls in February? Where `periodEnd` falls in February? Where the period overlaps February at all? A SD covering Jan 15 - Feb 15 could be counted in January, February, or both. This ambiguity does not exist for estimated revenue (each time entry has a single date).
+The project has 965 unit/integration tests across 46 files. The timesheet components already have unit tests: `EntryForm.test.tsx`, `WeekStrip.test.tsx`, `EntriesList.test.tsx`. A common mistake is writing e2e tests that duplicate this coverage -- testing input validation rules, date formatting, hour parsing, description length checks. These are cheaper and faster to test at the unit level. An e2e test that verifies "description under 10 characters shows error" adds maintenance burden without meaningful confidence gain over the existing `isValidDescription` unit test.
+
+E2e test suites that grow past 50-100 tests typically become the slowest part of CI, and teams start skipping or ignoring them. The project's CI already runs 965 unit tests; adding a bloated e2e suite could double the pipeline time.
 
 **Why it happens:**
-Billing periods are client-specific and do not always align with calendar months. The current schema has no constraint preventing overlapping periods for the same client. The reports date picker was designed for time entries (single-date entities), not for range-based billing documents.
+E2e tests are satisfying to write -- you see the browser doing things. Developers treat each form field as a test case rather than focusing on the workflow that connects them. The testing pyramid inverts: e2e tests cover what unit tests should, and unit tests cover what the e2e tests already exercise.
 
 **How to avoid:**
-- Use `periodEnd` as the attribution date (the bill "lands" at the end of the period). This is the accounting convention and avoids double-counting: a SD with period Jan 15 - Feb 15 is attributed to February.
-- Document this rule clearly in the API response and consider adding it as a tooltip in the UI.
-- Add a DB constraint or application-level validation preventing overlapping SD periods for the same client (if not already present).
-- For SDs spanning multiple months (e.g., quarterly), attribute the full amount to the `periodEnd` month rather than splitting proportionally, which adds unjustified complexity.
+E2e tests should cover **workflows that cross boundaries**, not individual component behaviors:
+
+**DO test with e2e:**
+- "User creates a time entry, sees it in the list, edits it, deletes it" (full CRUD workflow)
+- "User navigates to a different day via WeekStrip, creates an entry, navigates back, entry is gone from view" (navigation + data persistence)
+- "User submits a day, sees submission indicator, revokes, can edit again" (multi-step state machine)
+
+**DO NOT test with e2e:**
+- Input validation edge cases (unit test on `isValidDescription`, `isValidHours`)
+- Date formatting display (unit test on `formatHours`, `parseHoursToComponents`)
+- Component rendering variants (unit test with React Testing Library)
+- API error responses (unit test on route handlers)
+
+Target 10-20 e2e tests for the timesheets feature, not 50+.
 
 **Warning signs:**
-- Revenue for a client appears in two adjacent months.
-- Users report "missing" revenue that was actually attributed to a different month.
-- Quarterly reports show different revenue totals than summing three monthly reports.
+- E2e test file has >15 `test()` blocks for a single page
+- Test names reference specific validation rules ("rejects hours > 12")
+- Tests assert text formatting or CSS classes rather than user outcomes
+- E2e suite takes >5 minutes to run
 
 **Phase to address:**
-Revenue query design phase. The attribution rule must be decided before writing the SQL query.
+Phase 2: Test writing. Define a test plan before writing tests. Each e2e test should map to a user workflow, not a component behavior.
 
 ---
 
-### Pitfall 5: Removing the 10-Entry Limit Without Virtualization Will Degrade Drill-Down Performance
+### Pitfall 5: Fragile Selectors That Break on UI Changes
 
 **What goes wrong:**
-The current drill-down tables slice to `recentEntries.slice(0, 10)` (ByEmployeeTab line 129, ByClientTab line 139). The requirement says "ALL entries for selected date range." A busy employee with 20 entries/day over a full month means ~400+ table rows. A year-long date range could mean 5000+ rows per employee. Rendering thousands of `<tr>` elements in a plain HTML table causes visible lag, especially with the current per-cell styling (4 Tailwind classes per `<td>`).
+Tests use CSS class selectors (`page.locator('.bg-elevated .text-accent-pink')`), DOM structure (`page.locator('div > div > button')`), or auto-generated attributes that change between builds. When the design system evolves (this project uses Tailwind v4 with CSS variables), every class rename breaks e2e tests. The Tailwind v4 migration alone could invalidate dozens of selectors.
+
+This project's components use Tailwind utility classes extensively (e.g., `bg-[var(--bg-elevated)]`, `text-[var(--accent-pink)]`). These are implementation details that should never appear in tests.
 
 **Why it happens:**
-At 10 entries, DOM performance is irrelevant. Developers remove the `.slice(0, 10)` and assume it scales. It does not. React re-renders the entire table on any state change in the parent `ReportsContent` component (tab switch, date change, comparison change).
+Developers inspect the DOM in DevTools, copy a selector that works, and paste it into the test. It works today but is coupled to the current markup. Role-based and text-based selectors require knowing what the component does, not how it looks.
 
 **How to avoid:**
-- For the expected data volume (~10 employees, ~200 clients, months of data), pagination with 50-100 entries per page is sufficient and simpler than virtualization. Add a page size selector and page navigation.
-- Virtualization (react-window, TanStack Virtual) is overkill at this scale but becomes necessary if the table ever shows year-long data for all employees. Defer virtualization unless year-range reports are explicitly required.
-- Regardless of approach, the entry table should be a separate component with `React.memo()` to prevent re-renders when the parent state changes.
+Use Playwright's recommended locator hierarchy:
+1. `page.getByRole('button', { name: 'Save Entry' })` -- accessible role + visible text
+2. `page.getByLabel('Hours')` -- form field labels
+3. `page.getByText('No entries for this day')` -- visible text content
+4. `page.getByTestId('entry-card-123')` -- explicit test IDs for dynamic content
+
+Add `data-testid` attributes to components that have no accessible role or unique text:
+- `EntryCard` -> `data-testid="entry-card-{id}"`
+- `WeekStrip` day buttons -> already have accessible day names
+- Submission button -> already has button text
+
+Avoid: `page.locator('.entry-card')`, `page.locator('[class*="elevated"]')`, `page.locator('div:nth-child(3)')`.
 
 **Warning signs:**
-- Drill-down tab takes >500ms to render after selecting an employee/client.
-- Browser DevTools shows >1000 DOM nodes in the entry table.
-- Scrolling the entry table is janky (frame drops below 30fps).
+- Tests import Tailwind class names or CSS variable names
+- Selectors contain `>`, `:nth-child`, or class names
+- A design change (color, spacing, layout) breaks e2e tests
+- Multiple tests break from a single component refactor
 
 **Phase to address:**
-Entry table implementation phase. The pagination approach should be decided before implementing "show all entries."
+Phase 1-2: Add `data-testid` attributes during infrastructure setup; enforce locator patterns during test writing via code review.
+
+---
+
+### Pitfall 6: Flaky Tests from Timing and Animation Assumptions
+
+**What goes wrong:**
+The project uses `animate-fade-up` for modals and dropdowns (per `CLAUDE.md` animation rule). Tests that click a button and immediately assert on the modal content fail intermittently because the animation has not completed. Similarly, API calls for creating/editing time entries have variable latency -- a test that clicks "Save" and immediately checks the entries list may see stale data.
+
+The `TopicCascadeSelect` component involves a multi-step dropdown interaction (select topic, then subtopic). Each step involves a dropdown animation and potentially a network request. Race conditions between clicks and UI updates are the primary source of flaky e2e tests.
+
+**Why it happens:**
+Tests work locally (fast machine, instant API) but fail in CI (slower runner, network variability). Developers add `page.waitForTimeout(500)` as a band-aid, which makes tests slow AND still flaky (500ms is not always enough, and it wastes time when the UI is ready in 50ms).
+
+**How to avoid:**
+Never use `page.waitForTimeout()` except for debugging. Instead:
+- Use auto-waiting assertions: `await expect(page.getByRole('dialog')).toBeVisible()` waits for the modal to appear, regardless of animation duration.
+- Wait for network idle after mutations: `await page.waitForResponse(resp => resp.url().includes('/api/timesheets') && resp.status() === 201)` after creating an entry.
+- For the cascade select: wait for each dropdown to be visible before clicking the next option.
+- For entry list updates after CRUD: wait for the entry card to appear/disappear rather than waiting for a fixed time.
+
+**Warning signs:**
+- Any `page.waitForTimeout()` call in test code
+- Tests that pass 9/10 times (flaky rate >1%)
+- CI logs showing "element not found" or "element not visible" errors
+- Tests with `{ timeout: 30000 }` overrides
+
+**Phase to address:**
+Phase 2: Test writing. Establish wait patterns in shared test utilities/fixtures.
 
 ---
 
@@ -128,83 +215,96 @@ Entry table implementation phase. The pagination approach should be decided befo
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Keeping JS-side aggregation for topic breakdowns | No SQL query changes needed | Response payload grows with each dimension; duplicated logic between `page.tsx` and `route.ts` | Never for new dimensions -- use SQL GROUP BY from the start |
-| Computing SD totals on-the-fly for revenue charts | No schema migration needed | O(topics x lineItems) per SD per request; already flagged as a bottleneck in CONCERNS.md | Acceptable as MVP if <10 SDs per report period; must add `cachedTotal` before quarterly reports |
-| Embedding all entries in the main reports response | Single API call, simple state management | Payload bloat; entries loaded even when user stays on Overview tab | Acceptable for monthly reports with <500 entries; switch to lazy-loaded drill-down API for larger ranges |
-| Duplicating `formatCurrency` in ByClientTab vs billing-pdf.tsx | Avoids import dependency | Inconsistent formatting if one is updated without the other (already diverged: ByClientTab uses `maximumFractionDigits: 0`, billing-pdf uses 2 decimal places) | Never -- extract to shared utility in `lib/date-utils.ts` or a new `lib/format-utils.ts` |
+| CredentialsProvider for auth bypass | Fast to implement, no JWT encoding needed | Security risk if leaked to production; tests skip real middleware path | Never -- JWT cookie injection is equally simple and carries zero production risk |
+| `page.waitForTimeout()` instead of proper waits | Fixes flaky test immediately | Slows suite, still flaky under load, masks real timing bugs | Never -- always wait for a specific condition |
+| Testing against `next dev` | Fast startup, quick iteration | Misses production-only bugs (hydration, caching, standalone build) | Local development only, with `reuseExistingServer: true`; CI must use production build |
+| Sharing database state across tests (no cleanup) | No setup/teardown code to write | Cascading failures, order-dependent tests, impossible to parallelize | Never -- truncation between test files is cheap and essential |
+| Duplicating unit test coverage in e2e | "More coverage feels safer" | 3x slower CI, 3x more tests to maintain, no additional confidence | Never -- e2e tests should cover workflows, not individual behaviors |
+| Hardcoded test data (dates, IDs) in specs | Quick to write | Breaks when run on different dates; collides with other tests | Only for truly static reference data (e.g., user positions); use factories for mutable data |
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| NextAuth JWT + Playwright | Setting cookie on wrong domain (`localhost` vs `127.0.0.1`) or missing `httpOnly`/`secure` flags | Use exact domain from `baseURL`; set `httpOnly: true`, `sameSite: 'Lax'`, `secure: false` for localhost; cookie name is `next-auth.session-token` (no `__Secure-` prefix on HTTP) |
+| NextAuth middleware + Playwright | Middleware blocks API requests during test setup (seed endpoints) | Either seed data via direct DB connection (bypassing the app) or add seed endpoints gated by `E2E_TEST=true` env var (never exposed in production) |
+| PostgreSQL TRUNCATE + foreign keys | `TRUNCATE time_entries` fails due to FK from `service_description_line_items` | Use `TRUNCATE ... CASCADE` or truncate tables in dependency order (line_items, topics, SDs, submissions, entries) |
+| Next.js Server Components + Playwright | `page.goto()` returns before Server Components finish rendering; assertions on server-fetched data fail | Wait for a specific element that only renders after data loads (e.g., `await expect(page.getByText('Client Name')).toBeVisible()`) rather than trusting `page.goto()` completion |
+| Drizzle ORM in test setup | Importing `db` from `lib/db.ts` in Playwright setup uses the app's connection pool, which may conflict with the running server | Create a separate Drizzle client in test utilities pointing to the test database, independent of the app's pool |
+| Impersonation cookie + e2e tests | Setting both `next-auth.session-token` and `impersonate_user_id` cookies but the test user is not ADMIN, so impersonation is silently ignored | Ensure the JWT token's email matches an ADMIN user in the test database if testing impersonation flows |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Full entry dump in reports API response | Response > 500KB, slow network on mobile | Split entries into lazy-loaded drill-down endpoint | >2000 entries per report period (quarterly for busy firm) |
-| On-the-fly SD total calculation in reports | API response > 2s for multi-month ranges | Add `cachedTotal` column on `service_descriptions` | >20 finalized SDs in a single report period |
-| Recharts re-render on parent state change | Charts flicker on tab switch or comparison change | Wrap chart components in `React.memo()`, stabilize data references with `useMemo` | Noticeable with >20 data points in bar charts (all employees across clients) |
-| Sending topic breakdown data to non-drill-down views | Wasted bandwidth; topic Maps built but unused on Overview tab | Compute topic breakdown only when drill-down is active (conditional aggregation or separate endpoint) | Always -- topic data is per-client/employee, not overview-level |
+| Running `next build` on every test run locally | 30-60 second startup before first test runs | Use `reuseExistingServer: true` locally; only build in CI | Always in development; use `npm run dev` locally with reuse |
+| Not caching Playwright browser binaries in CI | 2-3 minute download of Chromium on every CI run | Cache `~/.cache/ms-playwright` with `actions/cache@v4` keyed on Playwright version | Every CI run without cache |
+| Running all browsers (chromium, firefox, webkit) | 3x test execution time | Run chromium-only in CI; cross-browser testing is unnecessary for an internal app with known user browsers | >20 tests with all 3 browsers |
+| Full database re-seed between every test | Each test spends 2-3 seconds on setup | Seed reference data once in `globalSetup`; truncate only mutable tables between specs | >10 tests with per-test full seed |
+| Not parallelizing test files | Suite runs serially, wasting CI time | Use `fullyParallel: true` at file level once database isolation is solid | >15 spec files running serially |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Exposing actual billed revenue to non-admin users | Revenue data from finalized SDs contains sensitive pricing, discounts, and retainer terms | Gate actual revenue behind the same `isAdmin` check used for estimated revenue (already in `route.ts:62`); ensure the new SD-based revenue query also respects this check |
-| Returning SD details in the reports API response | SD IDs or line item data in the response could be used to probe the billing API | Return only aggregated `actualRevenue: number` per client, never raw SD data, in the reports endpoint |
-| Missing rate limiting on expanded reports API | Quarterly reports with all entries create heavier server load; repeated requests could cause memory pressure | Apply same rate limiting strategy as other endpoints; consider caching report results for identical date ranges |
-
-## UX Pitfalls
-
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Showing actual revenue as 0 EUR when no SDs are finalized | Partners assume no billing happened, when in reality SDs are still in DRAFT | Show "No finalized bills" or "--" instead of 0 EUR; only show actual revenue when at least one finalized SD exists for the period |
-| Topic breakdown with 20+ topics creates unreadable charts | Legal firms may have 15-25 active topics; a bar chart with 25 bars is noise | Group topics below a threshold into "Other" (like DonutChart already does with `maxSlices`); show top 8-10 topics |
-| Hours over time chart with daily granularity for multi-month ranges | 90+ data points on a bar chart is unreadable | Switch to weekly or monthly granularity when date range exceeds 45 days; label the axis appropriately |
-| All-entries table with no sorting or filtering | Users cannot find specific entries in a 200-row table | Add client-side sort on date, hours, employee, topic; add a search/filter input for descriptions |
+| CredentialsProvider gated by `NODE_ENV` | Production build sets `NODE_ENV=production` during build but bypass could leak via misconfigured runtime env | Do not add any auth bypass to production code; use JWT cookie injection in Playwright setup only |
+| Test secrets committed to repository | `NEXTAUTH_SECRET` for test environment in source code could be used to forge sessions | Use a separate, disposable `NEXTAUTH_SECRET` for tests (e.g., `"test-secret-do-not-use-in-production"`); set via CI env vars, not committed files |
+| Test database accessible from production network | If test DB is on the same server as production, a connection string leak could expose test data or allow test operations on production | Use a completely separate database instance or at minimum a different database name with no cross-access |
+| Seed API endpoints without authentication | Adding `/api/test/seed` for e2e setup creates an unauthenticated endpoint that could reset production data | Gate seed endpoints with a specific env var (`E2E_TEST_MODE=true`) that is NEVER set in production; better yet, seed via direct DB connection in Playwright setup |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Revenue charts:** Verify actual revenue handles retainer clients separately -- `calculateRetainerGrandTotal` uses different logic than `calculateGrandTotal` and must be called when `retainerFee != null && retainerHours != null`
-- [ ] **Revenue comparison:** Confirm comparison period (Previous Period / Previous Year) queries SDs with matching `periodEnd` attribution -- comparison revenue must use the same attribution rule as the primary period
-- [ ] **Topic breakdown:** Verify entries with `topicId = null` (possible for old entries or if topic was deleted) appear as "Uncategorized" rather than crashing the aggregation
-- [ ] **Topic breakdown:** Confirm `topicName` from `time_entries` is used (denormalized, immutable) rather than joining to `topics.name` -- the topics table name could have been renamed since the entry was logged
-- [ ] **Entry tables:** Verify topic column shows `topicName` from time entries, not from the topics table -- these can diverge
-- [ ] **Entry tables:** Confirm entries include INTERNAL and MANAGEMENT client entries, not just REGULAR -- admins track all client types
-- [ ] **INTERNAL/MANAGEMENT clients:** Verify these clients have `hourlyRate = null` and are excluded from estimated revenue (not counted as 0 EUR revenue)
-- [ ] **Access control:** Non-admin users must not see revenue data in any of the new views -- verify the `isAdmin` gate covers revenue-by-client, revenue-by-employee, and comparison revenue
-- [ ] **Date range:** Quarterly and yearly presets (if added) must work with both estimated and actual revenue without timeout
+- [ ] **Auth bypass:** Verify no `CredentialsProvider` or `NODE_ENV` check was added to `lib/auth.ts` -- auth bypass must live entirely in Playwright test setup code
+- [ ] **Cookie domain:** Confirm `next-auth.session-token` cookie domain matches the `baseURL` in `playwright.config.ts` -- mismatch causes silent auth failure (no error, just redirected to login)
+- [ ] **Test database:** Verify tests run against `veda_legal_test`, not the development database -- check `DATABASE_URL` in the test environment config
+- [ ] **CI pipeline:** Confirm CI workflow includes PostgreSQL service container, `next build`, Playwright browser install, and runs e2e tests as a separate job from unit tests
+- [ ] **Cleanup between tests:** Verify `TRUNCATE CASCADE` runs on mutable tables between test files -- run the full suite twice in sequence and check for failures on second run
+- [ ] **Production build tested:** Verify `playwright.config.ts` `webServer.command` uses `build && start`, not `dev`
+- [ ] **Data-testid attributes:** Confirm `EntryCard`, `EntryForm`, and submission button have `data-testid` attributes -- inspect rendered HTML in a test trace
+- [ ] **No waitForTimeout:** Search test files for `waitForTimeout` -- should return zero results
+- [ ] **Trace on failure:** Verify `playwright.config.ts` has `trace: 'on-first-retry'` so CI failures produce actionable traces
+- [ ] **Existing unit tests still pass:** Run `npm run test -- --run` after adding e2e infrastructure to confirm vitest and Playwright configs do not conflict
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| JS-side aggregation scaled beyond capacity | MEDIUM | Migrate to SQL GROUP BY queries; requires rewriting the reports API handler but no schema changes; test with production data volumes |
-| SD totals computed on-the-fly causing timeouts | MEDIUM | Add `cachedTotal` column via migration; backfill from existing data; add trigger or application hook on finalization |
-| Revenue attribution rule not documented, users confused | LOW | Add tooltip/info icon to revenue charts; update the date range label to show attribution rule; no code change to calculation |
-| Entry table renders 5000+ rows without pagination | LOW | Add `.slice(offset, offset + pageSize)` with pagination controls; 30-minute fix; no API changes needed if all entries are already returned |
-| Topic breakdown crashes on null topicId | LOW | Add null coalescing in aggregation: `entry.topicName || "Uncategorized"`; single-line fix per aggregation point |
+| CredentialsProvider shipped to production | HIGH | Immediately remove the provider and redeploy; audit access logs for unauthorized logins; rotate NEXTAUTH_SECRET; rewrite to JWT cookie injection approach |
+| Database state leakage causing cascading failures | MEDIUM | Add `TRUNCATE CASCADE` in `beforeEach`; re-run full suite to verify; may need to adjust test data factories to use unique identifiers |
+| Tests built against dev server fail on production build | MEDIUM | Switch `webServer.command` to build+start; fix hydration/rendering differences one by one; most fixes are in the app code, not the tests |
+| Over-tested suite (50+ e2e tests, 10+ minute CI) | HIGH | Audit each test against unit test coverage; delete tests that duplicate unit coverage; consolidate multi-step tests that test the same workflow separately; may lose weeks of test-writing effort |
+| Fragile selectors break on design change | MEDIUM | Add `data-testid` attributes to components; rewrite selectors to use role/label/testid; one-time effort that prevents recurring breakage |
+| Flaky tests from timing issues | LOW-MEDIUM | Replace `waitForTimeout` with auto-waiting assertions; add `waitForResponse` after mutations; enable `trace: 'on-first-retry'` to diagnose remaining flakes |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Estimated vs actual revenue confusion | Revenue chart UI design | User testing: ask a partner what each number means before shipping |
-| JS-side aggregation scaling | API refactoring (before new features) | Response payload size stays under 100KB for monthly reports; API response time under 500ms |
-| SD total query expense | Schema migration (before revenue charts) | `cachedTotal` column exists and is populated on finalization; reports API does not import `billing-pdf.tsx` |
-| SD period attribution ambiguity | Revenue query design | Quarterly revenue equals sum of three monthly revenues for same clients |
-| Entry table without pagination | Entry table implementation | Drill-down with 500+ entries renders in under 200ms; pagination controls visible |
-| `formatCurrency` duplication | Shared utility extraction (prep phase) | Single `formatCurrency` import used by all components; grep finds no local definitions |
+| Auth bypass leaking to production | Phase 1: Infrastructure | `git grep CredentialsProvider` returns zero results in `src/`; auth bypass code exists only in `e2e/` directory |
+| Database state leakage | Phase 1: Infrastructure | Full suite passes when run twice in sequence (`npx playwright test && npx playwright test`) |
+| Testing against dev server | Phase 1: Infrastructure | CI workflow shows `next build && next start` in webServer command; no `next dev` in Playwright config |
+| Over-testing unit-covered behavior | Phase 2: Test writing | E2e test count is 10-20; each test maps to a user workflow documented in test plan; no test duplicates an existing unit test assertion |
+| Fragile selectors | Phase 1-2: Infrastructure + test writing | Zero CSS class selectors in test files; all interactive elements use role, label, or testid locators |
+| Flaky timing issues | Phase 2: Test writing | Zero `waitForTimeout` calls; CI flake rate <2% over 10 consecutive runs |
 
 ## Sources
 
-- Codebase analysis: `/Users/stefan/projects/veda-legal-timesheets/app/src/app/api/reports/route.ts` (current aggregation pattern)
-- Codebase analysis: `/Users/stefan/projects/veda-legal-timesheets/app/src/app/(authenticated)/(admin)/reports/page.tsx` (duplicated server-side aggregation)
-- Codebase analysis: `/Users/stefan/projects/veda-legal-timesheets/app/src/lib/billing-pdf.tsx` (billing calculation functions)
-- Codebase analysis: `/Users/stefan/projects/veda-legal-timesheets/app/src/components/reports/ByClientTab.tsx` (10-entry limit, `formatCurrency` duplication)
-- Codebase analysis: `/Users/stefan/projects/veda-legal-timesheets/.planning/codebase/CONCERNS.md` (existing performance bottlenecks)
-- [Recharts Performance Guide](https://recharts.github.io/en-US/guide/performance/) -- optimization strategies for large datasets
-- [PostgreSQL GROUP BY Performance](https://www.cybertec-postgresql.com/en/speeding-up-group-by-in-postgresql/) -- hash vs sort aggregation
-- [PostgreSQL Aggregation Best Practices](https://www.tigerdata.com/learn/postgresql-aggregation-best-practices/) -- indexing and GROUP BY optimization
-- [Optimizing React Table Rendering](https://dev.to/navneet7716/optimizing-react-table-rendering-by-160x--5g3c) -- virtualization and pagination strategies
-- [Crunchy Data: Revenue Aggregation in PostgreSQL](https://www.crunchydata.com/blog/fun-with-sql-in-postgres-finding-revenue-accrued-per-day) -- SQL patterns for revenue reporting
+- [Auth.js Testing Guide](https://authjs.dev/guides/testing) -- official recommendation for CredentialsProvider approach with security warnings
+- [Playwright Best Practices](https://playwright.dev/docs/best-practices) -- test isolation, locator strategy, anti-patterns
+- [Playwright Authentication](https://playwright.dev/docs/auth) -- storageState, global setup, cookie injection
+- [Next.js Playwright Testing Guide](https://nextjs.org/docs/pages/guides/testing/playwright) -- webServer config, production build recommendation
+- [NextAuth GitHub Issue #6796](https://github.com/nextauthjs/next-auth/issues/6796) -- community discussion on e2e testing approaches
+- [NextAuth GitHub Issue #12179](https://github.com/nextauthjs/next-auth/issues/12179) -- Playwright integration patterns
+- [Playwright GitHub Issue #33699](https://github.com/microsoft/playwright/issues/33699) -- database isolation strategies for e2e tests
+- [Playwright GitHub Issue #21207](https://github.com/microsoft/playwright/issues/21207) -- cookie injection with NextAuth
+- [Next.js GitHub Discussion #62254](https://github.com/vercel/next.js/discussions/62254) -- testing user sessions with cookies
+- Codebase analysis: `app/src/lib/auth.ts` (JWT strategy, Azure AD provider, signIn callback with whitelist)
+- Codebase analysis: `app/src/middleware.ts` (NextAuth middleware with route matching)
+- Codebase analysis: `app/src/lib/api-utils.ts` (requireAuth with JWT fallback, impersonation support)
+- Codebase analysis: `app/src/lib/schema.ts` (FK constraints, unique indexes, cascade deletes)
+- Codebase analysis: `app/src/lib/user.ts` (getCurrentUser with impersonation cookie)
+- Codebase analysis: `app/vitest.config.ts` (existing test infrastructure to avoid conflicts)
 
 ---
-*Pitfalls research for: legal practice reporting dashboard enhancements*
-*Researched: 2026-02-24*
+*Pitfalls research for: adding Playwright e2e tests to existing Next.js/NextAuth/PostgreSQL app*
+*Researched: 2026-02-25*

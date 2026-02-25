@@ -209,7 +209,7 @@ export const TopicCascadeSelect = forwardRef<
     : placeholder;
 
   return (
-    <div ref={dropdownRef} className={`relative ${className}`}>
+    <div ref={dropdownRef} className={`relative ${className}`} data-testid="topic-cascade-select">
       {/* Trigger Button */}
       <button
         type="button"

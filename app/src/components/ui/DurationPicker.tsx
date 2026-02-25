@@ -319,7 +319,7 @@ export const DurationPicker = forwardRef<DurationPickerRef, DurationPickerProps>
   ) : null;
 
   return (
-    <div className={className}>
+    <div className={className} data-testid="duration-picker">
       {/* Trigger Button */}
       <button
         ref={triggerRef}

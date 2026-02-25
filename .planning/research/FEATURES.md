@@ -1,164 +1,213 @@
 # Feature Research
 
-**Domain:** Legal practice management reporting dashboards
-**Researched:** 2026-02-24
-**Confidence:** MEDIUM — based on competitor analysis (Clio, PracticePanther, Smokeball, MyCase, Rocket Matter), industry KPI literature, and existing codebase review. No direct user testing or analytics data available.
+**Domain:** Playwright e2e test suite for CRUD-heavy timesheet workflows
+**Researched:** 2026-02-25
+**Confidence:** HIGH -- based on Playwright official documentation, Auth.js testing guide, community patterns for NextAuth+Playwright, and analysis of the existing codebase (965 unit/integration tests, NextAuth JWT strategy, CRUD timesheet workflows).
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-Features users assume exist. Missing these = partners/admins feel the reports page is incomplete.
+Features that any serious e2e test suite for a CRUD-heavy Next.js app must include. Missing these means the suite provides false confidence or is too painful to maintain.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Revenue by Client chart (estimated)** | Every legal PM tool shows revenue per client. Partners need to know which clients generate the most revenue. Clio, MyCase, and others all provide this. | LOW | Already have `hourlyRate * hours` calculation in the API. Just need a new chart on overview using existing `byClient` data with `revenue` field. |
-| **Revenue by Employee chart (estimated)** | Originating/responsible attorney revenue attribution is a core Clio report type. Partners evaluate attorney performance partly on revenue generated. | MEDIUM | Need to compute per-employee revenue. Requires joining employee hours with client rates. Not in current API response — need to aggregate `entry.hours * client.hourlyRate` per employee. |
-| **Topic breakdown in client drill-down** | When drilling into a client, the first question is "what work was done?" Matter/practice-area breakdown is standard in Clio matter reports, Smokeball firm insights, and legal PM broadly. | MEDIUM | `timeEntries` already stores `topicId` and `topicName`. Need to aggregate hours by topic for the selected client within the date range. New summary section at top of client drill-down. |
-| **All entries in drill-down tables (not last 10)** | Current 10-entry limit frustrates any real analysis. Every competitor shows full entry lists with pagination or scroll. LawWare, Actionstep, and others show complete entry lists. | LOW | Remove `.slice(0, 10)` from both `ByEmployeeTab` and `ByClientTab`. Consider virtual scrolling or simple pagination if entry count exceeds ~200. |
-| **Topic column in entry tables** | When viewing entries, users need to see what type of work was done. Standard column in time entry lists across Clio, Actionstep, and all competitors. | LOW | `topicName` is already on `timeEntries` but not included in the API response or table columns. Add to query, API response, and table render. |
-| **Hours over time trend in client drill-down** | Time trends answer "is this client's workload increasing or decreasing?" Standard in Clio and MyCase dashboard views. | MEDIUM | Need to aggregate hours by date/week/month for selected client. Use existing `BarChart` component in horizontal layout (date on x-axis). |
-| **Hours over time trend in employee drill-down** | Already exists as "Hours by Day" chart. Confirmed working in current codebase. | ALREADY EXISTS | Current `ByEmployeeTab` already shows `dailyHours` chart. Keep as-is. |
-| **Topic breakdown in employee drill-down** | Cross-client topic breakdown answers "what type of work does this person spend time on?" Practice-area analysis per attorney is a standard Clio productivity report. | MEDIUM | Aggregate `topicName` across all of an employee's entries in the period. New chart section in employee drill-down. |
+| **Auth bypass via JWT cookie injection** | The app uses NextAuth v4 with JWT strategy and Azure AD SSO. Real OAuth flows are impossible to test in CI (no Azure AD credentials, IP blocks, MFA). Every e2e test needs authentication. Without a bypass, zero tests can run. | MEDIUM | Encode a valid JWT using `next-auth/jwt`'s `encode()` function with `NEXTAUTH_SECRET`, set as `next-auth.session-token` cookie. Must match the email of a user seeded in the test database. Alternative: Credentials provider enabled only in test env. JWT encoding is cleaner because it does not require changing auth config for tests. |
+| **Playwright config with setup project** | Playwright's recommended architecture: a `setup` project that runs first (auth, seeding) and browser projects that depend on it. Without this, every test file repeats setup boilerplate. | LOW | Standard `playwright.config.ts` with `projects: [{ name: 'setup' }, { name: 'chromium', dependencies: ['setup'] }]`. Use `storageState` to persist auth across all tests. Single browser (Chromium) is sufficient for an internal app with 10 users. |
+| **Test database with seed data** | E2e tests need real clients, topics, subtopics, and a user in the database to create time entries. Without seeded reference data, the entry form's ClientSelect and TopicCascadeSelect dropdowns are empty and no CRUD operations work. | MEDIUM | Seed script that inserts a test user (matching JWT email), 2-3 clients (REGULAR + INTERNAL types), topics with subtopics, and optionally existing time entries. Run in `globalSetup` or setup project. Reuse existing `seed-topics.ts` pattern. Must use real PostgreSQL (not mocked) since the dev server queries the actual DB. |
+| **Page Object Model for timesheets page** | The timesheets page has complex interactive elements: ClientSelect dropdown, TopicCascadeSelect cascade, DurationPicker, description input, WeekStrip date navigation, entry table with inline edit/delete, submission button. Raw locator strings scattered across tests become unmaintainable when UI changes. | MEDIUM | One `TimesheetsPage` class encapsulating: `selectClient()`, `selectTopic()`, `setDuration()`, `setDescription()`, `submitEntry()`, `getEntryRows()`, `editEntry()`, `deleteEntry()`, `navigateToDate()`, `submitTimesheet()`. Locators centralized. The form reuses EntryForm for both create and inline edit, so the POM should reflect that. |
+| **CRUD test coverage: Create entry** | Creating a time entry is the core user workflow. It exercises ClientSelect, TopicCascadeSelect (with subtopic prefix behavior), DurationPicker, description input, and the Log button. The entry must appear in the entries list after creation. | LOW | Select client -> select topic/subtopic -> set hours/minutes -> type description -> click Log -> verify entry appears in table with correct values. Test both REGULAR client (with subtopic) and INTERNAL client (topic-only). |
+| **CRUD test coverage: Edit entry** | Inline editing exercises the same EntryForm in edit mode, which has different behavior (preserves description when changing topic, shows Save/Cancel buttons). Tests must verify the edit actually persists. | MEDIUM | Click edit icon on entry row -> verify form appears with pre-filled values -> change one field -> click Save -> verify entry row updates. Also test Cancel discards changes. Must handle the fact that locked entries (billed) disable the edit button. |
+| **CRUD test coverage: Delete entry** | Deletion has a ConfirmModal confirmation step. Tests must verify the modal appears, confirm deletes, and cancel preserves the entry. | LOW | Click delete icon -> verify ConfirmModal appears with entry details -> click Delete -> verify entry disappears from list. Also test Cancel preserves entry. |
+| **WeekStrip date navigation tests** | Date navigation is how users access entries for different days. The WeekStrip shows 7 days, has prev/next week arrows, a Today button, and a calendar popup. Changing dates triggers a fetch for new entries. | LOW | Click day in week strip -> verify entries reload. Click prev/next week arrows -> verify week shifts. Click Today -> verify today is selected. Test that creating an entry on one day, navigating away, and coming back shows the entry. |
+| **Submission flow tests** | Daily submission (requiring minimum 8 hours) is a business-critical workflow. Tests must verify the Submit Timesheet button appears after 8 hours logged, confirm submission changes status, and that the submission indicator appears in the WeekStrip. | MEDIUM | Log entries totaling 8+ hours -> verify "Submit Timesheet" button appears -> click -> verify "Timesheet Submitted" status shows. Also test submission prompt modal that appears automatically after reaching 8h. Test that deleting entries below 8h revokes submission. |
+| **Custom Playwright fixtures** | Fixtures wrap page objects and test data for injection into tests. Playwright's recommended approach for composable, maintainable test infrastructure. Without fixtures, each test file needs manual page object instantiation and data setup. | LOW | `test.extend()` with `timesheetsPage` fixture that creates a `TimesheetsPage` POM, and optionally an `authenticatedPage` fixture that navigates to `/timesheets` with auth. Combine with POM for clean test signatures: `test('can create entry', async ({ timesheetsPage }) => { ... })`. |
+| **Test isolation and cleanup** | Tests that share state break in parallel or when one test fails mid-flow. Each test must start from a known state and not pollute the database for other tests. | MEDIUM | Options: (1) Reset DB between tests -- clean but slow. (2) Use unique data per test (unique descriptions, timestamps) -- faster but DB grows. (3) Delete only what you created -- per-test cleanup via API. Recommend option 2 (unique test data) for speed, with periodic DB reset via `globalSetup`. The app has only 10 real users so test isolation is straightforward. |
+| **CI integration (GitHub Actions)** | The existing CI workflow runs unit tests on PR. E2e tests must also run in CI or they rot immediately. Requires PostgreSQL service container, Playwright browser install, and dev server startup. | MEDIUM | Add PostgreSQL service container to CI workflow. Run `npm run db:migrate` + seed script. Start dev server with `npx playwright test` using `webServer` config. Install browsers with `npx playwright install --with-deps chromium`. Store Playwright report as artifact on failure. |
 
 ### Differentiators (Competitive Advantage)
 
-Features that set the product apart. Not required, but valuable for a small firm.
+Features that elevate the test suite beyond basic coverage. Not required for the milestone, but provide significant value.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Actual billed revenue (from finalized SDs)** | Most small-firm tools only show estimated revenue (rate x hours). Showing actual billed amount from finalized service descriptions — accounting for discounts, caps, waivers, and retainer logic — gives a true picture. This bridges the gap between "what we could bill" and "what we did bill." | HIGH | Requires querying `serviceDescriptions` (status = FINALIZED) for the selected period, running `calculateGrandTotal()` / `calculateRetainerGrandTotal()` from `billing-pdf.tsx` for each, and aggregating. Complex because retainer vs. non-retainer SDs use different calculation paths. Must handle: SD period may not align with report period; one client may have multiple SDs in a period. |
-| **Estimated vs. actual revenue comparison** | Showing the delta between estimated and actual billed revenue surfaces write-offs, discounts, and retainer absorption at a glance. This is the "realization rate" concept that Clio tracks as a premium KPI — but here it's derived naturally from the existing billing system rather than requiring manual write-off tracking. | MEDIUM | Depends on actual billed revenue feature above. Once both numbers exist, showing them side-by-side (or as a comparison metric) is straightforward. Could use stacked/grouped bar chart or summary card with delta. |
-| **Clickable chart-to-drill-down navigation** | Clicking a bar in "Hours by Employee" already navigates to the employee drill-down. Extending this pattern to revenue charts and topic charts creates a fluid exploration experience. Most competitors require navigating to separate report pages. | LOW | Pattern already exists (`onEmployeeClick`, `onClientClick`). Just wire up new charts with same handlers. |
+| **Playwright HTML report with trace on failure** | When tests fail in CI, the HTML report with screenshot and trace file lets you debug without reproducing locally. Playwright captures DOM snapshots, network requests, and console logs. A 30-second config change that saves hours of debugging. | LOW | Set `reporter: 'html'` and `trace: 'on-first-retry'` in `playwright.config.ts`. Upload `playwright-report/` as a GitHub Actions artifact on failure. Already built into Playwright, zero custom code. |
+| **API-level test data factory** | Instead of creating entries through the UI (slow, flaky), seed test data via direct API calls (`POST /api/timesheets`) in fixtures. Tests that need pre-existing entries (for edit, delete, submission) start faster and are more reliable. | LOW | Add helper functions like `createEntryViaAPI(page, data)` that call `fetch('/api/timesheets', ...)` using `page.request`. The API already exists and handles auth via session cookie, which Playwright carries from storageState. This is much faster than clicking through the form for each entry. |
+| **Accessibility assertions** | Running `axe-core` checks during e2e tests catches WCAG violations in the actual rendered UI. For a legal app used daily by attorneys, accessibility is both ethical and practical (keyboard-heavy users). | LOW | Install `@axe-core/playwright`. Add a single check per page: `await checkA11y(page)` in the page load fixture. Catches contrast issues, missing labels, role problems in the dark theme. Low effort, high value. |
+| **Resilient locator strategy** | Use Playwright's recommended locator priority: `getByRole` > `getByLabel` > `getByText` > `getByTestId` > CSS selectors. Role-based locators survive UI refactors and enforce accessible markup. | LOW | No extra tooling needed. Discipline in POM implementation. The existing components use button text ("Log", "Save", "Cancel"), input placeholders ("Select client...", "What did you work on?"), and table column headers -- all suitable for accessible locators. Add `data-testid` only when semantic locators are ambiguous (e.g., multiple delete buttons). |
+| **Test tagging and selective execution** | Tag tests as `@smoke`, `@crud`, `@navigation`, `@submission` so CI can run a fast smoke suite on every PR and the full suite nightly. Playwright supports `--grep @smoke` filtering natively. | LOW | Add tags to test titles: `test('can create entry @smoke @crud', ...)`. Configure CI with two modes: PR runs `--grep @smoke`, scheduled runs the full suite. Keeps PR feedback fast (<3 minutes) while maintaining full coverage. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
-Features that seem good but create problems, especially for a ~10 person firm with ~200 clients.
+Features that seem like good testing practices but create more problems than they solve for this specific project.
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **Custom report builder / drag-and-drop report designer** | "I want to build any report I need." Clio's premium tier offers this. | Massive implementation cost. For a 10-person firm, the number of useful report configurations is small and knowable. Custom report builders are used by <10% of users even in large firms (per Clio's own usage data suggesting most use prebuilt reports). Adds UI complexity, testing burden, and maintenance overhead disproportionate to the user base. | Build the 5-8 specific views that matter. If a new view is needed, add it as a feature rather than building a meta-tool. |
-| **Utilization rate / billable vs. non-billable breakdown** | Industry standard KPI (avg 38% per Clio 2025 benchmarks). Sounds essential. | Requires classifying all time as "billable" or "non-billable" — which the current system does via `ClientType` (REGULAR vs INTERNAL/MANAGEMENT) but the report would need careful handling. More importantly: explicitly declared out of scope in PROJECT.md. The firm has not requested this. | Defer entirely. If needed later, the data model supports it (client type classification exists). Not worth building speculatively. |
-| **Collected revenue tracking (payments received)** | The full legal billing pipeline is: worked -> billed -> collected. Clio tracks all three. | Requires a payment/collection tracking system that does not exist in this app. Service descriptions track "billed" but there is no payment recording, no accounts receivable, no aging reports. Building this is an entirely new domain. | Show estimated (rate x hours) and actual billed (from finalized SDs). Collection tracking is a separate future initiative if the firm adopts the app for accounting. |
-| **CSV/PDF export of reports** | Partners want to share reports in meetings. Explicitly listed as out of scope in PROJECT.md. | Not inherently bad, but adds scope to a milestone already focused on data visualization improvements. Export formatting (page breaks, headers, summaries) is surprisingly time-consuming to get right. | Defer to a future milestone as PROJECT.md states. Browser print (Ctrl+P) works as a stopgap. |
-| **Predictive analytics / AI forecasting** | "Predict next month's revenue." Emerging trend in legal PM tools. | Requires historical data depth that a new system won't have. Predictions from small datasets are unreliable and misleading. For 10 employees and 200 clients, a partner's intuition is more accurate than any model trained on <1 year of data. | Show trends (hours over time) and let humans extrapolate. Trends are honest; predictions from thin data are not. |
-| **Real-time / live-updating dashboards** | "See entries as they're logged." Sounds modern. | For 10 concurrent users, real-time adds WebSocket infrastructure complexity for negligible benefit. Reports are analytical tools used periodically, not operational monitors. The data changes meaningfully at most a few times per day per user. | Fetch on page load and on date range change (current approach). Add a manual refresh button if needed. Polling at 60s intervals is the absolute maximum justified complexity. |
-| **Mobile-specific report layouts** | "View reports on my phone." Explicitly out of scope in PROJECT.md. | Reports are analytical tools used at a desk with a large screen. The charts and tables are fundamentally desktop experiences. Responsive tweaks add complexity to every chart and table component. | Defer entirely. The firm did not request this. If needed, tackle as a separate responsive design pass, not interleaved with feature work. |
+| **Visual regression testing (screenshot comparison)** | "Catch UI regressions automatically." Sounds comprehensive. | For a dark-themed app with dynamic data (timestamps, hours totals, user names), screenshot comparison generates constant false positives. Font rendering differs between macOS and Linux CI. Anti-aliasing differences trigger failures. The maintenance cost of updating baselines after every intentional UI change exceeds the value of catching unintentional ones. The 965 existing unit tests already cover component rendering logic. | Use functional assertions (`toBeVisible()`, `toHaveText()`, `toHaveCount()`) that verify the right content renders. Reserve screenshot testing for truly static pages (login page, empty states) if ever needed. |
+| **Multi-browser testing** | "Test in Chrome, Firefox, and Safari." Industry best practice. | This is an internal app for 10 employees at a Bulgarian law firm. They all use Chrome (confirmed by the enterprise environment with Azure AD SSO). Running 3x the tests triples CI time and cost for zero additional coverage of real user scenarios. Cross-browser bugs in a Tailwind CSS app are exceptionally rare. | Run Chromium only. If a specific browser bug is reported, add a targeted test for that browser. Do not speculatively test browsers nobody uses. |
+| **Mobile viewport testing** | "Test responsive layouts." Mobile report layouts are explicitly out of scope (PROJECT.md). | The timesheet page has separate mobile (EntryCard) and desktop (EntryRow/table) renderings. Testing both viewports doubles the test count. Mobile-specific layouts were explicitly scoped out. The 10 users access the app from desktop workstations. | Test desktop viewport only (1280x720). If mobile testing becomes needed in a future milestone, add a separate mobile test suite then. |
+| **Test coverage percentage targets** | "Aim for 80% e2e coverage." Sounds rigorous. | E2e coverage metrics are misleading. A test that navigates to `/timesheets` technically "covers" hundreds of lines of server component, middleware, and API code. The number is meaningless. Coverage targets incentivize low-value tests that touch code without verifying behavior. The 965 unit tests already provide line-level coverage; e2e tests provide workflow-level confidence. | Define coverage by user workflows, not code lines. Track: "which user journeys have e2e tests?" not "what % of code do e2e tests execute?" |
+| **Parallel test execution across workers** | "Run tests in parallel for speed." Default Playwright behavior. | Tests share a single PostgreSQL database. Parallel writes from multiple workers create race conditions (two tests creating entries, one test deleting while another reads). With ~15-20 tests in the initial suite, serial execution completes in under 2 minutes. Parallelism adds database isolation complexity for negligible time savings. | Run tests serially (`workers: 1`) in the initial suite. Revisit only if the suite grows beyond 50 tests and execution exceeds 5 minutes. At that point, consider per-worker database schemas or transaction rollback isolation. |
+| **Mocking API responses in e2e tests** | "Mock the API to test the UI in isolation." Common in component testing. | E2e tests exist specifically to test the full stack: UI -> API -> database -> UI. Mocking the API defeats the purpose and creates a false sense of security. The app already has 965 unit tests that mock dependencies; e2e tests fill a different gap. | Never mock the API in e2e tests. Use the real API with a real database. If an API is slow or flaky, fix the API, do not mock it. Exception: the M365 Graph API should be skipped (external service, not owned), but the test should not verify M365 behavior. |
+| **End-to-end tests for admin/billing/reports** | "Test all pages." Scope creep. | The milestone scope is explicitly "core timesheet entry workflows." Admin billing involves complex drag-and-drop (dnd-kit), PDF generation, retainer calculations -- each of which would need significant test infrastructure. Reports involve Recharts charts that are difficult to assert on. Adding these triples the milestone scope. | Scope strictly to timesheets page: create, edit, delete, date navigation, submission. Other pages get their own e2e milestone if/when needed. The existing unit tests cover billing and reports logic. |
 
 ## Feature Dependencies
 
 ```
-[Topic column in entry tables]
-    (no dependencies, standalone data addition)
+[Auth bypass (JWT cookie injection)]
+    └──requires──> [Test user seeded in database]
 
-[All entries in drill-down tables]
-    (no dependencies, remove slice limit)
+[Playwright config with setup project]
+    └──requires──> [Auth bypass]
+    └──requires──> [Test database seed]
 
-[Revenue by Client chart (estimated)]
-    (no dependencies, data already in API response)
+[Page Object Model (TimesheetsPage)]
+    └──requires──> [Playwright config] (needs base test/fixture setup)
 
-[Revenue by Employee chart (estimated)]
-    └──requires──> API change to compute per-employee revenue
+[Custom fixtures]
+    └──requires──> [Page Object Model]
+    └──requires──> [Auth bypass] (authenticatedPage fixture)
 
-[Topic breakdown in client drill-down]
-    └──requires──> API to include topicId/topicName in entries response
+[Create entry tests]
+    └──requires──> [Page Object Model]
+    └──requires──> [Seeded clients + topics in DB]
 
-[Topic breakdown in employee drill-down]
-    └──requires──> API to include topicId/topicName in entries response
+[Edit entry tests]
+    └──requires──> [Create entry tests] (or API-level data factory)
+    └──requires──> [Page Object Model]
 
-[Hours over time trend in client drill-down]
-    └──requires──> Per-client daily hours aggregation (similar to existing employee dailyHours)
+[Delete entry tests]
+    └──requires──> [Create entry tests] (or API-level data factory)
+    └──requires──> [Page Object Model]
 
-[Actual billed revenue from finalized SDs]
-    └──requires──> New API query joining serviceDescriptions + billing calculation functions
-                       └──requires──> Understanding of billing-pdf.tsx calculation functions
+[WeekStrip navigation tests]
+    └──requires──> [Page Object Model]
+    └──requires──> [Seeded entries or ability to create them]
 
-[Estimated vs. actual revenue comparison]
-    └──requires──> [Actual billed revenue from finalized SDs]
-    └──requires──> [Revenue by Client chart (estimated)]
+[Submission flow tests]
+    └──requires──> [Create entry tests] (need 8+ hours of entries)
+    └──requires──> [Page Object Model]
+
+[CI integration]
+    └──requires──> [Playwright config]
+    └──requires──> [Test database seed]
+    └──requires──> [All tests passing locally]
+
+[API-level data factory]
+    └──requires──> [Auth bypass] (API calls need session cookie)
+    └──enhances──> [Edit entry tests] (pre-create entries faster)
+    └──enhances──> [Delete entry tests]
+    └──enhances──> [Submission flow tests] (seed 8+ hours quickly)
+
+[Test tagging]
+    └──enhances──> [CI integration] (fast smoke suite on PR)
 ```
 
 ### Dependency Notes
 
-- **Topic column & topic breakdowns require the same API change:** Adding `topicId`/`topicName` to the entries response unlocks both the table column and the breakdown aggregations. Do this once.
-- **Revenue by Employee requires new aggregation:** Current API computes revenue per client but not per employee. Need to sum `hours * clientRate` grouped by employee.
-- **Actual billed revenue is the hardest feature:** It requires understanding the full billing calculation pipeline including retainer logic, discounts, caps, and waivers. The functions exist in `billing-pdf.tsx` but they operate on serialized `ServiceDescription` objects, not raw DB rows — so the API needs to fetch, serialize, and calculate.
-- **Estimated vs. actual comparison is cheap once actual exists:** It's just displaying two numbers side by side. The hard work is in computing the "actual" number.
+- **Auth bypass is the foundation:** Nothing works without it. The NextAuth middleware rejects unauthenticated requests to all routes except `/login` and `/api/auth`. The JWT encode approach is preferred over a Credentials provider because it requires zero changes to production auth configuration -- it is purely a test-side concern.
+- **Test database seed is tightly coupled to auth:** The JWT encodes an email address. The seeded user must have that same email address. The `signIn` callback in `auth.ts` looks up the user by email and checks status is ACTIVE.
+- **API-level data factory eliminates UI-through setup:** Edit, delete, and submission tests need pre-existing entries. Creating them through the UI is slow (5-10 seconds per entry) and couples setup failures to unrelated tests. Direct API calls via `page.request.post('/api/timesheets', ...)` are faster and more reliable.
+- **CI integration depends on everything else working locally first:** Do not attempt CI setup until the full test suite passes on the development machine.
 
 ## MVP Definition
 
-### Launch With (v1)
+### Launch With (v1.1 -- This Milestone)
 
-Minimum viable improvement — what's needed to make the reports page genuinely useful for this milestone.
+Minimum viable e2e test suite that provides browser-level regression protection for the revenue-critical timesheet workflow.
 
-- [x] Revenue by Client chart (estimated) — already have the data, just need the chart
-- [x] Revenue by Employee chart (estimated) — new aggregation but straightforward
-- [x] Topic column in entry tables — trivial addition, high information value
-- [x] All entries in drill-down tables — remove artificial limit, immediate usability win
-- [x] Topic breakdown in client drill-down — summary section showing hours per topic
-- [x] Topic breakdown in employee drill-down — cross-client topic distribution
-- [x] Hours over time trend in client drill-down — new chart, existing chart component
+- [ ] Auth bypass infrastructure (JWT cookie injection + setup project) -- foundation
+- [ ] Test database seed script (user, clients, topics/subtopics) -- foundation
+- [ ] Playwright config (Chromium-only, serial execution, HTML reporter) -- foundation
+- [ ] TimesheetsPage POM (locators for all interactive elements) -- maintainability
+- [ ] Custom fixtures (timesheetsPage, authenticatedPage) -- ergonomics
+- [ ] Create entry test (REGULAR client with subtopic + INTERNAL client topic-only) -- core CRUD
+- [ ] Edit entry test (change description, change hours, cancel edit) -- core CRUD
+- [ ] Delete entry test (confirm delete, cancel delete) -- core CRUD
+- [ ] WeekStrip navigation test (select day, prev/next week, Today button) -- navigation
+- [ ] Submission flow test (reach 8h, submit, verify status) -- business logic
+- [ ] CI integration (GitHub Actions with PostgreSQL service) -- prevents test rot
+- [ ] API-level data factory for test setup -- test speed and reliability
 
 ### Add After Validation (v1.x)
 
-Features to add once core charts and drill-downs are working and validated with actual users.
+Features to add once the core suite is stable and running in CI.
 
-- [ ] Actual billed revenue from finalized SDs — add once users confirm the estimated revenue charts are useful and want to see the billed/estimated delta
-- [ ] Estimated vs. actual revenue comparison — natural follow-on to actual billed revenue
+- [ ] Accessibility checks with @axe-core/playwright -- when POM and fixture patterns are established
+- [ ] Test tagging (@smoke, @crud) with selective CI execution -- when suite grows beyond 10 tests
+- [ ] Trace-on-failure for CI debugging -- when failures in CI need remote diagnosis
+- [ ] Submission revocation test (delete entry below 8h threshold) -- extends submission coverage
+- [ ] Calendar popup date selection test -- extends navigation coverage
+- [ ] Entry form validation tests (missing client, missing topic, zero hours, short description) -- edge cases
 
 ### Future Consideration (v2+)
 
-Features to defer until there's clear demand.
+Features to defer until there is a clear need.
 
-- [ ] CSV/PDF export — explicit out-of-scope per PROJECT.md
-- [ ] Utilization rate — not requested, defer
-- [ ] Collection tracking — requires new domain (payments), not in scope
+- [ ] Admin/billing e2e tests -- separate milestone, different page, different complexity
+- [ ] Reports e2e tests -- charts are hard to assert on, unit tests cover logic
+- [ ] Multi-browser testing -- only if a browser-specific bug is reported
+- [ ] Visual regression testing -- only if functional assertions prove insufficient
+- [ ] Parallel test execution -- only if suite exceeds 50 tests and >5 minute runtime
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| All entries in drill-down tables | HIGH | LOW | P1 |
-| Topic column in entry tables | HIGH | LOW | P1 |
-| Revenue by Client chart (estimated) | HIGH | LOW | P1 |
-| Topic breakdown in client drill-down | HIGH | MEDIUM | P1 |
-| Hours over time trend in client drill-down | MEDIUM | MEDIUM | P1 |
-| Revenue by Employee chart (estimated) | HIGH | MEDIUM | P1 |
-| Topic breakdown in employee drill-down | MEDIUM | MEDIUM | P1 |
-| Actual billed revenue (from finalized SDs) | HIGH | HIGH | P2 |
-| Estimated vs. actual revenue comparison | MEDIUM | MEDIUM (after P2 above) | P2 |
+| Auth bypass (JWT injection) | HIGH (blocks everything) | MEDIUM | P1 |
+| Test database seed | HIGH (blocks everything) | MEDIUM | P1 |
+| Playwright config | HIGH (blocks everything) | LOW | P1 |
+| TimesheetsPage POM | HIGH (maintainability) | MEDIUM | P1 |
+| Custom fixtures | MEDIUM (ergonomics) | LOW | P1 |
+| Create entry test | HIGH (core workflow) | LOW | P1 |
+| Edit entry test | HIGH (core workflow) | MEDIUM | P1 |
+| Delete entry test | HIGH (core workflow) | LOW | P1 |
+| WeekStrip navigation test | MEDIUM (core navigation) | LOW | P1 |
+| Submission flow test | HIGH (business logic) | MEDIUM | P1 |
+| API-level data factory | HIGH (speed + reliability) | LOW | P1 |
+| CI integration | HIGH (prevents rot) | MEDIUM | P1 |
+| HTML report + trace | MEDIUM (debugging) | LOW | P2 |
+| Accessibility checks | MEDIUM (quality) | LOW | P2 |
+| Test tagging | LOW (optimization) | LOW | P2 |
+| Submission revocation test | MEDIUM (edge case) | LOW | P2 |
+| Calendar popup test | LOW (secondary UI) | LOW | P3 |
+| Form validation tests | LOW (unit tests cover) | LOW | P3 |
 
 **Priority key:**
-- P1: Must have for this milestone (matches PROJECT.md Active requirements)
-- P2: Should have, add when possible (extends revenue reporting value)
+- P1: Must have for this milestone (matches PROJECT.md Active requirements + essential infrastructure)
+- P2: Should have, add when time permits within milestone
 - P3: Nice to have, future consideration
 
-## Competitor Feature Analysis
+## Existing Infrastructure to Leverage
 
-| Feature | Clio | MyCase | Smokeball | Our Approach |
-|---------|------|--------|-----------|--------------|
-| Revenue by client | Yes, in revenue reports | Yes, in financial dashboard | Limited | Chart in overview tab (estimated + actual billed) |
-| Revenue by attorney | Yes, originating attorney revenue report | Yes, per-attorney billing | Limited, document-focused | Revenue by employee chart in overview |
-| Matter/topic breakdown | Yes, matter reports with practice area grouping | Practice type segmentation | Matter type breakdown | Topic breakdown in client and employee drill-downs |
-| Time trends | Yes, via custom reports | Monthly charts | Yes, in firm insights | Hours over time charts in client drill-down |
-| Entry detail tables | Full entry lists with filters | Full lists | Full lists | All entries with topic column (removing 10-entry limit) |
-| Estimated vs billed | Realization rate as KPI | Billed vs collected | Not prominent | Estimated vs actual billed comparison |
-| Drill-down navigation | Separate report pages | Separate pages | Separate pages | In-page drill-down via chart clicks (smoother UX) |
-| Export | CSV, PDF | CSV, PDF | PDF | Deferred (browser print as stopgap) |
-| Custom report builder | Yes (premium tier) | Limited | Limited | Deliberately not building (anti-feature) |
+The project already has significant test infrastructure that the e2e suite should build upon (not duplicate):
+
+| Existing Asset | How E2E Suite Uses It | Notes |
+|----------------|----------------------|-------|
+| 965 unit/integration tests (Vitest) | Do NOT re-test what these cover (component rendering, API validation logic, date formatting). E2e tests focus on full-stack workflows. | Vitest and Playwright coexist independently. Different test runners, different purposes. |
+| Mock factories (`createMockUser`, `createMockClient`, etc.) | Inspiration for e2e seed data structure but NOT directly reusable. Vitest factories create in-memory mocks; e2e needs real database rows. | Write a separate `e2e/seed.ts` that uses Drizzle ORM to insert real rows, following the same data shapes. |
+| `createMockRequest()` helper | Not usable in e2e context. This creates `NextRequest` objects for unit testing API routes. | E2e tests hit real API endpoints via browser fetch or `page.request`. |
+| `lib/schema.ts` (Drizzle schema) | The e2e seed script imports schema definitions to insert test data correctly. | Direct dependency -- seed script uses `db.insert(users)`, `db.insert(clients)`, etc. |
+| `lib/submission-utils.ts` (`MIN_SUBMISSION_HOURS`) | Import this constant in e2e tests to compute how many hours to seed for submission tests. | Avoids hardcoding `8` in tests -- if the threshold changes, tests adapt. |
+| Playwright 1.57.0 (already in node_modules) | Use directly. Already installed but no config or tests exist yet. | Needs `playwright.config.ts` and `e2e/` directory. No `@playwright/test` in package.json devDependencies -- need to add it. |
+| `app/.env` (DATABASE_URL, NEXTAUTH_SECRET) | E2e tests need the same `NEXTAUTH_SECRET` for JWT encoding and `DATABASE_URL` for seed script. | In CI, these come from GitHub Actions environment. Locally, reuse the dev `.env` file. |
+| CI workflow (`.github/workflows/ci.yml`) | Extend with a new job for e2e tests, or add steps to existing job. Currently runs unit tests + migration check. | Separate job recommended: e2e needs PostgreSQL service container, browser install, and dev server, which unit tests do not. |
 
 ## Sources
 
-- [Clio Financial Reporting](https://www.clio.com/features/law-firm-financial-reporting/) — MEDIUM confidence, feature descriptions from marketing page
-- [Clio Revenue Reports](https://help.clio.com/hc/en-us/articles/14352205073051-Clio-Manage-Revenue-Reports) — MEDIUM confidence, help article (blocked by 403, used search snippet)
-- [Clio 62 Essential KPIs](https://www.clio.com/blog/law-firm-kpis/) — MEDIUM confidence, industry benchmarks (38% utilization, 88% realization)
-- [Law Firm Financial Dashboards: Turning Data into Decisions](https://www.lawfirmvelocity.com/post/financial-dashboard) — MEDIUM confidence, best practices for dashboard design
-- [MyCase Financial Dashboard](https://www.mycase.com/blog/law-firm-financial-management/financial-dashboard/) — MEDIUM confidence, dashboard feature recommendations
-- [BigHand 5 Revenue Metrics](https://www.bighand.com/en-us/resources/blog/five-revenue-metrics-all-law-firm-leaders-need-to-know-and-track/) — MEDIUM confidence, revenue metric definitions
-- [Smokeball Reporting](https://www.smokeball.com/features/legal-reporting-software) — LOW confidence, limited detail from search snippets
-- [Rocket Matter Key Reports](https://www.rocketmatter.com/blog/six-key-reports-for-better-law-practice-management/) — LOW confidence, limited detail
-- Existing codebase analysis — HIGH confidence, direct code review of reports API, components, schema, and billing utilities
+- [Playwright Authentication Documentation](https://playwright.dev/docs/auth) -- HIGH confidence, official docs
+- [Playwright Fixtures Documentation](https://playwright.dev/docs/test-fixtures) -- HIGH confidence, official docs
+- [Playwright Page Object Models](https://playwright.dev/docs/pom) -- HIGH confidence, official docs
+- [Playwright CI Setup](https://playwright.dev/docs/ci-intro) -- HIGH confidence, official docs
+- [Playwright Visual Comparisons](https://playwright.dev/docs/test-snapshots) -- HIGH confidence, official docs (referenced for anti-feature analysis)
+- [Auth.js Testing Guide](https://authjs.dev/guides/testing) -- HIGH confidence, official NextAuth docs
+- [NextAuth E2E Testing Issue #6796](https://github.com/nextauthjs/next-auth/issues/6796) -- MEDIUM confidence, community discussion with maintainer input
+- [Playwright Fixtures vs POM](https://dzone.com/articles/playwright-fixtures-vs-pom) -- MEDIUM confidence, community analysis
+- [Checkly: POMs and Fixtures with Playwright](https://www.checklyhq.com/blog/page-object-models-and-fixtures-with-playwright/) -- MEDIUM confidence, respected testing company
+- [Test Data Strategies for E2E Tests](https://www.playwright-user-event.org/playwright-tips/test-data-strategies-for-e2e-tests) -- MEDIUM confidence, community guide
+- [NextAuth + Playwright + MSW Integration](https://dev.to/kuroski/writing-integration-tests-for-nextjs-next-auth-prisma-using-playwright-and-msw-388m) -- MEDIUM confidence, detailed community tutorial
+- Existing codebase analysis (middleware, auth.ts, TimesheetsContent, EntryForm, EntryRow, WeekStrip, EntriesList, test helpers, CI workflow) -- HIGH confidence, direct code review
 
 ---
-*Feature research for: Legal practice management reporting dashboards*
-*Researched: 2026-02-24*
+*Feature research for: Playwright e2e test suite for CRUD-heavy timesheet workflows*
+*Researched: 2026-02-25*

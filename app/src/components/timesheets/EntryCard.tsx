@@ -12,7 +12,7 @@ interface EntryCardProps {
 
 export function EntryCard({ entry, onEditClick, onDeleteClick, readOnly = false }: EntryCardProps) {
   return (
-    <div className="bg-[var(--bg-surface)] rounded-lg p-3">
+    <div className="bg-[var(--bg-surface)] rounded-lg p-3" data-testid="entry-card">
       {/* Header: Client + Hours */}
       <div className="flex items-start justify-between gap-2 mb-1">
         <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">

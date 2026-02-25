@@ -1,372 +1,441 @@
 # Stack Research
 
-**Domain:** Legal practice reporting dashboard (advanced charts, revenue views, data aggregation)
-**Researched:** 2026-02-24
+**Domain:** E2E testing infrastructure for Next.js legal timesheet app with Azure AD SSO
+**Researched:** 2026-02-25
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This milestone does NOT require new dependencies. The existing stack (Recharts 3.6.0, Drizzle ORM 0.45.1, Next.js 16) covers every requirement. The work is pattern-based: new chart components using existing Recharts primitives, new SQL aggregation queries using existing Drizzle helpers, and new API response shapes. The only optional action is bumping Recharts from 3.6.0 to 3.7.0 for minor bug fixes (not blocking).
+Playwright 1.57.0 and `@playwright/test` 1.57.0 are already installed as dependencies. The primary work is configuration and auth bypass infrastructure, not new package installation. The auth bypass strategy uses NextAuth's built-in `encode()` from `next-auth/jwt` to programmatically create valid JWE session tokens and inject them as cookies via Playwright's `storageState` -- no third-party auth testing libraries needed. Database seeding uses the existing Drizzle ORM connection directly (no `drizzle-seed` package needed -- test data is hand-crafted, not random). The Next.js experimental test mode (`testProxy`) is intentionally skipped: it is designed for mocking fetch requests, not for auth bypass, and remains experimental with no stability guarantees.
 
 ## Recommended Stack
 
-### Core Technologies (Already Installed -- No Changes)
+### Core Technologies (Already Installed -- No New Packages)
 
-| Technology | Installed | Latest | Purpose | Status |
-|------------|-----------|--------|---------|--------|
-| Recharts | 3.6.0 | 3.7.0 | All chart rendering (bar, donut, area/line) | Keep. Optional bump to 3.7.0 for stacked charts improvements. |
-| Drizzle ORM | 0.45.1 | 0.45.1 | SQL queries with type-safe aggregation (sum, count, groupBy) | Keep. Already at latest. |
-| Next.js | 16.0.10 | 16.0.10 | App Router, Server Components for data fetching | Keep. No changes needed. |
-| React | 19.2.1 | 19.2.1 | UI rendering | Keep. |
-| TypeScript | 5.x | 5.x | Type safety for chart data shapes and API contracts | Keep. |
+| Technology | Version | Purpose | Status |
+|------------|---------|---------|--------|
+| `@playwright/test` | 1.57.0 | Test runner, assertions, browser automation | Already installed. No changes. |
+| `playwright` | 1.57.0 | Browser engine binaries (Chromium, Firefox, WebKit) | Already installed. Browsers downloaded. |
+| `next-auth` | 4.24.13 | `encode()` from `next-auth/jwt` creates valid JWE tokens for auth bypass | Already installed. Use existing export. |
+| Drizzle ORM | 0.45.1 | Direct DB seeding/cleanup in test fixtures via existing `db` instance | Already installed. No changes. |
+| `@paralleldrive/cuid2` | 3.0.4 | Generate IDs for test data (matches production ID format) | Already installed. |
+| `dotenv` | 17.2.3 | Load `.env.test` for test database URL | Already installed. |
 
-**Confidence: HIGH** -- Verified installed versions via `npm ls`, latest versions via `npm view`.
+**Confidence: HIGH** -- All versions verified from `package.json` and `node_modules`.
 
 ### Supporting Libraries (None Needed)
 
-No new supporting libraries are required. Here's why each potential addition was rejected:
+No new npm packages are required. Here is why each potential addition was rejected:
 
 | Considered | Version | Purpose | Why NOT Needed |
 |------------|---------|---------|----------------|
-| `date-fns` | 4.x | Date manipulation for time series x-axis | Project already has `date-utils.ts` with all needed date functions. Recharts handles date formatting on axes natively. |
-| `@tanstack/react-table` | 8.x | Sortable/paginated tables for entry lists | Existing `DataTable` component in `components/ui/` and plain HTML tables in drill-downs are sufficient for ~200 clients / ~10 employees. Scale doesn't justify the abstraction. |
-| `shadcn/ui charts` | latest | Recharts wrapper with design tokens | Project already uses raw Recharts with CSS variables for theming. shadcn charts is a thin wrapper, not worth adopting mid-project. Would add inconsistency with existing chart components. |
-| `d3-scale` / `d3-time` | 7.x | Time scale formatting | Recharts handles this internally (uses d3 submodules under the hood). No direct d3 usage needed. |
+| `drizzle-seed` | 0.3.x | Automated schema-aware random seeding | Overkill. E2e tests need 1 user, 1 client, 1 topic, 1 subtopic -- hand-crafted Drizzle inserts are simpler, more readable, and deterministic. `drizzle-seed` generates random data; we need specific, predictable test data. |
+| `playwright-test-coverage` | any | Code coverage for e2e tests | E2e tests measure user workflow correctness, not code coverage. Coverage is already handled by Vitest (965 unit tests). |
+| `@faker-js/faker` | any | Generate realistic test data | Same reasoning as `drizzle-seed`. We need 5-10 specific records, not 1000 random ones. |
+| `testcontainers` | any | Spin up PostgreSQL in Docker per test | Over-engineered for a 10-user app. Use the local PostgreSQL instance with a dedicated `veda_test` database and transaction rollback cleanup. CI can add a PostgreSQL service container. |
+| `msw` (Mock Service Worker) | any | Mock external API calls | E2e tests should hit the real Next.js server and real database. Mocking defeats the purpose. The only "external" dependency is Azure AD, which is bypassed via JWT injection, not mocking. |
+| `next/experimental/testmode/playwright` | N/A | Next.js test proxy for fetch mocking | Experimental, no stability guarantees. Designed for mocking server-side fetch, which we do not need. Auth bypass is handled at the cookie layer, not the fetch layer. |
 
-**Confidence: HIGH** -- Each rejection based on examination of existing codebase components.
+**Confidence: HIGH** -- Each rejection based on specific project requirements and existing infrastructure.
 
-## Chart Patterns for This Milestone
+### Development Tools
 
-### Pattern 1: Grouped Bar Chart for Estimated vs Actual Revenue
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| `npx playwright test` | Run e2e tests | Add `test:e2e` script to package.json |
+| `npx playwright test --ui` | Interactive test runner with time-travel debugging | Best for local development. Shows browser, DOM, network. |
+| `npx playwright codegen` | Record browser interactions to generate test code | Useful for initial test scaffolding, then refine manually. |
+| `npx playwright show-report` | View HTML report after test run | Auto-opens on failure. Includes screenshots, traces, logs. |
+| `npx playwright install --with-deps` | Install browser binaries + OS deps (for CI) | Required in CI. Locally, browsers are already downloaded. |
 
-**Use case:** Revenue by Client chart, Revenue by Employee chart (overview tab).
+## Auth Bypass Strategy
 
-**Approach:** Use Recharts `BarChart` with two `Bar` children, each with a different `dataKey`. This renders side-by-side bars per category without any `stackId` (stacking would mislead -- estimated and actual are alternatives, not additive).
+### Why JWT Cookie Injection (Not CredentialsProvider)
 
-```typescript
-// Data shape
-interface RevenueChartData {
-  name: string;          // Client or employee name
-  id: string;            // For click-through
-  estimated: number;     // rate x hours
-  actual: number | null; // from finalized SDs, null if none
-}
+Two approaches exist for bypassing Azure AD SSO in e2e tests:
 
-// Chart structure
-<BarChart data={data} barGap={2} barCategoryGap="15%">
-  <XAxis dataKey="name" />
-  <YAxis tickFormatter={formatCurrency} />
-  <Tooltip content={<RevenueTooltip />} />
-  <Legend />
-  <Bar dataKey="estimated" name="Estimated" fill="var(--accent-pink)" fillOpacity={0.4} radius={[4,4,0,0]} />
-  <Bar dataKey="actual" name="Billed" fill="var(--accent-pink)" fillOpacity={0.9} radius={[4,4,0,0]} />
-</BarChart>
-```
+**Option A: Add a test-only CredentialsProvider** -- Conditionally add `Credentials({...})` to the NextAuth providers array when `NODE_ENV !== "production"`. Tests log in via the `/login` page with a test password.
 
-**Why grouped bars, not ComposedChart with line overlay:**
-- Both metrics are the same unit (EUR) and roughly the same scale
-- Side-by-side bars make comparison intuitive ("this client: estimated X, billed Y")
-- A line overlaid on bars is harder to read when values are similar
+**Option B: Programmatic JWT cookie injection** -- Use `next-auth/jwt`'s `encode()` to create a valid JWE token containing the test user's email/name, then inject it as a `next-auth.session-token` cookie into the Playwright browser context before tests run.
 
-**Why not stacked bars:**
-- Estimated and actual are not additive -- they're two ways of measuring the same thing
-- Stacking would imply total = estimated + actual, which is meaningless
+**Recommendation: Option B (JWT cookie injection)** because:
 
-**Confidence: HIGH** -- Recharts grouped bars pattern is well-documented and the project already uses the `BarChart` component.
+1. **No production code changes.** Option A modifies `auth.ts`, adding a code path that must never reach production. Option B is entirely test-side code.
+2. **Faster.** Option A still requires a page load + form submission + redirect per auth setup. Option B sets a cookie in < 1ms.
+3. **Simpler.** No need to guard against the CredentialsProvider leaking to production. No extra UI on the login page.
+4. **Already proven.** The `encode()` function is a public API of `next-auth/jwt` (verified: exports `encode`, `decode`, `getToken`). The resulting JWE is identical to what NextAuth produces during real login.
 
-### Pattern 2: Area Chart for Hours Over Time Trends
-
-**Use case:** Client drill-down hours trend, Employee drill-down hours trend.
-
-**Approach:** Use Recharts `AreaChart` with a single `Area` child. Area (vs Line) provides better visual weight for time series in dark themes. Use gradient fill for the area below the line.
+### JWT Encode Implementation
 
 ```typescript
-// Data shape
-interface TrendData {
-  date: string;   // "2026-02-01" (or formatted "1 Feb")
-  hours: number;
-}
+// e2e/helpers/auth.ts
+import { encode } from "next-auth/jwt";
 
-// Chart structure
-<AreaChart data={data}>
-  <defs>
-    <linearGradient id="hoursGradient" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="5%" stopColor="var(--accent-pink)" stopOpacity={0.3} />
-      <stop offset="95%" stopColor="var(--accent-pink)" stopOpacity={0} />
-    </linearGradient>
-  </defs>
-  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-  <YAxis tickFormatter={formatHours} />
-  <Tooltip />
-  <Area
-    type="monotone"
-    dataKey="hours"
-    stroke="var(--accent-pink)"
-    fill="url(#hoursGradient)"
-    strokeWidth={2}
-  />
-</AreaChart>
-```
+const TEST_SECRET = process.env.NEXTAUTH_SECRET!;
 
-**Why AreaChart, not LineChart:**
-- Area fills provide better visual hierarchy on dark backgrounds
-- The gradient gives a sense of volume/magnitude that pure lines lack
-- Already using the same visual language as the design system's accent colors
-
-**Why not BarChart for trends:**
-- Time series with many points (30 days in a month) creates too many thin bars
-- Line/area communicates "trend over time" more intuitively than bars
-
-**Confidence: HIGH** -- AreaChart is a standard Recharts component. Gradient fill pattern is widely documented.
-
-### Pattern 3: Horizontal Bar Chart for Topic Breakdowns
-
-**Use case:** Client drill-down topic breakdown, Employee drill-down topic breakdown.
-
-**Approach:** Reuse the existing `BarChart` component (already in `charts/BarChart.tsx`) with `layout="vertical"`. This component already supports vertical layout, click handlers, and custom value formatting.
-
-```typescript
-// Data shape -- same as existing BarChart interface
-const topicData = [
-  { name: "Company Incorporation", value: 12.5, id: "topic-1" },
-  { name: "M&A Advisory", value: 8.25, id: "topic-2" },
-  // ...
-];
-
-// Reuse existing component
-<BarChart data={topicData} valueFormatter={formatHours} layout="vertical" />
-```
-
-**Why reuse existing BarChart:**
-- Already handles both horizontal and vertical layouts
-- Already styled with project's CSS variables
-- Already supports click-through via `onBarClick`
-- No need for a new component
-
-**Confidence: HIGH** -- Component already exists and works.
-
-### Pattern 4: Custom Tooltip for Dual-Metric Charts
-
-**Use case:** Revenue charts need tooltips showing both estimated and actual values with labels.
-
-**Approach:** Create a custom tooltip component that receives the standard Recharts `active`, `payload`, `label` props. Style it to match the existing tooltip pattern in the codebase.
-
-```typescript
-interface RevenueTooltipProps {
-  active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string }>;
-  label?: string;
-}
-
-function RevenueTooltip({ active, payload, label }: RevenueTooltipProps) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      backgroundColor: "var(--bg-elevated)",
-      border: "1px solid var(--border-subtle)",
-      borderRadius: "4px",
-      padding: "8px 12px",
-      fontSize: "12px",
-    }}>
-      <p style={{ color: "var(--text-primary)", marginBottom: 4 }}>{label}</p>
-      {payload.map((entry) => (
-        <p key={entry.name} style={{ color: entry.color || "var(--text-secondary)" }}>
-          {entry.name}: {formatCurrency(entry.value)}
-        </p>
-      ))}
-    </div>
-  );
-}
-```
-
-**Confidence: HIGH** -- Existing tooltips in codebase use inline `contentStyle`/`labelStyle` approach. Custom content tooltip is standard Recharts pattern.
-
-## Data Aggregation Strategy
-
-### Server-Side Aggregation with Drizzle ORM
-
-**Principle:** All aggregation runs server-side in the API route. The client receives pre-computed chart-ready data. No client-side aggregation beyond what already exists in the current drill-down components.
-
-**Why server-side:**
-- Drizzle ORM's `groupBy` + `sum()` + `count()` map directly to PostgreSQL GROUP BY queries
-- ~10 employees and ~200 clients means aggregation is fast (< 50ms even without optimization)
-- Avoids shipping raw entry data to the client for topic/employee/client breakdowns
-- Keeps the API as the single source of truth for calculations
-
-### Aggregation Queries Needed
-
-**1. Topic breakdown per client (new query)**
-
-```typescript
-import { sum, eq, and, gte, lte } from "drizzle-orm";
-
-// Group time entries by topicName for a given client and date range
-const topicBreakdown = await db
-  .select({
-    topicName: timeEntries.topicName,
-    totalHours: sum(timeEntries.hours),
-  })
-  .from(timeEntries)
-  .where(and(
-    eq(timeEntries.clientId, clientId),
-    gte(timeEntries.date, startStr),
-    lte(timeEntries.date, endStr),
-  ))
-  .groupBy(timeEntries.topicName);
-```
-
-**2. Topic breakdown per employee (new query)**
-
-```typescript
-// Group time entries by topicName for a given employee across all clients
-const topicBreakdown = await db
-  .select({
-    topicName: timeEntries.topicName,
-    totalHours: sum(timeEntries.hours),
-  })
-  .from(timeEntries)
-  .where(and(
-    eq(timeEntries.userId, employeeId),
-    gte(timeEntries.date, startStr),
-    lte(timeEntries.date, endStr),
-  ))
-  .groupBy(timeEntries.topicName);
-```
-
-**3. Actual revenue from finalized service descriptions (new query)**
-
-```typescript
-// Fetch finalized SDs overlapping the date range with their topics and line items
-const finalizedSDs = await db.query.serviceDescriptions.findMany({
-  where: and(
-    eq(serviceDescriptions.status, "FINALIZED"),
-    // SD periods overlapping the report date range
-    lte(serviceDescriptions.periodStart, endStr),
-    gte(serviceDescriptions.periodEnd, startStr),
-  ),
-  with: {
-    client: { columns: { id: true, name: true } },
-    topics: {
-      with: { lineItems: true },
+export async function createAuthCookie(user: { name: string; email: string }) {
+  const token = await encode({
+    token: {
+      name: user.name,
+      email: user.email,
+      sub: user.email, // NextAuth uses email as sub for JWT strategy
     },
+    secret: TEST_SECRET,
+    // salt defaults to "next-auth.session-token" when not provided
+    maxAge: 8 * 60 * 60, // Match authOptions session maxAge (8 hours)
+  });
+
+  return {
+    name: "next-auth.session-token",
+    value: token,
+    domain: "localhost",
+    path: "/",
+    httpOnly: true,
+    sameSite: "Lax" as const,
+    expires: Math.floor(Date.now() / 1000) + 8 * 60 * 60,
+  };
+}
+```
+
+**Cookie name:** `next-auth.session-token` (not `__Secure-next-auth.session-token` because `NEXTAUTH_URL` is `http://localhost:3000` in test, triggering the non-secure prefix).
+
+**Confidence: HIGH** -- `encode()` signature verified from `next-auth/jwt/types.d.ts` in node_modules. Cookie name behavior verified from NextAuth docs (secure prefix only for HTTPS URLs).
+
+### Auth Setup in Playwright
+
+```typescript
+// e2e/auth.setup.ts
+import { test as setup } from "@playwright/test";
+import { createAuthCookie } from "./helpers/auth";
+
+const STORAGE_STATE_PATH = "e2e/.auth/user.json";
+
+setup("authenticate as test user", async ({ context }) => {
+  const cookie = await createAuthCookie({
+    name: "E2E Test User",
+    email: "e2e-test@vedalegal.bg",
+  });
+  await context.addCookies([cookie]);
+  await context.storageState({ path: STORAGE_STATE_PATH });
+});
+```
+
+## Database Seeding Strategy
+
+### Approach: Direct Drizzle Inserts with Transaction Cleanup
+
+E2e tests hit the real database. The seeding strategy:
+
+1. **Dedicated test database:** `veda_test` PostgreSQL database (separate from `veda_dev`).
+2. **Global setup:** Insert a fixed set of test data (1 user, 2 clients, 2 topics, 3 subtopics) before all tests.
+3. **Per-test cleanup:** Delete time entries and submissions created during each test. Keep reference data (users, clients, topics) stable across tests.
+4. **Global teardown:** Truncate all tables after the full test suite completes.
+
+### Why Not Per-Test Database Reset
+
+Full database reset between tests is unnecessary because:
+- Time entry CRUD tests create entries, then clean them up individually.
+- Reference data (users, clients, topics) is read-only during tests.
+- Worker count set to 1 (serial execution) avoids race conditions.
+
+### Seeding Code Pattern
+
+```typescript
+// e2e/helpers/seed.ts
+import { db } from "@/lib/db";
+import { users, clients, topics, subtopics } from "@/lib/schema";
+import { createId } from "@paralleldrive/cuid2";
+
+export const TEST_USER = {
+  id: createId(),
+  email: "e2e-test@vedalegal.bg",
+  name: "E2E Test User",
+  position: "ASSOCIATE" as const,
+  status: "ACTIVE" as const,
+  updatedAt: new Date().toISOString(),
+};
+
+export const TEST_CLIENT = {
+  id: createId(),
+  name: "E2E Test Client Ltd",
+  clientType: "REGULAR" as const,
+  status: "ACTIVE" as const,
+  hourlyRate: "150.00",
+  updatedAt: new Date().toISOString(),
+};
+
+// ... topics, subtopics similarly
+
+export async function seedTestData() {
+  await db.insert(users).values(TEST_USER).onConflictDoNothing();
+  await db.insert(clients).values(TEST_CLIENT).onConflictDoNothing();
+  // ... topics, subtopics
+}
+
+export async function cleanupTestData() {
+  // Delete in reverse FK order
+  await db.delete(timeEntries).where(eq(timeEntries.userId, TEST_USER.id));
+  await db.delete(timesheetSubmissions).where(eq(timesheetSubmissions.userId, TEST_USER.id));
+  // Keep reference data for subsequent test runs
+}
+```
+
+**Why direct Drizzle, not API calls for seeding:**
+- API routes require authentication, creating a chicken-and-egg problem.
+- Direct DB access is faster and more reliable than HTTP round-trips.
+- Uses the same ORM and schema types as production code -- type-safe.
+
+**Confidence: HIGH** -- Drizzle insert/delete API is well-documented and already used throughout the codebase.
+
+## Playwright Configuration
+
+### Key Configuration Decisions
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| `workers` | 1 | Serial execution. Single test database, no parallel isolation needed for ~10 tests. Avoids race conditions. |
+| `retries` | 0 (local), 1 (CI) | No retries locally for fast feedback. One retry in CI to handle rare flakiness. |
+| `timeout` | 30000 (30s) | Generous for dev server cold starts. Individual actions have shorter timeouts. |
+| `webServer.command` | `npm run dev` | Use dev server, not production build. Faster iteration. CI can override to `npm run build && npm run start`. |
+| `webServer.reuseExistingServer` | `!process.env.CI` | Reuse running dev server locally (faster). Always start fresh in CI. |
+| `projects` | Setup + Chromium only | Single browser sufficient for internal tool with ~10 users all on modern browsers. Add Firefox/WebKit later if needed. |
+| `testDir` | `./e2e` | Separate from `src/` where Vitest unit tests live. Clear boundary. |
+| `outputDir` | `./e2e/test-results` | Keep artifacts near test files. |
+| `use.baseURL` | `http://localhost:3000` | Matches `NEXTAUTH_URL` and dev server. |
+| `use.trace` | `on-first-retry` | Capture traces only when tests fail and retry. Saves disk space. |
+| `use.screenshot` | `only-on-failure` | Automatic screenshots on failure for debugging. |
+
+### Configuration File
+
+```typescript
+// playwright.config.ts
+import { defineConfig, devices } from "@playwright/test";
+import dotenv from "dotenv";
+import path from "path";
+
+dotenv.config({ path: path.resolve(__dirname, ".env.test") });
+
+export default defineConfig({
+  testDir: "./e2e",
+  outputDir: "./e2e/test-results",
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  workers: 1,
+  reporter: process.env.CI ? "github" : "html",
+  timeout: 30_000,
+
+  use: {
+    baseURL: "http://localhost:3000",
+    trace: "on-first-retry",
+    screenshot: "only-on-failure",
+  },
+
+  projects: [
+    {
+      name: "setup",
+      testMatch: /.*\.setup\.ts/,
+    },
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "e2e/.auth/user.json",
+      },
+      dependencies: ["setup"],
+    },
+  ],
+
+  webServer: {
+    command: "npm run dev",
+    url: "http://localhost:3000",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
   },
 });
+```
 
-// Calculate actual revenue per client using existing billing-pdf.tsx functions
-for (const sd of finalizedSDs) {
-  const isRetainer = sd.retainerFee != null && sd.retainerHours != null;
-  const total = isRetainer
-    ? calculateRetainerGrandTotal(sd.topics, ...)
-    : calculateGrandTotal(sd.topics, sd.discountType, sd.discountValue);
-  // Map to client ID for the revenue chart
+**Why not use Next.js experimental test mode (`testProxy`):**
+The `next/experimental/testmode/playwright` config wrapper adds fetch-level request interception for mocking server-side fetches. This project does not need fetch mocking -- the test server hits the real database. Using the standard `@playwright/test` config keeps things simple, stable, and documented.
+
+**Confidence: HIGH** -- Configuration pattern follows Playwright official docs and Next.js Playwright guide.
+
+## File Structure
+
+```
+app/
+  playwright.config.ts          # Playwright configuration
+  .env.test                     # Test environment variables (DATABASE_URL for veda_test)
+  e2e/
+    .auth/
+      user.json                 # Persisted auth state (gitignored)
+    helpers/
+      auth.ts                   # createAuthCookie() using next-auth/jwt encode
+      seed.ts                   # Database seeding and cleanup utilities
+    auth.setup.ts               # Global auth setup (runs before all tests)
+    global.setup.ts             # Database seeding (runs before all tests)
+    global.teardown.ts          # Database cleanup (runs after all tests)
+    timesheets/
+      create-entry.spec.ts      # Create time entry tests
+      edit-entry.spec.ts        # Edit time entry tests
+      delete-entry.spec.ts      # Delete time entry tests
+      week-strip.spec.ts        # Date navigation tests
+      submission.spec.ts        # Submit/revoke daily timesheet tests
+```
+
+## Environment Configuration
+
+### .env.test
+
+```bash
+# Separate test database (not dev, not prod)
+DATABASE_URL=postgresql://stefan@localhost:5432/veda_test
+
+# Same NextAuth config as dev (needed for JWT encode/decode)
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=<same-as-dev-or-separate-test-secret>
+
+# Azure AD credentials not needed -- auth is bypassed via JWT injection
+# AZURE_AD_CLIENT_ID, AZURE_AD_CLIENT_SECRET, AZURE_AD_TENANT_ID are NOT required
+```
+
+### package.json Scripts
+
+```json
+{
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:codegen": "playwright codegen http://localhost:3000",
+    "db:create-test": "createdb veda_test 2>/dev/null; DATABASE_URL=postgresql://stefan@localhost:5432/veda_test npx drizzle-kit migrate"
+  }
 }
 ```
 
-**Why reuse `calculateGrandTotal` / `calculateRetainerGrandTotal`:**
-- These functions already handle ALL billing complexity: caps, discounts, waivers, retainer logic
-- Re-implementing the calculation would create divergence from invoice/PDF amounts
-- They are pure functions that accept data, not tied to any UI or DB context
+## CI Integration
 
-**Confidence: HIGH** -- Drizzle aggregation helpers verified via official docs. Billing functions already exist in codebase.
+### GitHub Actions Addition
 
-### API Response Shape Changes
-
-The current `/api/reports` endpoint returns a flat structure. For this milestone, extend the response rather than creating new endpoints:
-
-```typescript
-interface ReportData {
-  // Existing fields (unchanged)
-  summary: { totalHours; totalRevenue; activeClients; };
-  byEmployee: EmployeeStats[];
-  byClient: ClientStats[];
-  entries: Entry[];
-
-  // New fields
-  revenueByClient: { id; name; estimated; actual: number | null }[];
-  revenueByEmployee: { id; name; estimated; actual: number | null }[];
-}
-
-// Extended EmployeeStats (add to existing)
-interface EmployeeStats {
-  // ...existing fields...
-  topicBreakdown: { topicName: string; hours: number }[];
-}
-
-// Extended ClientStats (add to existing)
-interface ClientStats {
-  // ...existing fields...
-  topicBreakdown: { topicName: string; hours: number }[];
-  dailyHours: { date: string; hours: number }[];
-}
-
-// Extended Entry (add topic column)
-interface Entry {
-  // ...existing fields...
-  topicName: string | null;
-}
+```yaml
+# Add to .github/workflows/ci.yml
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: veda_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: ./app
+      - run: npx playwright install --with-deps chromium
+        working-directory: ./app
+      - run: npx drizzle-kit migrate
+        working-directory: ./app
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/veda_test
+      - run: npx playwright test
+        working-directory: ./app
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/veda_test
+          NEXTAUTH_URL: http://localhost:3000
+          NEXTAUTH_SECRET: e2e-test-secret-not-real
+          CI: true
 ```
 
-**Why extend existing endpoint, not add new ones:**
-- Current pattern is one fetch per date range change
-- Adding separate endpoints would increase network requests and complexity
-- Data size is small (~10 employees, ~200 clients, ~few hundred entries per month)
-- Adding topic breakdowns and revenue data adds minimal payload
-
-**Confidence: HIGH** -- Based on current API structure and data volume constraints.
+**Key CI detail:** Only install Chromium (`--with-deps chromium`), not all three browsers. Saves ~2 minutes of download time. Internal tool does not need cross-browser e2e coverage.
 
 ## Alternatives Considered
 
 | Recommended | Alternative | Why Not |
 |-------------|-------------|---------|
-| Recharts 3.6.0 (current) | Upgrade to 3.7.0 | 3.7.0 has stacked charts fixes but nothing blocking this milestone. Optional bump, not required. |
-| Recharts BarChart with two Bars | ComposedChart (Bar + Line) | Both metrics are EUR at similar scale. Side-by-side bars communicate comparison better than bar+line overlay. |
-| AreaChart for time trends | LineChart | Area fills work better on dark backgrounds. Same API, just different visual weight. |
-| Server-side aggregation in API route | Client-side aggregation in React | Server-side is already the pattern. Client-side would ship more data and duplicate logic. |
-| Extend existing `/api/reports` endpoint | New `/api/reports/revenue` endpoint | One-call pattern is simpler. Data volume is trivially small. |
-| Drizzle `groupBy` + `sum()` | Raw SQL via `db.execute()` | Drizzle's type-safe helpers are sufficient. Raw SQL adds type-safety risk for no benefit at this scale. |
-| Reuse existing `BarChart` component for topics | New `TopicBreakdownChart` component | Existing component already handles vertical layout and all needed features. |
+| JWT cookie injection | CredentialsProvider for test env | Modifies production auth code. Risk of test-only provider leaking to prod. Cookie injection is test-side only. |
+| JWT cookie injection | Full OAuth login flow in tests | Requires Azure AD test tenant, MFA handling, token refresh. Fragile, slow, and unnecessary for an internal tool. |
+| Standard Playwright config | `next/experimental/testmode/playwright` | Experimental, no stability guarantees, designed for fetch mocking (not auth). Adds complexity with no benefit. |
+| Single `veda_test` database | Per-test Docker containers | Over-engineered. 10-user app with serial test execution. PostgreSQL service in CI is sufficient. |
+| Serial execution (workers: 1) | Parallel with database isolation | Not enough tests to justify parallelization. Serial is simpler, avoids race conditions. |
+| Chromium only | Multi-browser (Chromium + Firefox + WebKit) | Internal tool used by ~10 people on managed devices. Cross-browser testing adds CI time with near-zero ROI. |
+| Dev server for tests | Production build + start | Dev server is faster to start and supports HMR for test development. CI can override. |
+| `storageState` file persistence | `context.addCookies()` per test | `storageState` is Playwright's recommended pattern. Shared across all tests in a project. More efficient. |
+| Hand-crafted Drizzle inserts | `drizzle-seed` package | Need deterministic, specific test data (known IDs, names, positions). Random data makes assertions fragile. |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `victory-charts` / `nivo` / `@visx` | Project is already on Recharts. Mixing chart libraries creates inconsistent styling and bundle bloat. | Recharts 3.6.0 (already installed) |
-| `shadcn/ui charts` | Thin wrapper over Recharts. Project already uses raw Recharts with CSS variables. Adopting mid-project adds inconsistency. shadcn is still migrating to Recharts v3 -- potential compat issues. | Raw Recharts components styled with existing CSS vars |
-| Dual Y-axis charts | Dual axes are notoriously misleading (you can make any two series appear correlated by adjusting scales). Not needed here since estimated and actual revenue share the same unit and scale. | Grouped bars with single Y-axis |
-| Client-side SQL (e.g., `sql.js`, `@electric-sql/pglite`) | Over-engineered for ~10 employees. Server queries take < 50ms. | Server-side Drizzle queries |
-| `@tanstack/react-table` for entry tables | Current HTML tables are sufficient. ~200 clients with perhaps 50-100 entries per month in a drill-down doesn't need virtual scrolling or complex table state management. | Plain HTML `<table>` with existing styling |
-| `react-window` / `react-virtualized` for long entry lists | "All entries for period" means hundreds, not thousands. Browser renders this fine without virtualization. | Scrollable `<table>` or paginated view if needed later |
+| Cypress | Playwright is already installed and configured. Adding Cypress creates tooling confusion, duplicate config, and two test runners to maintain. | Playwright 1.57.0 (already installed) |
+| `next/experimental/testmode` | Still experimental. Designed for server-side fetch mocking, not auth bypass. Could break on any Next.js update. | Standard `@playwright/test` config with `webServer` |
+| `msw` for e2e tests | E2e tests should exercise the full stack (browser -> API -> database). Mocking API responses in e2e tests defeats the purpose. | Real Next.js server hitting real test database |
+| `testcontainers` | Docker-per-test overhead is not justified for ~10 tests on a small dataset. PostgreSQL service in CI covers isolation. | Local `veda_test` database + CI PostgreSQL service |
+| `playwright-test-coverage` | E2e tests validate user workflows, not code coverage. Coverage is Vitest's job (965 existing tests). | Vitest `--coverage` for code coverage metrics |
+| Multi-role auth storage states | Only one role (ASSOCIATE) needed for timesheet e2e tests. Admin tests can be added later with a second storage state. | Single `user.json` storage state |
 
 ## Version Compatibility
 
 | Package | Version | Compatible With | Notes |
 |---------|---------|-----------------|-------|
-| recharts@3.6.0 | 3.6.0 | React 19.2.1 | Recharts 3.x supports React 18+. Verified working in current codebase. |
-| recharts@3.7.0 | 3.7.0 | React 19.2.1 | Safe upgrade if desired. No breaking changes between 3.6.0 and 3.7.0. |
-| drizzle-orm@0.45.1 | 0.45.1 | pg@8.16.3, drizzle-kit@0.31.8 | Already at latest. `sum()`, `count()`, `groupBy()` all available. |
+| `@playwright/test@1.57.0` | 1.57.0 | Node.js 22, Next.js 16.0.10 | Latest stable. Chrome for Testing builds (not Chromium). |
+| `playwright@1.57.0` | 1.57.0 | `@playwright/test@1.57.0` | Must match exactly. Already in sync. |
+| `next-auth@4.24.13` | 4.24.13 | `next-auth/jwt` `encode()` function | Verified export: `{ decode, encode, getToken }`. JWE uses A256GCM encryption. |
+| `drizzle-orm@0.45.1` | 0.45.1 | `pg@8.16.3` | Seeding uses existing `db` instance and schema. No version concerns. |
+| `dotenv@17.2.3` | 17.2.3 | `.env.test` loading | Already installed. Used in playwright.config.ts. |
 
 ## Installation
 
 ```bash
-# No new packages needed. Zero npm installs for this milestone.
+# No new packages needed. Zero npm installs.
 
-# Optional: Bump Recharts from 3.6.0 to 3.7.0 for minor improvements
-npm install recharts@3.7.0
+# One-time setup: create test database
+createdb veda_test
+DATABASE_URL=postgresql://stefan@localhost:5432/veda_test npx drizzle-kit migrate
+
+# One-time setup: install Playwright browsers (already done, but for reference)
+npx playwright install
+
+# Verify everything works
+npx playwright test --ui
+```
+
+## .gitignore Additions
+
+```
+# Playwright
+e2e/.auth/
+e2e/test-results/
+playwright-report/
+.env.test
 ```
 
 ## Sources
 
-- [Recharts BarChart API](https://recharts.github.io/en-US/api/BarChart/) -- Grouped bars via multiple `<Bar>` children, `barGap` and `barCategoryGap` props (HIGH confidence)
-- [Recharts ComposedChart API](https://recharts.github.io/en-US/api/ComposedChart/) -- Combining chart types in single view (HIGH confidence)
-- [Recharts AreaChart API](https://recharts.github.io/en-US/api/AreaChart/) -- Area chart for time trends (HIGH confidence)
-- [Recharts GitHub Releases](https://github.com/recharts/recharts/releases) -- Version 3.7.0 latest, 3.6.0 installed (HIGH confidence)
-- [Recharts 3.0 Migration Guide](https://github.com/recharts/recharts/wiki/3.0-migration-guide) -- State management rewrite, no breaking changes since 3.0 (HIGH confidence)
-- [Drizzle ORM Select Docs](https://orm.drizzle.team/docs/select) -- `groupBy()`, `sum()`, `count()`, `having()` syntax (HIGH confidence)
-- [Grouped Stacked Bar Charts with Recharts](https://spin.atomicobject.com/stacked-bar-charts-recharts/) -- Pattern for multiple Bar components with different stackIds (MEDIUM confidence -- blog post, but matches official API)
-- [Recharts Custom Tooltip API](https://recharts.github.io/en-US/api/Tooltip/) -- Custom `content` prop for tooltips (HIGH confidence)
-- npm registry verified via `npm view`: recharts@3.7.0, drizzle-orm@0.45.1 (HIGH confidence)
-- Installed versions verified via `npm ls`: recharts@3.6.0, drizzle-orm@0.45.1 (HIGH confidence)
+- [Playwright Authentication Docs](https://playwright.dev/docs/auth) -- storageState pattern, setup projects, cookie injection (HIGH confidence)
+- [Playwright Best Practices](https://playwright.dev/docs/best-practices) -- test isolation, webServer config, web-first assertions (HIGH confidence)
+- [Playwright Release Notes](https://playwright.dev/docs/release-notes) -- v1.57.0 features: Chrome for Testing, `--fail-on-flaky-tests`, webServer `wait` field (HIGH confidence)
+- [Next.js Playwright Guide](https://nextjs.org/docs/app/guides/testing/playwright) -- webServer configuration, CI recommendations (HIGH confidence)
+- [Auth.js Testing Guide](https://authjs.dev/guides/testing) -- CredentialsProvider approach for development, session validation patterns (HIGH confidence)
+- [NextAuth.js JWT Options](https://next-auth.js.org/configuration/options) -- `encode()`/`decode()` function signatures, cookie naming conventions, `__Secure-` prefix behavior (HIGH confidence)
+- [Auth.js JWT Reference](https://authjs.dev/reference/core/jwt) -- `encode()` params: `token`, `secret`, `salt`, `maxAge`. A256CBC-HS512 encryption (HIGH confidence)
+- `next-auth/jwt/types.d.ts` in node_modules -- verified `JWTEncodeParams` interface: `token?: JWT`, `salt?: string`, `secret: string | Buffer`, `maxAge?: number` (HIGH confidence)
+- `next-auth/jwt/index.d.ts` in node_modules -- verified exports: `encode`, `decode`, `getToken` (HIGH confidence)
+- [Next.js Experimental Test Mode README](https://github.com/vercel/next.js/blob/canary/packages/next/src/experimental/testmode/playwright/README.md) -- `testProxy: true` config, fetch interception API, explicitly experimental (MEDIUM confidence)
+- [Database Rollback Strategies in Playwright](https://www.thegreenreport.blog/articles/database-rollback-strategies-in-playwright/database-rollback-strategies-in-playwright.html) -- cleanup patterns, beforeEach/afterEach hooks (MEDIUM confidence)
 
 ---
-*Stack research for: Legal practice reporting dashboard*
-*Researched: 2026-02-24*
+*Stack research for: E2E testing infrastructure (Playwright + auth bypass + database seeding)*
+*Researched: 2026-02-25*

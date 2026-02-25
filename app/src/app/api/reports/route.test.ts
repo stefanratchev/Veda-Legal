@@ -60,8 +60,10 @@ function createMockTimeEntryWithRelations(overrides: {
   description?: string;
   userId?: string;
   clientId?: string;
+  topicName?: string;
+  isWrittenOff?: boolean;
   user?: { id: string; name: string | null };
-  client?: { id: string; name: string; hourlyRate: number | null };
+  client?: { id: string; name: string; hourlyRate: number | null; clientType?: "REGULAR" | "INTERNAL" | "MANAGEMENT" };
 } = {}) {
   const userId = overrides.userId || "user-1";
   const clientId = overrides.clientId || "client-1";
@@ -72,8 +74,12 @@ function createMockTimeEntryWithRelations(overrides: {
     description: overrides.description || "Test work",
     userId,
     clientId,
+    topicName: overrides.topicName ?? "General Advisory",
+    isWrittenOff: overrides.isWrittenOff ?? false,
     user: overrides.user || { id: userId, name: "Test User" },
-    client: overrides.client || { id: clientId, name: "Test Client", hourlyRate: 150 },
+    client: overrides.client
+      ? { clientType: "REGULAR" as const, ...overrides.client }
+      : { id: clientId, name: "Test Client", hourlyRate: 150, clientType: "REGULAR" as const },
   };
 }
 
@@ -415,7 +421,7 @@ describe("GET /api/reports", () => {
 
       const client = data.byClient[0];
       expect(client.hourlyRate).toBeNull();
-      expect(client.revenue).toBeNull();
+      expect(client.revenue).toBe(0);
     });
 
     it("returns empty data when no entries in date range", async () => {
@@ -797,6 +803,768 @@ describe("GET /api/reports", () => {
       const clients = data.byEmployee[0].clients;
       expect(clients[0].hours).toBe(8);
       expect(clients[1].hours).toBe(2);
+    });
+  });
+
+  describe("Topic Aggregations", () => {
+    it("includes topicName on each entry in the response", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          topicName: "M&A Advisory",
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].topicName).toBe("M&A Advisory");
+    });
+
+    it("resolves null topicName to 'Uncategorized'", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          topicName: undefined, // will be set by helper, override below
+        }),
+      ];
+      // Override topicName to null to simulate DB null
+      (entries[0] as Record<string, unknown>).topicName = null;
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].topicName).toBe("Uncategorized");
+    });
+
+    it("resolves empty string topicName to 'Uncategorized'", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          topicName: "",
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].topicName).toBe("Uncategorized");
+    });
+
+    it("includes topics array on byClient items", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "3.0",
+          topicName: "M&A Advisory",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "2.0",
+          topicName: "Company Incorporation",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byClient[0].topics).toHaveLength(2);
+      const topicNames = data.byClient[0].topics.map((t: { topicName: string }) => t.topicName).sort();
+      expect(topicNames).toEqual(["Company Incorporation", "M&A Advisory"]);
+      for (const topic of data.byClient[0].topics) {
+        expect(topic).toHaveProperty("totalHours");
+        expect(topic).toHaveProperty("writtenOffHours");
+      }
+    });
+
+    it("includes topics array on byEmployee items", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "3.0",
+          topicName: "M&A Advisory",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "2.0",
+          topicName: "Company Incorporation",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byEmployee[0].topics).toHaveLength(2);
+      const topicNames = data.byEmployee[0].topics.map((t: { topicName: string }) => t.topicName).sort();
+      expect(topicNames).toEqual(["Company Incorporation", "M&A Advisory"]);
+      for (const topic of data.byEmployee[0].topics) {
+        expect(topic).toHaveProperty("totalHours");
+        expect(topic).toHaveProperty("writtenOffHours");
+      }
+    });
+
+    it("aggregates written-off hours separately in topic", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "3.0",
+          topicName: "M&A Advisory",
+          isWrittenOff: false,
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "2.0",
+          topicName: "M&A Advisory",
+          isWrittenOff: true,
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      const topic = data.byClient[0].topics[0];
+      expect(topic.topicName).toBe("M&A Advisory");
+      expect(topic.totalHours).toBe(5);
+      expect(topic.writtenOffHours).toBe(2);
+    });
+  });
+
+  describe("Written-Off Handling", () => {
+    it("includes isWrittenOff flag on entries", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          isWrittenOff: true,
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].isWrittenOff).toBe(true);
+    });
+
+    it("includes totalWrittenOffHours in summary", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          hours: "3.0",
+          isWrittenOff: false,
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          hours: "2.0",
+          isWrittenOff: true,
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-3",
+          hours: "1.5",
+          isWrittenOff: false,
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.summary.totalWrittenOffHours).toBe(2);
+    });
+
+    it("excludes written-off hours from client revenue", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          hours: "3.0",
+          isWrittenOff: false,
+          clientId: "client-1",
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          hours: "2.0",
+          isWrittenOff: true,
+          clientId: "client-1",
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byClient[0].revenue).toBe(450); // 3 * 150, not 5 * 150
+    });
+
+    it("excludes written-off hours from summary totalRevenue", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          hours: "3.0",
+          isWrittenOff: false,
+          clientId: "client-1",
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          hours: "2.0",
+          isWrittenOff: true,
+          clientId: "client-1",
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.summary.totalRevenue).toBe(450); // 3 * 150, not 5 * 150
+    });
+
+    it("includes written-off hours in totalHours", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          hours: "3.0",
+          isWrittenOff: false,
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          hours: "2.0",
+          isWrittenOff: true,
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.summary.totalHours).toBe(5); // includes written-off
+    });
+  });
+
+  describe("Client Type Revenue Rules", () => {
+    it("includes clientType on byClient items", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          clientId: "client-1",
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byClient[0].clientType).toBe("REGULAR");
+    });
+
+    it("includes clientType on entries", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          clientId: "client-1",
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "INTERNAL" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.entries[0].clientType).toBe("INTERNAL");
+    });
+
+    it("sets revenue to 0 for INTERNAL clients", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          hours: "3.0",
+          clientId: "client-1",
+          client: { id: "client-1", name: "Internal Client", hourlyRate: 150, clientType: "INTERNAL" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byClient[0].revenue).toBe(0);
+    });
+
+    it("sets revenue to 0 for MANAGEMENT clients", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          hours: "3.0",
+          clientId: "client-1",
+          client: { id: "client-1", name: "Management Client", hourlyRate: 150, clientType: "MANAGEMENT" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byClient[0].revenue).toBe(0);
+    });
+
+    it("excludes INTERNAL/MANAGEMENT from summary totalRevenue", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          hours: "3.0",
+          clientId: "client-1",
+          client: { id: "client-1", name: "Regular Client", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          hours: "2.0",
+          clientId: "client-2",
+          client: { id: "client-2", name: "Internal Client", hourlyRate: 100, clientType: "INTERNAL" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.summary.totalRevenue).toBe(450); // Only REGULAR: 3 * 150
+    });
+  });
+
+  describe("Employee Revenue", () => {
+    it("includes revenue on byEmployee items", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          hours: "3.0",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(typeof data.byEmployee[0].revenue).toBe("number");
+    });
+
+    it("calculates employee revenue proportionally", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "3.0",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          userId: "user-1",
+          clientId: "client-2",
+          hours: "2.0",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-2", name: "Client B", hourlyRate: 200, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byEmployee[0].revenue).toBe(850); // 3*150 + 2*200
+    });
+
+    it("excludes written-off hours from employee revenue", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "3.0",
+          isWrittenOff: false,
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "2.0",
+          isWrittenOff: true,
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byEmployee[0].revenue).toBe(450); // 3 * 150, not 5 * 150
+    });
+
+    it("excludes INTERNAL client hours from employee revenue", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "3.0",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Regular Client", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          userId: "user-1",
+          clientId: "client-2",
+          hours: "2.0",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-2", name: "Internal Client", hourlyRate: 100, clientType: "INTERNAL" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byEmployee[0].revenue).toBe(450); // Only REGULAR: 3 * 150
+    });
+
+    it("includes billableHours on byEmployee items", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          clientId: "client-1",
+          hours: "3.0",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-1", name: "Regular Client", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          userId: "user-1",
+          clientId: "client-2",
+          hours: "2.0",
+          user: { id: "user-1", name: "Employee One" },
+          client: { id: "client-2", name: "Internal Client", hourlyRate: 100, clientType: "INTERNAL" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byEmployee[0].billableHours).toBe(3);
+      expect(data.byEmployee[0].totalHours).toBe(5);
+    });
+  });
+
+  describe("Revenue Consistency", () => {
+    it("summary totalRevenue equals sum of byClient revenue for REGULAR clients", async () => {
+      const user = createMockUser({ position: "ADMIN" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          clientId: "client-1",
+          hours: "3.0",
+          client: { id: "client-1", name: "Regular Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-2",
+          clientId: "client-2",
+          hours: "2.0",
+          client: { id: "client-2", name: "Regular Client B", hourlyRate: 200, clientType: "REGULAR" },
+        }),
+        createMockTimeEntryWithRelations({
+          id: "entry-3",
+          clientId: "client-3",
+          hours: "4.0",
+          client: { id: "client-3", name: "Internal Client", hourlyRate: 100, clientType: "INTERNAL" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      const regularClientRevenue = data.byClient
+        .filter((c: { clientType: string }) => c.clientType === "REGULAR")
+        .reduce((sum: number, c: { revenue: number }) => sum + c.revenue, 0);
+
+      expect(data.summary.totalRevenue).toBe(regularClientRevenue);
+      expect(data.summary.totalRevenue).toBe(850); // 3*150 + 2*200
+    });
+  });
+
+  describe("Non-Admin Revenue Visibility", () => {
+    it("hides employee revenue and billableHours from non-admin users", async () => {
+      const user = createMockUser({ id: "user-1", position: "ASSOCIATE" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          hours: "3.0",
+          user: { id: "user-1", name: user.name },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.byEmployee[0].revenue).toBeNull();
+      expect(data.byEmployee[0].billableHours).toBeNull();
+    });
+
+    it("hides totalWrittenOffHours from non-admin users", async () => {
+      const user = createMockUser({ id: "user-1", position: "ASSOCIATE" });
+      setupAuthenticatedUser(user);
+
+      const entries = [
+        createMockTimeEntryWithRelations({
+          id: "entry-1",
+          userId: "user-1",
+          hours: "3.0",
+          isWrittenOff: true,
+          user: { id: "user-1", name: user.name },
+          client: { id: "client-1", name: "Client A", hourlyRate: 150, clientType: "REGULAR" },
+        }),
+      ];
+      mockDb.query.timeEntries.findMany.mockResolvedValue(entries);
+
+      const request = createMockRequest({
+        method: "GET",
+        url: "/api/reports?startDate=2024-01-01&endDate=2024-01-31",
+      });
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(data.summary.totalWrittenOffHours).toBeNull();
     });
   });
 });

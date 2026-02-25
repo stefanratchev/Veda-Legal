@@ -1,36 +1,14 @@
 "use client";
 
 import { BarChart } from "./charts/BarChart";
+import { DataTable } from "@/components/ui/DataTable";
+import { ColumnDef } from "@/components/ui/table-types";
 import { formatHours } from "@/lib/date-utils";
-
-interface EmployeeStats {
-  id: string;
-  name: string;
-  totalHours: number;
-  clientCount: number;
-  topClient: { name: string; hours: number } | null;
-  clients: { id: string; name: string; hours: number }[];
-  dailyHours: { date: string; hours: number }[];
-}
-
-interface Entry {
-  id: string;
-  date: string;
-  hours: number;
-  description: string;
-  client: {
-    id: string;
-    name: string;
-  };
-  employee: {
-    id: string;
-    name: string;
-  };
-}
+import type { EmployeeStats, DrillDownEntry } from "@/types/reports";
 
 interface ByEmployeeTabProps {
   employees: EmployeeStats[];
-  entries: Entry[];
+  entries: DrillDownEntry[];
   isAdmin: boolean;
   currentUserId: string;
   selectedEmployeeId: string | null;
@@ -91,6 +69,46 @@ export function ByEmployeeTab({
       (e) => e.employee.id === selectedEmployeeId
     );
 
+    // Empty state: employee selected but no entries in period
+    if (employeeEntries.length === 0) {
+      return (
+        <div className="space-y-6">
+          {/* Back button and header */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onSelectEmployee(null)}
+              className="flex items-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors text-sm"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+              Back to All
+            </button>
+            <span className="text-[var(--border-subtle)]">|</span>
+            <h3 className="text-[var(--text-primary)] font-medium">
+              {selectedEmployee.name}
+            </h3>
+          </div>
+          {/* Empty state message */}
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-[var(--text-secondary)] text-[13px]">
+              No time entries for this employee in the selected period
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     // Calculate hours by client for bar chart
     const hoursByClient = employeeEntries.reduce(
       (acc, entry) => {
@@ -107,26 +125,74 @@ export function ByEmployeeTab({
       (a, b) => b.value - a.value
     );
 
-    // Calculate hours by day for bar chart
-    const hoursByDay = employeeEntries.reduce(
-      (acc, entry) => {
-        const date = entry.date;
-        if (!acc[date]) {
-          acc[date] = { name: formatDateDisplay(date), value: 0, id: date };
-        }
-        acc[date].value += entry.hours;
-        return acc;
-      },
-      {} as Record<string, { name: string; value: number; id: string }>
-    );
-    const dayChartData = Object.values(hoursByDay).sort((a, b) =>
-      a.id.localeCompare(b.id)
-    );
+    // Prepare topic chart data from pre-computed topics
+    const topicChartData = selectedEmployee.topics
+      .filter((t) => t.totalHours > 0)
+      .map((t) => ({
+        name: t.topicName,
+        value: t.totalHours,
+      }))
+      .sort((a, b) => b.value - a.value);
 
-    // Get last 10 entries
-    const recentEntries = [...employeeEntries]
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 10);
+    // Dynamic chart heights based on number of items
+    const topicChartHeight = Math.max(256, topicChartData.length * 40);
+    const clientChartHeight = Math.max(256, clientChartData.length * 40);
+
+    // Column definitions for the entries DataTable
+    const entryColumns: ColumnDef<DrillDownEntry>[] = [
+      {
+        id: "date",
+        header: "Date",
+        accessor: (row) => row.date,
+        cell: (row) => (
+          <span className="text-[var(--text-secondary)] text-[13px]">
+            {formatDateDisplay(row.date)}
+          </span>
+        ),
+      },
+      {
+        id: "client",
+        header: "Client",
+        accessor: (row) => row.client.name,
+        cell: (row) => (
+          <span className="text-[var(--text-primary)] text-[13px]">
+            {row.client.name}
+          </span>
+        ),
+      },
+      {
+        id: "topic",
+        header: "Topic",
+        accessor: (row) => row.topicName,
+        cell: (row) => (
+          <span className="text-[var(--text-secondary)] text-[13px]">
+            {row.topicName}
+          </span>
+        ),
+      },
+      {
+        id: "description",
+        header: "Description",
+        accessor: (row) => row.description,
+        cell: (row) => (
+          <span className="text-[var(--text-secondary)] text-[13px] max-w-xs truncate block">
+            {row.description}
+          </span>
+        ),
+        sortable: false,
+      },
+      {
+        id: "hours",
+        header: "Hours",
+        accessor: (row) => row.hours,
+        align: "right",
+        cell: (row) => (
+          <span className="text-[var(--text-primary)] text-[13px]">
+            {formatHours(row.hours)}
+          </span>
+        ),
+      },
+    ];
 
     return (
       <div className="space-y-6">
@@ -160,13 +226,27 @@ export function ByEmployeeTab({
           </span>
         </div>
 
-        {/* Charts */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Side-by-side charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Topic Breakdown */}
+          <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
+              Topic Breakdown
+            </h3>
+            <div style={{ height: topicChartHeight }}>
+              <BarChart
+                data={topicChartData}
+                valueFormatter={formatHours}
+                layout="vertical"
+              />
+            </div>
+          </div>
+          {/* Hours by Client */}
           <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
               Hours by Client
             </h3>
-            <div className="h-64">
+            <div style={{ height: clientChartHeight }}>
               <BarChart
                 data={clientChartData}
                 valueFormatter={formatHours}
@@ -174,62 +254,20 @@ export function ByEmployeeTab({
               />
             </div>
           </div>
-
-          <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-              Hours by Day
-            </h3>
-            <div className="h-64">
-              <BarChart
-                data={dayChartData}
-                valueFormatter={formatHours}
-                layout="horizontal"
-              />
-            </div>
-          </div>
         </div>
 
-        {/* Recent entries table */}
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded">
-          <div className="p-4 border-b border-[var(--border-subtle)]">
-            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
-              Recent Entries
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[var(--text-muted)] text-[11px] uppercase tracking-wider border-b border-[var(--border-subtle)]">
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Client</th>
-                  <th className="px-4 py-3 font-medium">Description</th>
-                  <th className="px-4 py-3 font-medium text-right">Hours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentEntries.map((entry) => (
-                  <tr
-                    key={entry.id}
-                    className="border-b border-[var(--border-subtle)] last:border-b-0"
-                  >
-                    <td className="px-4 py-3 text-[var(--text-secondary)]">
-                      {formatDateDisplay(entry.date)}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-primary)]">
-                      {entry.client.name}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)] max-w-xs truncate">
-                      {entry.description}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-primary)] text-right">
-                      {formatHours(entry.hours)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Entries table */}
+        <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
+          Entries
+        </h3>
+        <DataTable
+          data={employeeEntries}
+          columns={entryColumns}
+          getRowKey={(entry) => entry.id}
+          pageSize={50}
+          defaultSort={{ columnId: "date", direction: "desc" }}
+          emptyMessage="No entries for this employee"
+        />
       </div>
     );
   }

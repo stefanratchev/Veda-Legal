@@ -195,6 +195,7 @@ export function EntryForm({
             <button
               onClick={onSubmit}
               disabled={!canSubmit || isLoading}
+              data-testid="submit-button"
               className="
                 px-4 py-2 rounded flex-shrink-0
                 bg-[var(--accent-pink)] text-[var(--bg-deep)]
@@ -248,6 +249,7 @@ export function EntryForm({
           <button
             onClick={onSubmit}
             disabled={!canSubmit || isLoading}
+            data-testid="submit-button"
             className="
               px-4 py-2 rounded flex-shrink-0
               bg-[var(--accent-pink)] text-[var(--bg-deep)]

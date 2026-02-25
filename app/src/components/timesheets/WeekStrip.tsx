@@ -157,7 +157,7 @@ export function WeekStrip({
   const isWeekend = (date: Date): boolean => date.getDay() === 0 || date.getDay() === 6;
 
   return (
-    <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-3">
+    <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-3" data-testid="week-strip">
       <div className="flex items-center gap-3">
         {/* Prev Week */}
         <button

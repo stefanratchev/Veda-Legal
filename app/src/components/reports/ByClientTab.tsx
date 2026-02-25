@@ -1,34 +1,14 @@
 "use client";
 
 import { BarChart } from "./charts/BarChart";
+import { DataTable } from "@/components/ui/DataTable";
+import { ColumnDef } from "@/components/ui/table-types";
 import { formatHours } from "@/lib/date-utils";
-
-interface ClientStats {
-  id: string;
-  name: string;
-  totalHours: number;
-  revenue: number | null;
-  employees: { id: string; name: string; hours: number }[];
-}
-
-interface Entry {
-  id: string;
-  date: string;
-  hours: number;
-  description: string;
-  client: {
-    id: string;
-    name: string;
-  };
-  employee: {
-    id: string;
-    name: string;
-  };
-}
+import type { ClientStats, DrillDownEntry } from "@/types/reports";
 
 interface ByClientTabProps {
   clients: ClientStats[];
-  entries: Entry[];
+  entries: DrillDownEntry[];
   isAdmin: boolean;
   selectedClientId: string | null;
   onSelectClient: (id: string | null) => void;
@@ -134,10 +114,79 @@ export function ByClientTab({
       (a, b) => b.value - a.value
     );
 
-    // Get last 10 entries
-    const recentEntries = [...clientEntries]
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 10);
+    // Prepare topic chart data
+    const topicChartData = selectedClient.topics
+      .filter((t) => t.totalHours > 0)
+      .map((t) => {
+        const pct = selectedClient.totalHours > 0
+          ? Math.round((t.totalHours / selectedClient.totalHours) * 100)
+          : 0;
+        return {
+          name: `${t.topicName}  ${formatHours(t.totalHours)} (${pct}%)`,
+          value: t.totalHours,
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+
+    // Dynamic chart heights based on number of items
+    const topicChartHeight = Math.max(256, topicChartData.length * 40);
+    const employeeChartHeight = Math.max(256, employeeChartData.length * 40);
+
+    // Column definitions for the entries DataTable
+    const entryColumns: ColumnDef<DrillDownEntry>[] = [
+      {
+        id: "date",
+        header: "Date",
+        accessor: (row) => row.date,
+        cell: (row) => (
+          <span className="text-[var(--text-secondary)] text-[13px]">
+            {formatDateDisplay(row.date)}
+          </span>
+        ),
+      },
+      {
+        id: "employee",
+        header: "Employee",
+        accessor: (row) => row.employee.name,
+        cell: (row) => (
+          <span className="text-[var(--text-primary)] text-[13px]">
+            {row.employee.name}
+          </span>
+        ),
+      },
+      {
+        id: "topic",
+        header: "Topic",
+        accessor: (row) => row.topicName,
+        cell: (row) => (
+          <span className="text-[var(--text-secondary)] text-[13px]">
+            {row.topicName}
+          </span>
+        ),
+      },
+      {
+        id: "description",
+        header: "Description",
+        accessor: (row) => row.description,
+        cell: (row) => (
+          <span className="text-[var(--text-secondary)] text-[13px] max-w-xs truncate block">
+            {row.description}
+          </span>
+        ),
+        sortable: false,
+      },
+      {
+        id: "hours",
+        header: "Hours",
+        accessor: (row) => row.hours,
+        align: "right",
+        cell: (row) => (
+          <span className="text-[var(--text-primary)] text-[13px]">
+            {formatHours(row.hours)}
+          </span>
+        ),
+      },
+    ];
 
     return (
       <div className="space-y-6">
@@ -176,61 +225,48 @@ export function ByClientTab({
           )}
         </div>
 
-        {/* Hours by Employee chart */}
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-          <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-            Hours by Employee
-          </h3>
-          <div className="h-64">
-            <BarChart
-              data={employeeChartData}
-              valueFormatter={formatHours}
-              layout="vertical"
-            />
+        {/* Side-by-side charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Topic Breakdown */}
+          <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
+              Topic Breakdown
+            </h3>
+            <div style={{ height: topicChartHeight }}>
+              <BarChart
+                data={topicChartData}
+                valueFormatter={formatHours}
+                layout="vertical"
+              />
+            </div>
+          </div>
+          {/* Hours by Employee */}
+          <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
+              Hours by Employee
+            </h3>
+            <div style={{ height: employeeChartHeight }}>
+              <BarChart
+                data={employeeChartData}
+                valueFormatter={formatHours}
+                layout="vertical"
+              />
+            </div>
           </div>
         </div>
 
-        {/* Recent entries table */}
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded">
-          <div className="p-4 border-b border-[var(--border-subtle)]">
-            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
-              Recent Entries
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[var(--text-muted)] text-[11px] uppercase tracking-wider border-b border-[var(--border-subtle)]">
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Employee</th>
-                  <th className="px-4 py-3 font-medium">Description</th>
-                  <th className="px-4 py-3 font-medium text-right">Hours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentEntries.map((entry) => (
-                  <tr
-                    key={entry.id}
-                    className="border-b border-[var(--border-subtle)] last:border-b-0"
-                  >
-                    <td className="px-4 py-3 text-[var(--text-secondary)]">
-                      {formatDateDisplay(entry.date)}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-primary)]">
-                      {entry.employee.name}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)] max-w-xs truncate">
-                      {entry.description}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-primary)] text-right">
-                      {formatHours(entry.hours)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Entries table */}
+        <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
+          Entries
+        </h3>
+        <DataTable
+          data={clientEntries}
+          columns={entryColumns}
+          getRowKey={(entry) => entry.id}
+          pageSize={50}
+          defaultSort={{ columnId: "date", direction: "desc" }}
+          emptyMessage="No entries for this client"
+        />
       </div>
     );
   }

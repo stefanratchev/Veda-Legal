@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Partners and admins can quickly understand firm performance -- revenue, hours, and work distribution -- from the reports page.
-**Current focus:** Phase 8: Data Layer Foundation (v1.2 Reports Detail View)
+**Current focus:** Phase 9: Filter Component (v1.2 Reports Detail View)
 
 ## Current Position
 
-Phase: 8 of 11 (Data Layer Foundation)
+Phase: 9 of 11 (Filter Component)
 Plan: 0 of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-02-25 -- Roadmap created for v1.2
+Last activity: 2026-02-25 -- Phase 8 complete
 
-Progress: [████████████████░░░░░░░░░░░░░░] 16/22 plans (73% overall, 0% v1.2)
+Progress: [██████████████████░░░░░░░░░░░░] 18/24 plans (75% overall, 25% v1.2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16 (v1.0: 10, v1.1: 6)
+- Total plans completed: 18 (v1.0: 10, v1.1: 6, v1.2: 2)
 - Average duration: --
 - Total execution time: --
 
@@ -60,5 +60,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-data-layer-foundation/08-CONTEXT.md
+Stopped at: Phase 8 complete, ready for Phase 9
+Resume file: .planning/ROADMAP.md

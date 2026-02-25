@@ -35,7 +35,7 @@ See: [milestones/v1.1-ROADMAP.md](./milestones/v1.1-ROADMAP.md)
 
 **Milestone Goal:** Add a Detail tab to Reports with multi-select filters, six paired charts (Hours + Revenue by Client/Employee/Topic), and a full entry table for deep data exploration.
 
-- [ ] **Phase 8: Data Layer Foundation** - Extended types, aggregation utils, and filter logic enabling all downstream components
+- [x] **Phase 8: Data Layer Foundation** (2/2 plans) - completed 2026-02-25
 - [ ] **Phase 9: Filter Component** - Reusable MultiSelectFilter with search, selection, and active indicators
 - [ ] **Phase 10: Detail Tab Assembly** - Complete Detail tab wiring filters, six charts, and entry table
 - [ ] **Phase 11: Polish & Interactivity** - Summary stats row and chart-click-to-filter interaction
@@ -54,8 +54,8 @@ See: [milestones/v1.1-ROADMAP.md](./milestones/v1.1-ROADMAP.md)
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Extend ReportEntry with subtopicName and per-entry revenue (TDD)
-- [ ] 08-02-PLAN.md — Filter and aggregation utility functions (TDD)
+- [x] 08-01-PLAN.md — Extend ReportEntry with subtopicName and per-entry revenue (TDD)
+- [x] 08-02-PLAN.md — Filter and aggregation utility functions (TDD)
 
 ### Phase 9: Filter Component
 **Goal**: Users have a polished, reusable multi-select filter component that supports searching, selecting, and clearing options -- tested in isolation before integration
@@ -113,7 +113,7 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11
 | 5. Test Infrastructure | v1.1 | 2/2 | Complete | 2026-02-25 |
 | 6. Core Timesheet Workflow Tests | v1.1 | 3/3 | Complete | 2026-02-25 |
 | 7. CI Integration | v1.1 | 1/1 | Complete | 2026-02-25 |
-| 8. Data Layer Foundation | v1.2 | 0/2 | Not started | - |
+| 8. Data Layer Foundation | v1.2 | 2/2 | Complete | 2026-02-25 |
 | 9. Filter Component | v1.2 | 0/TBD | Not started | - |
 | 10. Detail Tab Assembly | v1.2 | 0/TBD | Not started | - |
 | 11. Polish & Interactivity | v1.2 | 0/TBD | Not started | - |

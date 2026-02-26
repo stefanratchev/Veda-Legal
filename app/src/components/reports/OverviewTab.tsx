@@ -5,6 +5,7 @@ import { SummaryCard } from "./SummaryCard";
 import { BarChart } from "./charts/BarChart";
 import { RevenueBarChart } from "./charts/RevenueBarChart";
 import { formatHours } from "@/lib/date-utils";
+import { getChartHeight } from "@/lib/chart-utils";
 
 interface OverviewTabProps {
   data: {
@@ -152,7 +153,7 @@ export function OverviewTab({
           <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
             Hours by Client
           </h3>
-          <div className="h-96">
+          <div style={{ height: getChartHeight(clientChartData.length, 15) }}>
             <BarChart
               data={clientChartData}
               onBarClick={onClientClick}
@@ -167,7 +168,7 @@ export function OverviewTab({
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
               Revenue by Client
             </h3>
-            <div className="h-96">
+            <div style={{ height: getChartHeight(clientRevenueData.length, 15) }}>
               <RevenueBarChart
                 data={clientRevenueData}
                 comparisonData={clientComparisonRevenue}
@@ -185,12 +186,13 @@ export function OverviewTab({
           <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
             Hours by Employee
           </h3>
-          <div className="h-64">
+          <div style={{ height: getChartHeight(employeeChartData.length, 20) }}>
             <BarChart
               data={employeeChartData}
               onBarClick={onEmployeeClick}
               valueFormatter={formatHours}
               layout="vertical"
+              maxBars={20}
             />
           </div>
         </div>
@@ -199,11 +201,12 @@ export function OverviewTab({
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
               Revenue by Employee
             </h3>
-            <div className="h-64">
+            <div style={{ height: getChartHeight(employeeRevenueData.length, 20) }}>
               <RevenueBarChart
                 data={employeeRevenueData}
                 comparisonData={employeeComparisonRevenue}
                 onBarClick={onEmployeeClick}
+                maxBars={20}
               />
             </div>
           </div>

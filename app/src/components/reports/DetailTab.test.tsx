@@ -350,4 +350,110 @@ describe("DetailTab", () => {
       }
     });
   });
+
+  describe("Dynamic Chart Heights", () => {
+    /**
+     * Helper to find the chart container div (with style) that is sibling to a heading.
+     * Structure: card div > h3 (heading) + div[style] (chart container)
+     */
+    function getChartContainer(headingText: string): HTMLElement | null {
+      const heading = screen.getByText(headingText);
+      // The chart container is the next sibling of the h3 heading
+      return heading.nextElementSibling as HTMLElement | null;
+    }
+
+    it("chart containers use inline style height instead of h-64 class", () => {
+      render(<DetailTab entries={entries} isAdmin={true} />);
+
+      const chartHeadings = [
+        "Hours by Client",
+        "Revenue by Client",
+        "Hours by Employee",
+        "Revenue by Employee",
+        "Hours by Topic",
+        "Revenue by Topic",
+      ];
+
+      for (const heading of chartHeadings) {
+        const container = getChartContainer(heading);
+        expect(container).not.toBeNull();
+        // Should have inline style with height
+        expect(container!.style.height).toBeTruthy();
+        // Should NOT have h-64 class
+        expect(container!.className).not.toContain("h-64");
+      }
+    });
+
+    it("small datasets use 256px minimum height", () => {
+      // With 4 entries: 3 unique clients => Math.max(256, 3*22) = Math.max(256, 66) = 256
+      render(<DetailTab entries={entries} isAdmin={false} />);
+
+      const container = getChartContainer("Hours by Client");
+      expect(container).not.toBeNull();
+      expect(container!.style.height).toBe("256px");
+    });
+
+    it("each chart computes height from its own data length", () => {
+      // 4 entries: 3 clients, 2 employees, 3 topics — all below 12 bars, so all 256px minimum
+      render(<DetailTab entries={entries} isAdmin={false} />);
+
+      const clientContainer = getChartContainer("Hours by Client");
+      const employeeContainer = getChartContainer("Hours by Employee");
+      const topicContainer = getChartContainer("Hours by Topic");
+
+      // 3 clients: Math.max(256, 3*22=66) = 256
+      expect(clientContainer!.style.height).toBe("256px");
+      // 2 employees: Math.max(256, 2*22=44) = 256
+      expect(employeeContainer!.style.height).toBe("256px");
+      // 3 topics: Math.max(256, 3*22=66) = 256
+      expect(topicContainer!.style.height).toBe("256px");
+    });
+
+    it("large dataset grows chart container taller", () => {
+      // Create 15 unique clients so clientHoursData has 15 items
+      const manyClientEntries: ReportEntry[] = Array.from({ length: 15 }, (_, i) =>
+        createEntry({
+          id: `e-${i}`,
+          clientId: `c-${i}`,
+          clientName: `Client ${String(i).padStart(2, "0")}`,
+          userId: "u1",
+          userName: "Alice Smith",
+          topicName: "Advisory",
+          hours: 1.0,
+          revenue: 150,
+        })
+      );
+
+      render(<DetailTab entries={manyClientEntries} isAdmin={false} />);
+
+      const container = getChartContainer("Hours by Client");
+      expect(container).not.toBeNull();
+      // 15 clients: Math.max(256, 15*22=330) = 330
+      expect(container!.style.height).toBe("330px");
+    });
+
+    it("dataset exceeding maxBars accounts for 'Other' grouping bar", () => {
+      // Create 25 unique clients — exceeds maxBars (20)
+      // effectiveBars = min(25, 20) + 1 = 21, height = Math.max(256, 21*22=462) = 462
+      const manyClientEntries: ReportEntry[] = Array.from({ length: 25 }, (_, i) =>
+        createEntry({
+          id: `e-${i}`,
+          clientId: `c-${i}`,
+          clientName: `Client ${String(i).padStart(2, "0")}`,
+          userId: "u1",
+          userName: "Alice Smith",
+          topicName: "Advisory",
+          hours: 1.0,
+          revenue: 150,
+        })
+      );
+
+      render(<DetailTab entries={manyClientEntries} isAdmin={false} />);
+
+      const container = getChartContainer("Hours by Client");
+      expect(container).not.toBeNull();
+      // 25 clients > 20 maxBars: effectiveBars = 20 + 1 = 21, height = 21*22 = 462
+      expect(container!.style.height).toBe("462px");
+    });
+  });
 });

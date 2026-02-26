@@ -566,18 +566,6 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
                   {formatCurrency(retainerSummary.retainerFee)}
                 </Text>
               </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryTopic}>
-                  Included Hours: {formatHours(retainerSummary.retainerHours)}
-                </Text>
-                <Text style={styles.summaryAmount} />
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryTopic}>
-                  Hours Used: {formatHours(retainerSummary.totalHourlyHours)}
-                </Text>
-                <Text style={styles.summaryAmount} />
-              </View>
               {retainerSummary.overageHours > 0 && (
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryTopic}>

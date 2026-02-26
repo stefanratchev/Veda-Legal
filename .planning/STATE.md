@@ -46,13 +46,13 @@ None.
 
 ### Quick Tasks Completed
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 5 | Change detail tab charts from top 10 to top 20 | 2026-02-26 | 614274a | .planning/quick/5-change-report-detail-charts-from-top-10-/ |
-| 6 | Dynamic chart height based on bar count | 2026-02-26 | f8ee33f | .planning/quick/6-dynamic-chart-height-based-on-bar-count-/ |
-| 7 | Remove 256px minimum from getChartHeight | 2026-02-26 | bad4d03 | .planning/quick/7-remove-256px-minimum-from-getchartheight/ |
-| 8 | Extract getChartHeight to shared utility | 2026-02-26 | ad5daf0 | .planning/quick/8-extract-getchartheight-to-shared-util-an/ |
-| 9 | Update retainer PDF service description summary | 2026-02-26 | 2f68a90 | .planning/quick/9-update-retainer-pdf-service-descriptions/ |
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 5 | Change detail tab charts from top 10 to top 20 | 2026-02-26 | 614274a | | .planning/quick/5-change-report-detail-charts-from-top-10-/ |
+| 6 | Dynamic chart height based on bar count | 2026-02-26 | f8ee33f | | .planning/quick/6-dynamic-chart-height-based-on-bar-count-/ |
+| 7 | Remove 256px minimum from getChartHeight | 2026-02-26 | bad4d03 | | .planning/quick/7-remove-256px-minimum-from-getchartheight/ |
+| 8 | Extract getChartHeight to shared utility | 2026-02-26 | ad5daf0 | | .planning/quick/8-extract-getchartheight-to-shared-util-an/ |
+| 9 | Update retainer PDF service description summary | 2026-02-26 | e4797c1 | Verified | [9-update-retainer-pdf-service-descriptions](.planning/quick/9-update-retainer-pdf-service-descriptions/) |
 
 ## Session Continuity
 

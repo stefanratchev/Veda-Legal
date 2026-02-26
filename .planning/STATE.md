@@ -11,7 +11,7 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 Phase: 11 of 11
 Status: Milestone v1.2 complete
-Last activity: 2026-02-26 -- v1.2 Reports Detail View shipped
+Last activity: 2026-02-26 - Completed quick task 5: Change report detail charts from top 10 to top 20 entries before grouping as Other
 
 Progress: [██████████████████████████████] 23/23 plans (100%)
 

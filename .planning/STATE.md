@@ -48,9 +48,10 @@ None.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 5 | Change detail tab charts from top 10 to top 20 | 2026-02-26 | 614274a | .planning/quick/5-change-report-detail-charts-from-top-10-/ |
 
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: v1.2 milestone complete
+Stopped at: Completed quick task 5
 Resume file: .planning/ROADMAP.md

@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A legal practice management app used by ~10 employees and ~200 clients. Features timesheet tracking, billing/invoicing, and reports with revenue visibility and rich drill-downs. Includes browser-level e2e regression protection for the revenue-critical timesheet workflow.
+A legal practice management app used by ~10 employees and ~200 clients. Features timesheet tracking, billing/invoicing, and reports with revenue visibility, rich drill-downs, and a Detail analytics tab with multi-select filters, paired charts, and a full entry table. Includes browser-level e2e regression protection for the revenue-critical timesheet workflow.
 
 ## Core Value
 
@@ -33,14 +33,15 @@ Partners and admins can quickly understand firm performance — who worked on wh
 - ✓ E2e tests for date navigation via WeekStrip — v1.1
 - ✓ E2e tests for daily submission/revoke flow — v1.1
 - ✓ CI integration: e2e tests on every PR with PostgreSQL + Chromium caching — v1.1
+- ✓ Detail tab in Reports with Hours & Revenue charts by Client, Employee, and Topic — v1.2
+- ✓ Multi-select filters (Client, Employee, Topic) that update charts and entry table simultaneously — v1.2
+- ✓ Full entry table with Date, Employee, Client, Topic, Subtopic, Description, Hours, Revenue (admin) — v1.2
+- ✓ Summary stats row (entry count, total hours, admin revenue) updating with filters — v1.2
+- ✓ Chart bar click-to-filter interaction with visual dimming — v1.2
 
 ### Active
 
-<!-- Current scope: v1.2 Reports Detail View -->
-
-- [ ] Detail tab in Reports with Hours & Revenue charts by Client, Employee, and Topic
-- [ ] Multi-select filters (Client, Employee, Topic) that update charts and entry table
-- [ ] Full entry table with Date, Employee, Client, Topic, Subtopic, Description, Hours, Revenue (admin)
+(No active requirements — planning next milestone)
 
 ### Out of Scope
 
@@ -57,26 +58,21 @@ Partners and admins can quickly understand firm performance — who worked on wh
 - Multi-browser e2e testing — internal app, all Chrome
 - Visual regression testing — dynamic data + Tailwind = false positives
 - Parallel e2e execution — only warranted if >50 tests
-
-## Current Milestone: v1.2 Reports Detail View
-
-**Goal:** Add a Detail tab to Reports that combines all charts (by Client, Employee, Topic) with a full entry table and multi-select filters for deep data exploration.
-
-**Target features:**
-- Hours & Revenue by Client, Employee, and Topic charts (paired)
-- Full entry table (Date, Employee, Client, Topic, Subtopic, Description, Hours, Revenue)
-- Multi-select Client, Employee, and Topic filters that update everything (charts + table)
-- Integration with existing period picker and comparison period
+- Server-side report filtering — data volume trivially small (~2000 entries/month)
+- Dual-axis charts — separate charts for different scales (v1.0 decision)
 
 ## Context
 
-Shipped v1.0 Reports Improvements and v1.1 E2E Timesheets.
+Shipped v1.0 Reports Improvements, v1.1 E2E Timesheets, and v1.2 Reports Detail View.
 
-**Reports** (v1.0): Overview with summary cards + paired Hours/Revenue charts by Client and Employee. Client and Employee drill-downs with topic breakdowns, side-by-side charts, and full entry DataTables. 965 unit tests across 46 files.
+**Reports** (v1.0): Overview with summary cards + paired Hours/Revenue charts by Client and Employee. Client and Employee drill-downs with topic breakdowns, side-by-side charts, and full entry DataTables.
 
-**E2E Testing** (v1.1): 15 Playwright e2e tests covering entry CRUD, date navigation, and daily submission. JWT cookie auth bypass (zero production changes). CI integration running on every PR with PostgreSQL 17, Chromium caching, and HTML report artifacts.
+**E2E Testing** (v1.1): 15 Playwright e2e tests covering entry CRUD, date navigation, and daily submission. JWT cookie auth bypass (zero production changes). CI integration running on every PR.
+
+**Detail Analytics** (v1.2): Detail tab with multi-select filter bar (Client, Employee, Topic), six paired bar charts (3 Hours + 3 Revenue, admin-gated), full entry table with sorting/pagination, summary stats row, and chart bar click-to-filter interaction. 94 new tests (1059 total).
 
 Tech stack: Next.js 16, Recharts, Drizzle ORM, PostgreSQL, Tailwind CSS v4, Playwright.
+Codebase: ~46,400 LOC TypeScript.
 
 ## Constraints
 
@@ -103,6 +99,12 @@ Tech stack: Next.js 16, Recharts, Drizzle ORM, PostgreSQL, Tailwind CSS v4, Play
 | Hardcoded deterministic seed data IDs | global-setup and test specs run in separate processes | ✓ Good |
 | drizzle-kit push --force for CI schema | Broken Prisma-to-Drizzle migration chain in legacy migrations | ✓ Good |
 | POM with portal-aware locators | DurationPicker renders via createPortal at body level | ✓ Good |
+| Client-side filtering for Detail tab | Data volume trivially small (~2000 entries/month) | ✓ Good |
+| No new npm packages for MultiSelectFilter | Built on existing ClientSelect pattern | ✓ Good |
+| Per-entry revenue server-computed with admin gating | No client-side rate exposure | ✓ Good |
+| Comparison badges excluded from Detail tab | Unfiltered comparison data would mislead | ✓ Good |
+| FilterState as single source of truth | Bar selection and FilterBar dropdowns share state (no separate chart state) | ✓ Good |
+| getBarOpacity duplicated in both chart files | 4-line function, avoids cross-component coupling | ✓ Good |
 
 ---
-*Last updated: 2026-02-25 after v1.2 milestone started*
+*Last updated: 2026-02-26 after v1.2 milestone*

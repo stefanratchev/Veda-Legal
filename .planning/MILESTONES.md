@@ -30,3 +30,21 @@
 
 ---
 
+
+## v1.2 Reports Detail View (Shipped: 2026-02-26)
+
+**Phases completed:** 4 phases (8-11), 7 plans
+**Timeline:** 2026-02-25 → 2026-02-26
+**Git range:** `6dcb16f..48ff4ac` (32 commits, +6,156/-81 lines across 41 files)
+
+**Key accomplishments:**
+- Extended ReportEntry with subtopicName and per-entry revenue (server-computed, admin-gated)
+- Built pure filter & aggregation utilities (filterEntries, aggregateBy*) with "empty Set = show all" convention
+- Created reusable MultiSelectFilter component with search, checkboxes, keyboard nav, and active indicators
+- Assembled Detail tab with FilterBar and six paired charts (Hours + Revenue by Client/Employee/Topic)
+- Added entry table with 7 columns, sorting, pagination (50/page), and admin-only revenue column
+- Implemented summary stats row and chart bar click-to-filter interaction with visual dimming
+- 94 new tests (1059 total), zero regressions
+
+---
+

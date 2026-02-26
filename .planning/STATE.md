@@ -9,11 +9,10 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 ## Current Position
 
-Phase: 11 of 11
-Status: Milestone v1.2 complete
-Last activity: 2026-02-26 - Completed quick task 10: Hide all-EXCLUDED topics from PDF
-
-Progress: [██████████████████████████████] 23/23 plans (100%)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-26 — Milestone v1.3 started
 
 ## Performance Metrics
 

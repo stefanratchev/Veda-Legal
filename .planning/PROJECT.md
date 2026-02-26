@@ -41,7 +41,14 @@ Partners and admins can quickly understand firm performance — who worked on wh
 
 ### Active
 
-(No active requirements — planning next milestone)
+## Current Milestone: v1.3 Billing Tabs
+
+**Goal:** Split the billing page into tabbed sections with date range filtering for service descriptions.
+
+**Target features:**
+- Tab-based billing page (Ready to Bill / Service Descriptions)
+- Date range picker on Service Descriptions tab (This Month default, Last Month, custom)
+- Status filter preserved alongside date range
 
 ### Out of Scope
 
@@ -63,7 +70,7 @@ Partners and admins can quickly understand firm performance — who worked on wh
 
 ## Context
 
-Shipped v1.0 Reports Improvements, v1.1 E2E Timesheets, and v1.2 Reports Detail View.
+Shipped v1.0 Reports Improvements, v1.1 E2E Timesheets, v1.2 Reports Detail View, and starting v1.3 Billing Tabs.
 
 **Reports** (v1.0): Overview with summary cards + paired Hours/Revenue charts by Client and Employee. Client and Employee drill-downs with topic breakdowns, side-by-side charts, and full entry DataTables.
 
@@ -107,4 +114,4 @@ Codebase: ~46,400 LOC TypeScript.
 | getBarOpacity duplicated in both chart files | 4-line function, avoids cross-component coupling | ✓ Good |
 
 ---
-*Last updated: 2026-02-26 after v1.2 milestone*
+*Last updated: 2026-02-26 after v1.3 milestone start*

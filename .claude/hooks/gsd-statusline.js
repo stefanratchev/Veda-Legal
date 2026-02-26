@@ -83,24 +83,6 @@ process.stdin.on('end', () => {
       }
     }
 
-    // Git branch + ahead count
-    let gitInfo = '';
-    try {
-      const { execFileSync } = require('child_process');
-      const opts = { cwd: dir, stdio: ['pipe', 'pipe', 'pipe'], timeout: 2000 };
-      const branch = execFileSync('git', ['--no-optional-locks', 'rev-parse', '--abbrev-ref', 'HEAD'], opts).toString().trim();
-      if (branch) {
-        let ahead = '';
-        try {
-          const count = parseInt(execFileSync('git', ['--no-optional-locks', 'rev-list', '--count', '@{u}..HEAD'], opts).toString().trim(), 10);
-          if (count > 0) ahead = ` \x1b[33m↑${count}\x1b[0m`;
-        } catch (e) {}
-        gitInfo = ` │ ${branch}${ahead}`;
-      }
-    } catch (e) {
-      // Not a git repo or git unavailable
-    }
-
     // GSD update available?
     let gsdUpdate = '';
     const cacheFile = path.join(homeDir, '.claude', 'cache', 'gsd-update-check.json');
@@ -116,9 +98,9 @@ process.stdin.on('end', () => {
     // Output
     const dirname = path.basename(dir);
     if (task) {
-      process.stdout.write(`${gsdUpdate}\x1b[2m${model}\x1b[0m │ \x1b[1m${task}\x1b[0m │ \x1b[2m${dirname}\x1b[0m${gitInfo}${ctx}`);
+      process.stdout.write(`${gsdUpdate}\x1b[2m${model}\x1b[0m │ \x1b[1m${task}\x1b[0m │ \x1b[2m${dirname}\x1b[0m${ctx}`);
     } else {
-      process.stdout.write(`${gsdUpdate}\x1b[2m${model}\x1b[0m │ \x1b[2m${dirname}\x1b[0m${gitInfo}${ctx}`);
+      process.stdout.write(`${gsdUpdate}\x1b[2m${model}\x1b[0m │ \x1b[2m${dirname}\x1b[0m${ctx}`);
     }
   } catch (e) {
     // Silent fail - don't break statusline on parse errors

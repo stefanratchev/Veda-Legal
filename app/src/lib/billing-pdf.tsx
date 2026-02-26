@@ -370,6 +370,17 @@ export function calculateTopicHours(topic: ServiceDescription["topics"][0]): num
   );
 }
 
+/**
+ * Determines if a topic should be visible in the client-facing PDF.
+ * A topic is hidden when ALL its line items are EXCLUDED (not visible to client).
+ * Topics with ZERO-waived items still appear (zero-rated but shown).
+ * Topics with no line items at all are still shown (e.g., FIXED fee topics with no entries).
+ */
+export function isTopicVisibleInPdf(topic: ServiceDescription["topics"][0]): boolean {
+  if (topic.lineItems.length === 0) return true;
+  return topic.lineItems.some((item) => item.waiveMode !== "EXCLUDED");
+}
+
 export function calculateGrandTotal(
   topics: ServiceDescription["topics"],
   discountType: "PERCENTAGE" | "AMOUNT" | null,
@@ -607,7 +618,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
             </>
           ) : (
             <>
-              {data.topics.map((topic) => (
+              {data.topics.filter(isTopicVisibleInPdf).map((topic) => (
                 <View key={topic.id} style={styles.summaryRow}>
                   <Text style={styles.summaryTopic}>{topic.topicName}</Text>
                   <Text style={styles.summaryAmount}>
@@ -648,7 +659,7 @@ export function ServiceDescriptionPDF({ data }: ServiceDescriptionPDFProps) {
         <Text style={styles.sectionTitle}>Detailed Description of Services</Text>
 
         {/* Topic sections */}
-        {data.topics.map((topic, topicIndex) => {
+        {data.topics.filter(isTopicVisibleInPdf).map((topic, topicIndex) => {
           const totalHours = calculateTopicHours(topic);
           const baseTopicTotal = calculateTopicBaseTotal(topic);
           const topicTotal = calculateTopicTotal(topic);

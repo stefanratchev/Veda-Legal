@@ -9,6 +9,7 @@ import {
   calculateGrandTotal,
   calculateRetainerSummary,
   calculateRetainerGrandTotal,
+  isTopicVisibleInPdf,
 } from "./billing-pdf";
 import { ServiceDescription, WaiveMode } from "@/types";
 
@@ -586,6 +587,62 @@ describe("billing-pdf utilities", () => {
       const topics = [makeTopic({ lineItems: [makeItem(12)] })];
       const gt = calculateRetainerGrandTotal(topics, 1000, 10, 200, null, null);
       expect(gt).toBe(1400); // 1000 + 2h * 200
+    });
+  });
+
+  describe("isTopicVisibleInPdf", () => {
+    it("returns true for topic with no line items", () => {
+      const topic = makeTopic({ lineItems: [] });
+      expect(isTopicVisibleInPdf(topic)).toBe(true);
+    });
+
+    it("returns true when all items are non-waived", () => {
+      const topic = makeTopic({
+        lineItems: [makeItem(2, null), makeItem(3, null)],
+      });
+      expect(isTopicVisibleInPdf(topic)).toBe(true);
+    });
+
+    it("returns true when some items are EXCLUDED but at least one is not", () => {
+      const topic = makeTopic({
+        lineItems: [makeItem(2, null), makeItem(3, "EXCLUDED")],
+      });
+      expect(isTopicVisibleInPdf(topic)).toBe(true);
+    });
+
+    it("returns true when all items are ZERO-waived (shown to client)", () => {
+      const topic = makeTopic({
+        lineItems: [makeItem(2, "ZERO"), makeItem(3, "ZERO")],
+      });
+      expect(isTopicVisibleInPdf(topic)).toBe(true);
+    });
+
+    it("returns true when mix of ZERO and non-waived", () => {
+      const topic = makeTopic({
+        lineItems: [makeItem(2, null), makeItem(3, "ZERO")],
+      });
+      expect(isTopicVisibleInPdf(topic)).toBe(true);
+    });
+
+    it("returns false when ALL items are EXCLUDED", () => {
+      const topic = makeTopic({
+        lineItems: [makeItem(2, "EXCLUDED"), makeItem(3, "EXCLUDED")],
+      });
+      expect(isTopicVisibleInPdf(topic)).toBe(false);
+    });
+
+    it("returns false for single EXCLUDED item", () => {
+      const topic = makeTopic({
+        lineItems: [makeItem(5, "EXCLUDED")],
+      });
+      expect(isTopicVisibleInPdf(topic)).toBe(false);
+    });
+
+    it("returns true when mix includes EXCLUDED and ZERO", () => {
+      const topic = makeTopic({
+        lineItems: [makeItem(2, "EXCLUDED"), makeItem(3, "ZERO")],
+      });
+      expect(isTopicVisibleInPdf(topic)).toBe(true);
     });
   });
 });

@@ -11,7 +11,7 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 
 Phase: 11 of 11
 Status: Milestone v1.2 complete
-Last activity: 2026-02-26 - Completed quick task 7: Remove 256px minimum from getChartHeight
+Last activity: 2026-02-26 - Completed quick task 8: Extract getChartHeight to shared utility
 
 Progress: [██████████████████████████████] 23/23 plans (100%)
 
@@ -51,9 +51,10 @@ None.
 | 5 | Change detail tab charts from top 10 to top 20 | 2026-02-26 | 614274a | .planning/quick/5-change-report-detail-charts-from-top-10-/ |
 | 6 | Dynamic chart height based on bar count | 2026-02-26 | f8ee33f | .planning/quick/6-dynamic-chart-height-based-on-bar-count-/ |
 | 7 | Remove 256px minimum from getChartHeight | 2026-02-26 | bad4d03 | .planning/quick/7-remove-256px-minimum-from-getchartheight/ |
+| 8 | Extract getChartHeight to shared utility | 2026-02-26 | ad5daf0 | .planning/quick/8-extract-getchartheight-to-shared-util-an/ |
 
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed quick task 7
+Stopped at: Completed quick task 8
 Resume file: .planning/ROADMAP.md

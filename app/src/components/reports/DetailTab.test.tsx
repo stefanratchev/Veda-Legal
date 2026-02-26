@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { ReportEntry } from "@/types/reports";
-import type { FilterState } from "./FilterBar";
 
 // Track props passed to chart components
 const barChartCalls: Record<string, unknown>[] = [];

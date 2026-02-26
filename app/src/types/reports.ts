@@ -40,8 +40,10 @@ export interface ReportEntry {
   clientId: string;
   clientName: string;
   topicName: string;
+  subtopicName: string;
   isWrittenOff: boolean;
   clientType: ClientType;
+  revenue: number | null;
 }
 
 export interface ReportData {

@@ -44,6 +44,7 @@ export async function getReportData({
       userId: true,
       clientId: true,
       topicName: true,
+      subtopicName: true,
       isWrittenOff: true,
     },
     with: {
@@ -76,6 +77,7 @@ function aggregateEntries(
     userId: string;
     clientId: string;
     topicName: string | null;
+    subtopicName: string | null;
     isWrittenOff: boolean | null;
     user: { id: string; name: string | null };
     client: {
@@ -301,18 +303,30 @@ function aggregateEntries(
     byClient: isAdmin
       ? byClient
       : byClient.map((c) => ({ ...c, hourlyRate: null, revenue: null })),
-    entries: entries.map((e) => ({
-      id: e.id,
-      date: e.date,
-      hours: Number(e.hours),
-      description: e.description,
-      userId: e.userId,
-      userName: e.user.name || "Unknown",
-      clientId: e.clientId,
-      clientName: e.client.name,
-      topicName: e.topicName || "Uncategorized",
-      isWrittenOff: e.isWrittenOff ?? false,
-      clientType: e.client.clientType as ClientType,
-    })),
+    entries: entries.map((e) => {
+      const entryHours = Number(e.hours);
+      const entryIsWrittenOff = e.isWrittenOff ?? false;
+      const entryIsBillable = (e.client.clientType as ClientType) === "REGULAR";
+      const entryClientRate = e.client.hourlyRate ? Number(e.client.hourlyRate) : 0;
+
+      return {
+        id: e.id,
+        date: e.date,
+        hours: entryHours,
+        description: e.description,
+        userId: e.userId,
+        userName: e.user.name || "Unknown",
+        clientId: e.clientId,
+        clientName: e.client.name,
+        topicName: e.topicName || "Uncategorized",
+        subtopicName: e.subtopicName || "",
+        isWrittenOff: entryIsWrittenOff,
+        clientType: e.client.clientType as ClientType,
+        revenue:
+          isAdmin && entryIsBillable && !entryIsWrittenOff && entryClientRate > 0
+            ? entryHours * entryClientRate
+            : null,
+      };
+    }),
   };
 }

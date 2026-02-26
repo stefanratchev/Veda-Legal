@@ -6,6 +6,7 @@ import {
   formatEurExact,
   prepareRevenueData,
   mergeComparisonData,
+  getBarOpacity,
 } from "./RevenueBarChart";
 
 // --- formatEurAbbreviated ---
@@ -104,19 +105,19 @@ describe("prepareRevenueData", () => {
     expect(result.map((r) => r.name)).toEqual(["B", "C", "A"]);
   });
 
-  it("returns top 10 when more than 10 items", () => {
-    const data = Array.from({ length: 15 }, (_, i) => ({
+  it("returns top 20 when more than 20 items", () => {
+    const data = Array.from({ length: 25 }, (_, i) => ({
       name: `Item ${i}`,
       value: (i + 1) * 100,
       id: String(i),
     }));
     const result = prepareRevenueData(data);
-    // 10 top items + 1 "Other"
-    expect(result).toHaveLength(11);
+    // 20 top items + 1 "Other"
+    expect(result).toHaveLength(21);
   });
 
-  it('aggregates items beyond top 10 into "Other" with summed value', () => {
-    const data = Array.from({ length: 12 }, (_, i) => ({
+  it('aggregates items beyond top 20 into "Other" with summed value', () => {
+    const data = Array.from({ length: 22 }, (_, i) => ({
       name: `Item ${i}`,
       value: (i + 1) * 100,
       id: String(i),
@@ -129,7 +130,7 @@ describe("prepareRevenueData", () => {
   });
 
   it('"Other" has no id field', () => {
-    const data = Array.from({ length: 12 }, (_, i) => ({
+    const data = Array.from({ length: 22 }, (_, i) => ({
       name: `Item ${i}`,
       value: (i + 1) * 100,
       id: String(i),
@@ -140,7 +141,7 @@ describe("prepareRevenueData", () => {
     expect(other!.id).toBeUndefined();
   });
 
-  it('returns all items when fewer than 10 (no "Other")', () => {
+  it('returns all items when fewer than 20 (no "Other")', () => {
     const data = Array.from({ length: 5 }, (_, i) => ({
       name: `Item ${i}`,
       value: (i + 1) * 100,
@@ -200,6 +201,34 @@ describe("mergeComparisonData", () => {
     const comparison = [{ name: "A", value: 0, id: "1" }];
     const result = mergeComparisonData(current, comparison);
     expect(result[0].percentChange).toBeNull();
+  });
+});
+
+// --- getBarOpacity ---
+
+describe("getBarOpacity (RevenueBarChart)", () => {
+  it("returns 0.8 when activeIds is undefined", () => {
+    expect(getBarOpacity(undefined, "id-1")).toBe(0.8);
+  });
+
+  it("returns 0.8 when activeIds is empty Set", () => {
+    expect(getBarOpacity(new Set(), "id-1")).toBe(0.8);
+  });
+
+  it("returns 0.8 for matching id when activeIds has entries", () => {
+    expect(getBarOpacity(new Set(["id-1", "id-2"]), "id-1")).toBe(0.8);
+  });
+
+  it("returns 0.25 for non-matching id when activeIds has entries", () => {
+    expect(getBarOpacity(new Set(["id-1"]), "id-2")).toBe(0.25);
+  });
+
+  it("returns 0.25 for undefined id when activeIds has entries", () => {
+    expect(getBarOpacity(new Set(["id-1"]), undefined)).toBe(0.25);
+  });
+
+  it("returns 0.8 for undefined id when activeIds is empty", () => {
+    expect(getBarOpacity(new Set(), undefined)).toBe(0.8);
   });
 });
 

@@ -4,6 +4,7 @@
 
 - ✅ **v1.0 Reports Improvements** — Phases 1-4 (shipped 2026-02-24)
 - ✅ **v1.1 E2E Timesheets** — Phases 5-7 (shipped 2026-02-25)
+- ✅ **v1.2 Reports Detail View** — Phases 8-11 (shipped 2026-02-26)
 
 ## Phases
 
@@ -30,6 +31,18 @@ See: [milestones/v1.1-ROADMAP.md](./milestones/v1.1-ROADMAP.md)
 
 </details>
 
+<details>
+<summary>✅ v1.2 Reports Detail View (Phases 8-11) — SHIPPED 2026-02-26</summary>
+
+- [x] Phase 8: Data Layer Foundation (2/2 plans) — completed 2026-02-25
+- [x] Phase 9: Filter Component (2/2 plans) — completed 2026-02-25
+- [x] Phase 10: Detail Tab Assembly (2/2 plans) — completed 2026-02-25
+- [x] Phase 11: Polish & Interactivity (1/1 plan) — completed 2026-02-26
+
+See: [milestones/v1.2-ROADMAP.md](./milestones/v1.2-ROADMAP.md)
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans | Status | Completed |
@@ -41,3 +54,7 @@ See: [milestones/v1.1-ROADMAP.md](./milestones/v1.1-ROADMAP.md)
 | 5. Test Infrastructure | v1.1 | 2/2 | Complete | 2026-02-25 |
 | 6. Core Timesheet Workflow Tests | v1.1 | 3/3 | Complete | 2026-02-25 |
 | 7. CI Integration | v1.1 | 1/1 | Complete | 2026-02-25 |
+| 8. Data Layer Foundation | v1.2 | 2/2 | Complete | 2026-02-25 |
+| 9. Filter Component | v1.2 | 2/2 | Complete | 2026-02-25 |
+| 10. Detail Tab Assembly | v1.2 | 2/2 | Complete | 2026-02-25 |
+| 11. Polish & Interactivity | v1.2 | 1/1 | Complete | 2026-02-26 |

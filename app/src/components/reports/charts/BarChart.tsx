@@ -22,6 +22,16 @@ const BAR_COLORS = [
   "#FB923C", // orange
   "#38BDF8", // sky blue
   "#A3E635", // lime
+  "#E879F9", // fuchsia
+  "#34D399", // emerald
+  "#FBBF24", // yellow
+  "#818CF8", // indigo
+  "#F87171", // red
+  "#2DD4BF", // teal-light
+  "#A78BFA", // violet
+  "#FCA5A1", // rose
+  "#67E8F9", // cyan
+  "#BEF264", // lime-light
 ];
 
 const MAX_LABEL_CHARS = 14;
@@ -61,10 +71,17 @@ interface BarChartItem {
 interface BarChartProps {
   data: BarChartItem[];
   onBarClick?: (id: string) => void;
+  activeIds?: Set<string>;
   valueFormatter?: (value: number) => string;
   layout?: "horizontal" | "vertical";
   valueLabel?: string;
   maxBars?: number;
+}
+
+export function getBarOpacity(activeIds: Set<string> | undefined, itemId: string | undefined): number {
+  if (!activeIds || activeIds.size === 0) return 0.8;
+  if (itemId != null && activeIds.has(itemId)) return 0.8;
+  return 0.25;
 }
 
 export function prepareBarData(
@@ -86,6 +103,7 @@ export function prepareBarData(
 export function BarChart({
   data,
   onBarClick,
+  activeIds,
   valueFormatter = (v) => v.toFixed(1),
   layout = "horizontal",
   valueLabel = "Hours",
@@ -170,11 +188,11 @@ export function BarChart({
           cursor={onBarClick ? "pointer" : "default"}
           onClick={(_, index) => handleClick(chartData[index])}
         >
-          {chartData.map((_, index) => (
+          {chartData.map((item, index) => (
             <Cell
               key={`cell-${index}`}
               fill={BAR_COLORS[index % BAR_COLORS.length]}
-              fillOpacity={0.8}
+              fillOpacity={getBarOpacity(activeIds, item.id)}
             />
           ))}
         </Bar>

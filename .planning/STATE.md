@@ -2,38 +2,33 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-25)
+See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Partners and admins can quickly understand firm performance -- revenue, hours, and work distribution -- from the reports page.
-**Current focus:** v1.1 E2E Timesheets — SHIPPED
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: All complete
-Plan: All complete
-Status: Milestone Complete
-Last activity: 2026-02-25 — v1.1 milestone shipped
+Phase: 11 of 11
+Status: Milestone v1.2 complete
+Last activity: 2026-02-26 - Completed quick task 8: Extract getChartHeight to shared utility
 
-Progress: [####################] 100% (v1.0 shipped, v1.1 shipped)
+Progress: [██████████████████████████████] 23/23 plans (100%)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16 (v1.0: 10, v1.1: 6)
-- Average duration: —
-- Total execution time: —
+- Total plans completed: 23 (v1.0: 10, v1.1: 6, v1.2: 7)
+- Average duration: --
+- Total execution time: --
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1. Data Layer | 2 | — | — |
-| 2. Overview Revenue Charts | 2 | — | — |
-| 3. Client Drill-Down | 3 | — | — |
-| 4. Employee Drill-Down | 3 | — | — |
-| 5. Test Infrastructure | 2/2 | 10min | 5min |
-| 6. Core Timesheet Workflow Tests | 3/3 | 53min | 18min |
-| 7. CI Integration | 1/1 | 5min | 5min |
+| 1-4 (v1.0) | 10 | -- | -- |
+| 5-7 (v1.1) | 6 | -- | -- |
+| 8-11 (v1.2) | 7 | -- | -- |
 
 ## Accumulated Context
 
@@ -53,9 +48,13 @@ None.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 5 | Change detail tab charts from top 10 to top 20 | 2026-02-26 | 614274a | .planning/quick/5-change-report-detail-charts-from-top-10-/ |
+| 6 | Dynamic chart height based on bar count | 2026-02-26 | f8ee33f | .planning/quick/6-dynamic-chart-height-based-on-bar-count-/ |
+| 7 | Remove 256px minimum from getChartHeight | 2026-02-26 | bad4d03 | .planning/quick/7-remove-256px-minimum-from-getchartheight/ |
+| 8 | Extract getChartHeight to shared utility | 2026-02-26 | ad5daf0 | .planning/quick/8-extract-getchartheight-to-shared-util-an/ |
 
 ## Session Continuity
 
-Last session: 2026-02-25
-Stopped at: v1.1 milestone complete and archived.
-Resume file: None
+Last session: 2026-02-26
+Stopped at: Completed quick task 8
+Resume file: .planning/ROADMAP.md

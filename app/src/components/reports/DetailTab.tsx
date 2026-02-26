@@ -13,6 +13,7 @@ import {
   aggregateByTopic,
 } from "@/lib/report-detail-utils";
 import { formatHours } from "@/lib/date-utils";
+import { getChartHeight } from "@/lib/chart-utils";
 import type { ReportEntry } from "@/types/reports";
 
 interface DetailTabProps {
@@ -27,16 +28,6 @@ function formatDateDisplay(dateStr: string): string {
   const [year, month, day] = dateStr.split("-").map(Number);
   const date = new Date(year, month - 1, day);
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
-
-/**
- * Compute chart container height based on number of data items.
- * After maxBars grouping, effective bar count = min(dataLength, maxBars) + 1 if overflow exists.
- * Each bar gets 22px; minimum height is 120px to ensure axes and labels render properly.
- */
-function getChartHeight(dataLength: number, maxBars: number = 20): number {
-  const effectiveBars = Math.min(dataLength, maxBars) + (dataLength > maxBars ? 1 : 0);
-  return Math.max(120, effectiveBars * 22);
 }
 
 /**

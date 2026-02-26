@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 ## Current Position
 
 Phase: 11 of 11 (Polish & Interactivity)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-02-25 -- Phase 10 complete
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-02-26 -- Phase 11 complete
 
-Progress: [██████████████████████░░░░░░░░] 22/24 plans (92% overall, 75% v1.2)
+Progress: [████████████████████████████░░] 23/24 plans (96% overall, 88% v1.2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 22 (v1.0: 10, v1.1: 6, v1.2: 6)
+- Total plans completed: 23 (v1.0: 10, v1.1: 6, v1.2: 7)
 - Average duration: --
 - Total execution time: --
 
@@ -41,6 +41,8 @@ Recent decisions affecting current work:
 - [v1.2]: No new npm packages -- MultiSelectFilter built on existing ClientSelect pattern
 - [v1.2]: Per-entry revenue computed server-side with admin gating (not client-side from hourlyRate)
 - [v1.2]: Comparison period badges excluded from Detail tab (unfiltered comparison data would mislead)
+- [v1.2]: FilterState is single source of truth for bar selection and FilterBar dropdowns (no separate chart state)
+- [v1.2]: getBarOpacity duplicated in both chart files (4-line function, avoids cross-component coupling)
 
 ### Pending Todos
 
@@ -59,6 +61,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-25
-Stopped at: Phase 10 complete, ready for Phase 11
+Last session: 2026-02-26
+Stopped at: Completed 11-01-PLAN.md (Phase 11 complete)
 Resume file: .planning/ROADMAP.md

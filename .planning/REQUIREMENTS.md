@@ -10,7 +10,7 @@ Requirements for Reports Detail View milestone. Each maps to roadmap phases.
 ### Detail Tab
 
 - [x] **DTAB-01**: User can navigate to a Detail tab in Reports alongside Overview, By Client, By Employee
-- [ ] **DTAB-02**: User sees summary stats row (entry count, total hours, total revenue for admins) that updates with filters
+- [x] **DTAB-02**: User sees summary stats row (entry count, total hours, total revenue for admins) that updates with filters
 
 ### Filters
 
@@ -29,7 +29,7 @@ Requirements for Reports Detail View milestone. Each maps to roadmap phases.
 - [x] **CHRT-04**: Admin sees Revenue by Client horizontal bar chart
 - [x] **CHRT-05**: Admin sees Revenue by Employee horizontal bar chart
 - [x] **CHRT-06**: Admin sees Revenue by Topic horizontal bar chart
-- [ ] **CHRT-07**: User can click a chart bar to toggle that entity as a filter
+- [x] **CHRT-07**: User can click a chart bar to toggle that entity as a filter
 
 ### Entry Table
 
@@ -73,7 +73,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DTAB-01 | Phase 10 | Complete |
-| DTAB-02 | Phase 11 | Pending |
+| DTAB-02 | Phase 11 | Complete |
 | FILT-01 | Phase 9 | Complete |
 | FILT-02 | Phase 9 | Complete |
 | FILT-03 | Phase 9 | Complete |
@@ -86,7 +86,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHRT-04 | Phase 10 | Complete |
 | CHRT-05 | Phase 10 | Complete |
 | CHRT-06 | Phase 10 | Complete |
-| CHRT-07 | Phase 11 | Pending |
+| CHRT-07 | Phase 11 | Complete |
 | TABL-01 | Phase 10 | Complete |
 | TABL-02 | Phase 10 | Complete |
 | TABL-03 | Phase 10 | Complete |

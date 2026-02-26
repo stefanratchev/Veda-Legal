@@ -381,7 +381,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               data={clientHoursData}
               valueFormatter={formatHours}
               layout="vertical"
-              maxBars={10}
+              maxBars={20}
               onBarClick={handleClientBarClick}
               activeIds={filters.clientIds}
             />
@@ -393,7 +393,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               Revenue by Client
             </h3>
             <div className="h-64">
-              <RevenueBarChart data={clientRevenueData} maxBars={10} onBarClick={handleClientBarClick} activeIds={filters.clientIds} />
+              <RevenueBarChart data={clientRevenueData} maxBars={20} onBarClick={handleClientBarClick} activeIds={filters.clientIds} />
             </div>
           </div>
         ) : null}
@@ -412,7 +412,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               data={employeeHoursData}
               valueFormatter={formatHours}
               layout="vertical"
-              maxBars={10}
+              maxBars={20}
               onBarClick={handleEmployeeBarClick}
               activeIds={filters.employeeIds}
             />
@@ -424,7 +424,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               Revenue by Employee
             </h3>
             <div className="h-64">
-              <RevenueBarChart data={employeeRevenueData} maxBars={10} onBarClick={handleEmployeeBarClick} activeIds={filters.employeeIds} />
+              <RevenueBarChart data={employeeRevenueData} maxBars={20} onBarClick={handleEmployeeBarClick} activeIds={filters.employeeIds} />
             </div>
           </div>
         ) : null}
@@ -443,7 +443,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               data={topicHoursData}
               valueFormatter={formatHours}
               layout="vertical"
-              maxBars={10}
+              maxBars={20}
               onBarClick={handleTopicBarClick}
               activeIds={filters.topicNames}
             />
@@ -455,7 +455,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               Revenue by Topic
             </h3>
             <div className="h-64">
-              <RevenueBarChart data={topicRevenueData} maxBars={10} onBarClick={handleTopicBarClick} activeIds={filters.topicNames} />
+              <RevenueBarChart data={topicRevenueData} maxBars={20} onBarClick={handleTopicBarClick} activeIds={filters.topicNames} />
             </div>
           </div>
         ) : null}

@@ -384,29 +384,29 @@ describe("DetailTab", () => {
       }
     });
 
-    it("small datasets use 256px minimum height", () => {
-      // With 4 entries: 3 unique clients => Math.max(256, 3*22) = Math.max(256, 66) = 256
+    it("small datasets use 120px minimum height", () => {
+      // With 4 entries: 3 unique clients => Math.max(120, 3*22) = Math.max(120, 66) = 120
       render(<DetailTab entries={entries} isAdmin={false} />);
 
       const container = getChartContainer("Hours by Client");
       expect(container).not.toBeNull();
-      expect(container!.style.height).toBe("256px");
+      expect(container!.style.height).toBe("120px");
     });
 
     it("each chart computes height from its own data length", () => {
-      // 4 entries: 3 clients, 2 employees, 3 topics — all below 12 bars, so all 256px minimum
+      // 4 entries: 3 clients, 2 employees, 3 topics — all below 6 bars, so all 120px minimum
       render(<DetailTab entries={entries} isAdmin={false} />);
 
       const clientContainer = getChartContainer("Hours by Client");
       const employeeContainer = getChartContainer("Hours by Employee");
       const topicContainer = getChartContainer("Hours by Topic");
 
-      // 3 clients: Math.max(256, 3*22=66) = 256
-      expect(clientContainer!.style.height).toBe("256px");
-      // 2 employees: Math.max(256, 2*22=44) = 256
-      expect(employeeContainer!.style.height).toBe("256px");
-      // 3 topics: Math.max(256, 3*22=66) = 256
-      expect(topicContainer!.style.height).toBe("256px");
+      // 3 clients: Math.max(120, 3*22=66) = 120
+      expect(clientContainer!.style.height).toBe("120px");
+      // 2 employees: Math.max(120, 2*22=44) = 120
+      expect(employeeContainer!.style.height).toBe("120px");
+      // 3 topics: Math.max(120, 3*22=66) = 120
+      expect(topicContainer!.style.height).toBe("120px");
     });
 
     it("large dataset grows chart container taller", () => {
@@ -428,13 +428,13 @@ describe("DetailTab", () => {
 
       const container = getChartContainer("Hours by Client");
       expect(container).not.toBeNull();
-      // 15 clients: Math.max(256, 15*22=330) = 330
+      // 15 clients: Math.max(120, 15*22=330) = 330
       expect(container!.style.height).toBe("330px");
     });
 
     it("dataset exceeding maxBars accounts for 'Other' grouping bar", () => {
       // Create 25 unique clients — exceeds maxBars (20)
-      // effectiveBars = min(25, 20) + 1 = 21, height = Math.max(256, 21*22=462) = 462
+      // effectiveBars = min(25, 20) + 1 = 21, height = Math.max(120, 21*22=462) = 462
       const manyClientEntries: ReportEntry[] = Array.from({ length: 25 }, (_, i) =>
         createEntry({
           id: `e-${i}`,

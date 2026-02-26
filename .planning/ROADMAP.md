@@ -95,10 +95,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. User sees a summary stats row (entry count, total hours; admins see total revenue) that updates in real-time as filters change (DTAB-02)
   2. User can click a chart bar to toggle that entity as a filter, and clicking again removes it (CHRT-07)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 11-01: TBD
+- [ ] 11-01-PLAN.md — Summary stats row, chart activeIds visual feedback, and click-to-filter interaction (TDD)
 
 ## Progress
 
@@ -117,4 +117,4 @@ Phases execute in numeric order: 8 -> 9 -> 10 -> 11
 | 8. Data Layer Foundation | v1.2 | 2/2 | Complete | 2026-02-25 |
 | 9. Filter Component | v1.2 | 2/2 | Complete | 2026-02-25 |
 | 10. Detail Tab Assembly | v1.2 | 2/2 | Complete | 2026-02-25 |
-| 11. Polish & Interactivity | v1.2 | 0/TBD | Not started | - |
+| 11. Polish & Interactivity | v1.2 | 0/1 | Not started | - |

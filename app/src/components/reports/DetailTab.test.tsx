@@ -213,26 +213,29 @@ describe("DetailTab", () => {
     it("renders entry table with base columns for non-admin", () => {
       render(<DetailTab entries={entries} isAdmin={false} />);
 
-      // Check table headers
+      // Check table headers (some text appears in both summary stats and table)
       expect(screen.getByText("Date")).toBeInTheDocument();
       expect(screen.getByText("Employee")).toBeInTheDocument();
       expect(screen.getByText("Client")).toBeInTheDocument();
       expect(screen.getByText("Topic")).toBeInTheDocument();
       expect(screen.getByText("Subtopic")).toBeInTheDocument();
       expect(screen.getByText("Description")).toBeInTheDocument();
-      expect(screen.getByText("Hours")).toBeInTheDocument();
+      // "Hours" appears in both summary stats and table header
+      expect(screen.getAllByText("Hours").length).toBeGreaterThanOrEqual(2);
     });
 
     it("does NOT render Revenue column header for non-admin", () => {
       render(<DetailTab entries={entries} isAdmin={false} />);
 
+      // "Revenue" should not appear anywhere for non-admin (no summary stat, no table header)
       expect(screen.queryByText("Revenue")).not.toBeInTheDocument();
     });
 
     it("renders Revenue column header for admin", () => {
       render(<DetailTab entries={entries} isAdmin={true} />);
 
-      expect(screen.getByText("Revenue")).toBeInTheDocument();
+      // "Revenue" appears in both summary stats row and table column header
+      expect(screen.getAllByText("Revenue").length).toBeGreaterThanOrEqual(2);
     });
 
     it("renders entry data in the table", () => {
@@ -252,41 +255,56 @@ describe("DetailTab", () => {
       // 4 entries, total 10.5 hours => "10h 30m"
       expect(screen.getByText("Entries")).toBeInTheDocument();
       expect(screen.getByText("4")).toBeInTheDocument();
-      expect(screen.getByText("Hours")).toBeInTheDocument();
+      // "Hours" appears in both summary stats and table header
+      expect(screen.getAllByText("Hours").length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText("10h 30m")).toBeInTheDocument();
     });
 
     it("renders total revenue for admin", () => {
       render(<DetailTab entries={entries} isAdmin={true} />);
 
-      // Revenue label should be present in the summary stats
+      // Revenue label appears in summary stats AND table header for admin
       // Total revenue: 450 + 300 + 225 + 0 (null) = 975
-      expect(screen.getByText("Revenue")).toBeInTheDocument();
+      expect(screen.getAllByText("Revenue").length).toBeGreaterThanOrEqual(2);
+      // Verify the formatted amount appears
+      expect(screen.getByText(/975/)).toBeInTheDocument();
     });
 
     it("does NOT render revenue label in summary stats for non-admin", () => {
       render(<DetailTab entries={entries} isAdmin={false} />);
 
-      // "Revenue" should not appear anywhere as summary stat label
-      // (Note: Revenue column header is also hidden for non-admin)
+      // "Revenue" should not appear anywhere for non-admin
       expect(screen.queryByText("Revenue")).not.toBeInTheDocument();
     });
 
     it("updates when filter is applied", () => {
       render(<DetailTab entries={entries} isAdmin={false} />);
 
-      // Initially 4 entries
+      // Initially 4 entries visible in summary stats
+      expect(screen.getByText("Entries")).toBeInTheDocument();
       expect(screen.getByText("4")).toBeInTheDocument();
+      expect(screen.getByText("10h 30m")).toBeInTheDocument();
 
-      // Open Clients dropdown and select "Beta Inc" (1 entry)
+      // Open Clients dropdown and select "Beta Inc" (1 entry with 2h)
       fireEvent.click(screen.getByText("Clients"));
-      const betaCheckboxes = screen.getAllByText("Beta Inc");
-      // Click the one in the dropdown (checkbox label)
-      fireEvent.click(betaCheckboxes[0]);
+      // Find the Beta Inc option button in the dropdown (it contains the text)
+      const betaElements = screen.getAllByText("Beta Inc");
+      // The dropdown option button wraps the text - use mouseDown on the closest button
+      const dropdownButton = betaElements.find(el =>
+        el.closest("button[type='button']")?.closest("[data-testid='multi-select-filter']")
+      );
+      if (dropdownButton) {
+        const button = dropdownButton.closest("button[type='button']");
+        if (button) {
+          fireEvent.mouseDown(button);
+        }
+      }
 
       // After filtering to Beta Inc only: 1 entry, 2h
-      expect(screen.getByText("1")).toBeInTheDocument();
-      expect(screen.getByText("2h")).toBeInTheDocument();
+      // "2h" appears in both summary stats and table cell
+      expect(screen.getAllByText("2h").length).toBeGreaterThanOrEqual(1);
+      // Previous total "10h 30m" should no longer appear
+      expect(screen.queryByText("10h 30m")).not.toBeInTheDocument();
     });
   });
 

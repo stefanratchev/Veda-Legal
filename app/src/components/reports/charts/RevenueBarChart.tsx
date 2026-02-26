@@ -69,7 +69,14 @@ interface RevenueBarChartProps {
   data: RevenueItem[];
   comparisonData?: RevenueItem[];
   onBarClick?: (id: string) => void;
+  activeIds?: Set<string>;
   maxBars?: number;
+}
+
+export function getBarOpacity(activeIds: Set<string> | undefined, itemId: string | undefined): number {
+  if (!activeIds || activeIds.size === 0) return 0.8;
+  if (itemId != null && activeIds.has(itemId)) return 0.8;
+  return 0.25;
 }
 
 // --- EUR Formatters (exported for testing) ---
@@ -231,6 +238,7 @@ export function RevenueBarChart({
   data,
   comparisonData,
   onBarClick,
+  activeIds,
   maxBars = 10,
 }: RevenueBarChartProps) {
   const preparedData = useMemo(
@@ -290,11 +298,11 @@ export function RevenueBarChart({
           cursor={onBarClick ? "pointer" : "default"}
           onClick={(_, index) => handleClick(chartData[index])}
         >
-          {chartData.map((_, index) => (
+          {chartData.map((item, index) => (
             <Cell
               key={`cell-${index}`}
               fill={BAR_COLORS[index % BAR_COLORS.length]}
-              fillOpacity={0.8}
+              fillOpacity={getBarOpacity(activeIds, item.id)}
             />
           ))}
           <LabelList

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { FilterBar, FilterState } from "@/components/reports/FilterBar";
 import { BarChart } from "@/components/reports/charts/BarChart";
 import { RevenueBarChart } from "@/components/reports/charts/RevenueBarChart";
@@ -85,6 +85,43 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
       ),
     [entries, filters]
   );
+
+  // Toggle handlers for chart bar clicks (stable refs via functional setState)
+  const handleClientBarClick = useCallback((id: string) => {
+    setFilters(prev => {
+      const next = new Set(prev.clientIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { ...prev, clientIds: next };
+    });
+  }, []);
+
+  const handleEmployeeBarClick = useCallback((id: string) => {
+    setFilters(prev => {
+      const next = new Set(prev.employeeIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { ...prev, employeeIds: next };
+    });
+  }, []);
+
+  const handleTopicBarClick = useCallback((id: string) => {
+    setFilters(prev => {
+      const next = new Set(prev.topicNames);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { ...prev, topicNames: next };
+    });
+  }, []);
+
+  // Summary stats derived from filtered data
+  const summaryStats = useMemo(() => {
+    const entryCount = filteredEntries.length;
+    const totalHours = filteredEntries.reduce((sum, e) => sum + e.hours, 0);
+    const totalRevenue = filteredEntries.reduce((sum, e) => sum + (e.revenue ?? 0), 0);
+    const hasRevenue = filteredEntries.some(e => e.revenue !== null);
+    return { entryCount, totalHours, totalRevenue: hasRevenue ? totalRevenue : null };
+  }, [filteredEntries]);
 
   // Aggregations for charts
   const byClient = useMemo(
@@ -245,6 +282,30 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
     });
   };
 
+  // Summary stats row JSX
+  const summaryStatsRow = (
+    <div className="flex items-center gap-6 px-4 py-3 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded">
+      <div>
+        <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Entries</span>
+        <span className="ml-2 text-sm font-medium text-[var(--text-primary)]">{summaryStats.entryCount}</span>
+      </div>
+      <div className="w-px h-4 bg-[var(--border-subtle)]" />
+      <div>
+        <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Hours</span>
+        <span className="ml-2 text-sm font-medium text-[var(--text-primary)]">{formatHours(summaryStats.totalHours)}</span>
+      </div>
+      {isAdmin && summaryStats.totalRevenue !== null ? (
+        <>
+          <div className="w-px h-4 bg-[var(--border-subtle)]" />
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Revenue</span>
+            <span className="ml-2 text-sm font-medium text-[var(--accent-pink)]">{formatCurrency(summaryStats.totalRevenue)}</span>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+
   // Empty state
   if (filteredEntries.length === 0) {
     return (
@@ -257,6 +318,9 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
           filters={filters}
           onChange={setFilters}
         />
+
+        {/* Summary Stats */}
+        {summaryStatsRow}
 
         {/* Empty state */}
         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -301,6 +365,9 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
         onChange={setFilters}
       />
 
+      {/* Summary Stats */}
+      {summaryStatsRow}
+
       {/* Chart Row 1: By Client */}
       <div
         className={`grid grid-cols-1 ${isAdmin ? "md:grid-cols-2" : ""} gap-4`}
@@ -315,6 +382,8 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               valueFormatter={formatHours}
               layout="vertical"
               maxBars={10}
+              onBarClick={handleClientBarClick}
+              activeIds={filters.clientIds}
             />
           </div>
         </div>
@@ -324,7 +393,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               Revenue by Client
             </h3>
             <div className="h-64">
-              <RevenueBarChart data={clientRevenueData} maxBars={10} />
+              <RevenueBarChart data={clientRevenueData} maxBars={10} onBarClick={handleClientBarClick} activeIds={filters.clientIds} />
             </div>
           </div>
         ) : null}
@@ -344,6 +413,8 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               valueFormatter={formatHours}
               layout="vertical"
               maxBars={10}
+              onBarClick={handleEmployeeBarClick}
+              activeIds={filters.employeeIds}
             />
           </div>
         </div>
@@ -353,7 +424,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               Revenue by Employee
             </h3>
             <div className="h-64">
-              <RevenueBarChart data={employeeRevenueData} maxBars={10} />
+              <RevenueBarChart data={employeeRevenueData} maxBars={10} onBarClick={handleEmployeeBarClick} activeIds={filters.employeeIds} />
             </div>
           </div>
         ) : null}
@@ -373,6 +444,8 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               valueFormatter={formatHours}
               layout="vertical"
               maxBars={10}
+              onBarClick={handleTopicBarClick}
+              activeIds={filters.topicNames}
             />
           </div>
         </div>
@@ -382,7 +455,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
               Revenue by Topic
             </h3>
             <div className="h-64">
-              <RevenueBarChart data={topicRevenueData} maxBars={10} />
+              <RevenueBarChart data={topicRevenueData} maxBars={10} onBarClick={handleTopicBarClick} activeIds={filters.topicNames} />
             </div>
           </div>
         ) : null}

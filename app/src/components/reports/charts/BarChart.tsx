@@ -61,10 +61,17 @@ interface BarChartItem {
 interface BarChartProps {
   data: BarChartItem[];
   onBarClick?: (id: string) => void;
+  activeIds?: Set<string>;
   valueFormatter?: (value: number) => string;
   layout?: "horizontal" | "vertical";
   valueLabel?: string;
   maxBars?: number;
+}
+
+export function getBarOpacity(activeIds: Set<string> | undefined, itemId: string | undefined): number {
+  if (!activeIds || activeIds.size === 0) return 0.8;
+  if (itemId != null && activeIds.has(itemId)) return 0.8;
+  return 0.25;
 }
 
 export function prepareBarData(
@@ -86,6 +93,7 @@ export function prepareBarData(
 export function BarChart({
   data,
   onBarClick,
+  activeIds,
   valueFormatter = (v) => v.toFixed(1),
   layout = "horizontal",
   valueLabel = "Hours",
@@ -170,11 +178,11 @@ export function BarChart({
           cursor={onBarClick ? "pointer" : "default"}
           onClick={(_, index) => handleClick(chartData[index])}
         >
-          {chartData.map((_, index) => (
+          {chartData.map((item, index) => (
             <Cell
               key={`cell-${index}`}
               fill={BAR_COLORS[index % BAR_COLORS.length]}
-              fillOpacity={0.8}
+              fillOpacity={getBarOpacity(activeIds, item.id)}
             />
           ))}
         </Bar>

@@ -30,6 +30,16 @@ function formatDateDisplay(dateStr: string): string {
 }
 
 /**
+ * Compute chart container height based on number of data items.
+ * After maxBars grouping, effective bar count = min(dataLength, maxBars) + 1 if overflow exists.
+ * Each bar gets 22px; minimum height is 256px (equivalent to h-64).
+ */
+function getChartHeight(dataLength: number, maxBars: number = 20): number {
+  const effectiveBars = Math.min(dataLength, maxBars) + (dataLength > maxBars ? 1 : 0);
+  return Math.max(256, effectiveBars * 22);
+}
+
+/**
  * Format currency for display (e.g., "€1,234")
  */
 function formatCurrency(amount: number): string {
@@ -376,7 +386,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
           <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
             Hours by Client
           </h3>
-          <div className="h-64">
+          <div style={{ height: getChartHeight(clientHoursData.length) }}>
             <BarChart
               data={clientHoursData}
               valueFormatter={formatHours}
@@ -392,7 +402,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
               Revenue by Client
             </h3>
-            <div className="h-64">
+            <div style={{ height: getChartHeight(clientRevenueData.length) }}>
               <RevenueBarChart data={clientRevenueData} maxBars={20} onBarClick={handleClientBarClick} activeIds={filters.clientIds} />
             </div>
           </div>
@@ -407,7 +417,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
           <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
             Hours by Employee
           </h3>
-          <div className="h-64">
+          <div style={{ height: getChartHeight(employeeHoursData.length) }}>
             <BarChart
               data={employeeHoursData}
               valueFormatter={formatHours}
@@ -423,7 +433,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
               Revenue by Employee
             </h3>
-            <div className="h-64">
+            <div style={{ height: getChartHeight(employeeRevenueData.length) }}>
               <RevenueBarChart data={employeeRevenueData} maxBars={20} onBarClick={handleEmployeeBarClick} activeIds={filters.employeeIds} />
             </div>
           </div>
@@ -438,7 +448,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
           <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
             Hours by Topic
           </h3>
-          <div className="h-64">
+          <div style={{ height: getChartHeight(topicHoursData.length) }}>
             <BarChart
               data={topicHoursData}
               valueFormatter={formatHours}
@@ -454,7 +464,7 @@ export function DetailTab({ entries, isAdmin }: DetailTabProps) {
             <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
               Revenue by Topic
             </h3>
-            <div className="h-64">
+            <div style={{ height: getChartHeight(topicRevenueData.length) }}>
               <RevenueBarChart data={topicRevenueData} maxBars={20} onBarClick={handleTopicBarClick} activeIds={filters.topicNames} />
             </div>
           </div>

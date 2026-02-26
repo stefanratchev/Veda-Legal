@@ -3,6 +3,10 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import type { ReportEntry } from "@/types/reports";
 import type { FilterState } from "./FilterBar";
 
+// Track props passed to chart components
+const barChartCalls: Record<string, unknown>[] = [];
+const revenueBarChartCalls: Record<string, unknown>[] = [];
+
 // Mock child components to inspect props
 vi.mock("@/hooks/useClickOutside", () => ({
   useClickOutside: vi.fn(),
@@ -23,6 +27,21 @@ vi.mock("recharts", () => ({
   Tooltip: () => null,
   Cell: () => null,
   LabelList: () => null,
+}));
+
+// Mock BarChart and RevenueBarChart to capture props
+vi.mock("@/components/reports/charts/BarChart", () => ({
+  BarChart: (props: Record<string, unknown>) => {
+    barChartCalls.push(props);
+    return <div data-testid="mock-bar-chart" />;
+  },
+}));
+
+vi.mock("@/components/reports/charts/RevenueBarChart", () => ({
+  RevenueBarChart: (props: Record<string, unknown>) => {
+    revenueBarChartCalls.push(props);
+    return <div data-testid="mock-revenue-bar-chart" />;
+  },
 }));
 
 // Import after mocks
@@ -94,6 +113,8 @@ describe("DetailTab", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    barChartCalls.length = 0;
+    revenueBarChartCalls.length = 0;
   });
 
   describe("Rendering", () => {
@@ -221,6 +242,95 @@ describe("DetailTab", () => {
       expect(screen.getAllByText("Alice Smith").length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText("Bob Jones").length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText("Acme Corp").length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Summary Stats", () => {
+    it("renders entry count and total hours", () => {
+      render(<DetailTab entries={entries} isAdmin={false} />);
+
+      // 4 entries, total 10.5 hours => "10h 30m"
+      expect(screen.getByText("Entries")).toBeInTheDocument();
+      expect(screen.getByText("4")).toBeInTheDocument();
+      expect(screen.getByText("Hours")).toBeInTheDocument();
+      expect(screen.getByText("10h 30m")).toBeInTheDocument();
+    });
+
+    it("renders total revenue for admin", () => {
+      render(<DetailTab entries={entries} isAdmin={true} />);
+
+      // Revenue label should be present in the summary stats
+      // Total revenue: 450 + 300 + 225 + 0 (null) = 975
+      expect(screen.getByText("Revenue")).toBeInTheDocument();
+    });
+
+    it("does NOT render revenue label in summary stats for non-admin", () => {
+      render(<DetailTab entries={entries} isAdmin={false} />);
+
+      // "Revenue" should not appear anywhere as summary stat label
+      // (Note: Revenue column header is also hidden for non-admin)
+      expect(screen.queryByText("Revenue")).not.toBeInTheDocument();
+    });
+
+    it("updates when filter is applied", () => {
+      render(<DetailTab entries={entries} isAdmin={false} />);
+
+      // Initially 4 entries
+      expect(screen.getByText("4")).toBeInTheDocument();
+
+      // Open Clients dropdown and select "Beta Inc" (1 entry)
+      fireEvent.click(screen.getByText("Clients"));
+      const betaCheckboxes = screen.getAllByText("Beta Inc");
+      // Click the one in the dropdown (checkbox label)
+      fireEvent.click(betaCheckboxes[0]);
+
+      // After filtering to Beta Inc only: 1 entry, 2h
+      expect(screen.getByText("1")).toBeInTheDocument();
+      expect(screen.getByText("2h")).toBeInTheDocument();
+    });
+  });
+
+  describe("Chart Click-to-Filter", () => {
+    it("passes onBarClick to BarChart components", () => {
+      render(<DetailTab entries={entries} isAdmin={false} />);
+
+      // Should have 3 BarChart instances (Client, Employee, Topic)
+      expect(barChartCalls.length).toBe(3);
+      for (const call of barChartCalls) {
+        expect(typeof call.onBarClick).toBe("function");
+      }
+    });
+
+    it("passes onBarClick to RevenueBarChart components for admin", () => {
+      render(<DetailTab entries={entries} isAdmin={true} />);
+
+      // Should have 3 RevenueBarChart instances (Client, Employee, Topic)
+      expect(revenueBarChartCalls.length).toBe(3);
+      for (const call of revenueBarChartCalls) {
+        expect(typeof call.onBarClick).toBe("function");
+      }
+    });
+
+    it("passes activeIds from filter state to BarChart components", () => {
+      render(<DetailTab entries={entries} isAdmin={false} />);
+
+      // Initially all activeIds should be empty Sets
+      for (const call of barChartCalls) {
+        const activeIds = call.activeIds as Set<string>;
+        expect(activeIds).toBeDefined();
+        expect(activeIds.size).toBe(0);
+      }
+    });
+
+    it("passes activeIds from filter state to RevenueBarChart components", () => {
+      render(<DetailTab entries={entries} isAdmin={true} />);
+
+      // Initially all activeIds should be empty Sets
+      for (const call of revenueBarChartCalls) {
+        const activeIds = call.activeIds as Set<string>;
+        expect(activeIds).toBeDefined();
+        expect(activeIds.size).toBe(0);
+      }
     });
   });
 });

@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Partners and admins can quickly understand firm performance -- revenue, hours, and work distribution -- from the reports page.
-**Current focus:** Planning next milestone
+**Current focus:** Phase 12 - Tab Navigation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-26 — Milestone v1.3 started
+Phase: 12 of 13 (Tab Navigation)
+Plan: --
+Status: Ready to plan
+Last activity: 2026-02-26 -- Roadmap created for v1.3 Billing Tabs
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -28,6 +30,7 @@ Last activity: 2026-02-26 — Milestone v1.3 started
 | 1-4 (v1.0) | 10 | -- | -- |
 | 5-7 (v1.1) | 6 | -- | -- |
 | 8-11 (v1.2) | 7 | -- | -- |
+| 12-13 (v1.3) | 0 | -- | -- |
 
 ## Accumulated Context
 
@@ -57,5 +60,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed quick task 10
+Stopped at: Created v1.3 roadmap
 Resume file: .planning/ROADMAP.md

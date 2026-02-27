@@ -41,21 +41,21 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TABS-01 | — | Pending |
-| TABS-02 | — | Pending |
-| TABS-03 | — | Pending |
-| TABS-04 | — | Pending |
-| TABS-05 | — | Pending |
-| FILT-01 | — | Pending |
-| FILT-02 | — | Pending |
-| FILT-03 | — | Pending |
-| FILT-04 | — | Pending |
+| TABS-01 | Phase 12 | Pending |
+| TABS-02 | Phase 12 | Pending |
+| TABS-03 | Phase 12 | Pending |
+| TABS-04 | Phase 12 | Pending |
+| TABS-05 | Phase 12 | Pending |
+| FILT-01 | Phase 13 | Pending |
+| FILT-02 | Phase 13 | Pending |
+| FILT-03 | Phase 13 | Pending |
+| FILT-04 | Phase 13 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 9 total
-- Mapped to phases: 0
-- Unmapped: 9 ⚠️
+- Mapped to phases: 9
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-02-26 after initial definition*
+*Last updated: 2026-02-26 after roadmap creation*

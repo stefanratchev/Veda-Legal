@@ -17,10 +17,10 @@ Requirements for Billing Tabs milestone. Each maps to roadmap phases.
 
 ### Date Range Filtering
 
-- [ ] **FILT-01**: Service Descriptions tab has a date range picker with This Month, Last Month, and custom range presets
-- [ ] **FILT-02**: This Month is the default date range when opening the Service Descriptions tab
-- [ ] **FILT-03**: Date range filters service descriptions server-side (only matching SDs are fetched)
-- [ ] **FILT-04**: Status filter (All/Draft/Finalized) works alongside the date range filter
+- [x] **FILT-01**: Service Descriptions tab has a date range picker with This Month, Last Month, and custom range presets
+- [x] **FILT-02**: This Month is the default date range when opening the Service Descriptions tab
+- [x] **FILT-03**: Date range filters service descriptions server-side (only matching SDs are fetched)
+- [x] **FILT-04**: Status filter (All/Draft/Finalized) works alongside the date range filter
 
 ## Future Requirements
 
@@ -46,10 +46,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TABS-03 | Phase 12 | Complete |
 | TABS-04 | Phase 12 | Complete |
 | TABS-05 | Phase 12 | Complete |
-| FILT-01 | Phase 13 | Pending |
-| FILT-02 | Phase 13 | Pending |
-| FILT-03 | Phase 13 | Pending |
-| FILT-04 | Phase 13 | Pending |
+| FILT-01 | Phase 13 | Complete |
+| FILT-02 | Phase 13 | Complete |
+| FILT-03 | Phase 13 | Complete |
+| FILT-04 | Phase 13 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 9 total

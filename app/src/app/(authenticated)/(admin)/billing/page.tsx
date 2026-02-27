@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { eq, asc, desc, and } from "drizzle-orm";
 import { db, clients, serviceDescriptions } from "@/lib/db";
 import { BillingContent } from "@/components/billing/BillingContent";
@@ -92,5 +93,9 @@ export default async function BillingPage() {
     orderBy: [asc(clients.name)],
   });
 
-  return <BillingContent initialServiceDescriptions={listItems} clients={clientsList} />;
+  return (
+    <Suspense>
+      <BillingContent initialServiceDescriptions={listItems} clients={clientsList} />
+    </Suspense>
+  );
 }

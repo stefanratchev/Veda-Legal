@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DataTable } from "@/components/ui/DataTable";
 import { TableFilters } from "@/components/ui/TableFilters";
 import { ColumnDef } from "@/components/ui/table-types";
@@ -45,8 +45,34 @@ function formatPeriod(start: string, end: string): string {
   return `${startMonth} - ${endMonth}`;
 }
 
+type BillingTab = "ready-to-bill" | "service-descriptions";
+
+const billingTabs: { id: BillingTab; label: string }[] = [
+  { id: "ready-to-bill", label: "Ready to Bill" },
+  { id: "service-descriptions", label: "Service Descriptions" },
+];
+
 export function BillingContent({ initialServiceDescriptions, clients }: BillingContentProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Derive active tab from URL — default to "ready-to-bill"
+  const activeTab: BillingTab =
+    searchParams.get("tab") === "service-descriptions"
+      ? "service-descriptions"
+      : "ready-to-bill";
+
+  const handleTabClick = useCallback(
+    (tabId: BillingTab) => {
+      if (tabId === "ready-to-bill") {
+        router.replace("/billing", { scroll: false });
+      } else {
+        router.replace(`/billing?tab=${tabId}`, { scroll: false });
+      }
+    },
+    [router]
+  );
+
   const [serviceDescriptions, setServiceDescriptions] = useState(initialServiceDescriptions);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -221,36 +247,61 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
         <p className="text-[var(--text-muted)] text-[13px] mt-0.5">Manage service descriptions and billing</p>
       </div>
 
-      <UnbilledClientsSection onCreateServiceDescription={handleCreate} />
-
-      <div className="border-t border-[var(--bg-surface)] pt-6">
-        <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)] mb-4">
-          Service Descriptions
-        </h2>
-        <TableFilters
-          searchValue={searchQuery}
-          onSearchChange={setSearchQuery}
-          searchPlaceholder="Search by client name..."
-          filterOptions={[
-            { value: "ALL", label: "All Status" },
-            { value: "DRAFT", label: "Draft" },
-            { value: "FINALIZED", label: "Finalized" },
-          ]}
-          filterValue={statusFilter}
-          onFilterChange={(value) => setStatusFilter(value as "ALL" | ServiceDescriptionStatus)}
-          resultCount={filteredDescriptions.length}
-        />
+      {/* Tab Bar */}
+      <div className="flex border-b border-[var(--border-subtle)]">
+        {billingTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => handleTabClick(tab.id)}
+            className={`
+              px-4 py-2.5 text-[13px] font-medium transition-colors relative
+              ${
+                activeTab === tab.id
+                  ? "text-[var(--accent-pink)]"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              }
+            `}
+          >
+            {tab.label}
+            {activeTab === tab.id && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-pink)]" />
+            )}
+          </button>
+        ))}
       </div>
 
-      <DataTable
-        data={filteredDescriptions}
-        columns={columns}
-        getRowKey={(sd) => sd.id}
-        pageSize={25}
-        emptyMessage={serviceDescriptions.length === 0 ? "No service descriptions yet" : "No matching service descriptions"}
-        emptyIcon={emptyIcon}
-        onRowClick={handleRowClick}
-      />
+      {/* Tab Content */}
+      {activeTab === "ready-to-bill" && (
+        <UnbilledClientsSection onCreateServiceDescription={handleCreate} />
+      )}
+
+      {activeTab === "service-descriptions" && (
+        <>
+          <TableFilters
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search by client name..."
+            filterOptions={[
+              { value: "ALL", label: "All Status" },
+              { value: "DRAFT", label: "Draft" },
+              { value: "FINALIZED", label: "Finalized" },
+            ]}
+            filterValue={statusFilter}
+            onFilterChange={(value) => setStatusFilter(value as "ALL" | ServiceDescriptionStatus)}
+            resultCount={filteredDescriptions.length}
+          />
+
+          <DataTable
+            data={filteredDescriptions}
+            columns={columns}
+            getRowKey={(sd) => sd.id}
+            pageSize={25}
+            emptyMessage={serviceDescriptions.length === 0 ? "No service descriptions yet" : "No matching service descriptions"}
+            emptyIcon={emptyIcon}
+            onRowClick={handleRowClick}
+          />
+        </>
+      )}
 
       {showCreateModal && (
         <CreateServiceDescriptionModal

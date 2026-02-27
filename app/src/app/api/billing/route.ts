@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import {
@@ -25,7 +25,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Parse optional date range query params
+    const periodStartFrom = request.nextUrl.searchParams.get("periodStartFrom");
+    const periodStartTo = request.nextUrl.searchParams.get("periodStartTo");
+
+    // Validate date format if provided (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (periodStartFrom && !dateRegex.test(periodStartFrom)) {
+      return errorResponse("Invalid periodStartFrom format. Expected YYYY-MM-DD.", 400);
+    }
+    if (periodStartTo && !dateRegex.test(periodStartTo)) {
+      return errorResponse("Invalid periodStartTo format. Expected YYYY-MM-DD.", 400);
+    }
+
+    // Build where conditions for date range filtering
+    const conditions = [];
+    if (periodStartFrom) {
+      conditions.push(gte(serviceDescriptions.periodStart, periodStartFrom));
+    }
+    if (periodStartTo) {
+      conditions.push(lte(serviceDescriptions.periodStart, periodStartTo));
+    }
+
     const allServiceDescriptions = await db.query.serviceDescriptions.findMany({
+      ...(conditions.length > 0 ? { where: and(...conditions) } : {}),
       columns: {
         id: true,
         clientId: true,

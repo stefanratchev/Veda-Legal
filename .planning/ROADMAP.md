@@ -63,11 +63,10 @@ See: [milestones/v1.2-ROADMAP.md](./milestones/v1.2-ROADMAP.md)
   3. Clicking "Service Descriptions" shows the SD table with status filter and search
   4. Navigating directly to `?tab=service-descriptions` opens that tab; no query param defaults to Ready to Bill
   5. Tab state survives page refresh (URL is the source of truth)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 12-01: TBD
-- [ ] 12-02: TBD
+- [ ] 12-01-PLAN.md — Refactor BillingContent into tabbed layout with URL-persisted tab state + tests
 
 ### Phase 13: Date Range Filtering
 **Goal**: Users can scope the Service Descriptions tab to a specific time period
@@ -102,5 +101,5 @@ Phases execute in numeric order: 12 -> 13
 | 9. Filter Component | v1.2 | 2/2 | Complete | 2026-02-25 |
 | 10. Detail Tab Assembly | v1.2 | 2/2 | Complete | 2026-02-25 |
 | 11. Polish & Interactivity | v1.2 | 1/1 | Complete | 2026-02-26 |
-| 12. Tab Navigation | v1.3 | 0/TBD | Not started | - |
+| 12. Tab Navigation | v1.3 | 0/1 | Not started | - |
 | 13. Date Range Filtering | v1.3 | 0/TBD | Not started | - |

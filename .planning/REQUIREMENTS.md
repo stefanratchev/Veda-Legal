@@ -9,11 +9,11 @@ Requirements for Billing Tabs milestone. Each maps to roadmap phases.
 
 ### Tab Navigation
 
-- [ ] **TABS-01**: User sees a tab bar with "Ready to Bill" and "Service Descriptions" on the billing page
-- [ ] **TABS-02**: Ready to Bill tab displays the existing unbilled clients grid with create/continue actions
-- [ ] **TABS-03**: Service Descriptions tab displays the existing SD table with status filter and search
-- [ ] **TABS-04**: Active tab is persisted in the URL query param (e.g., `?tab=service-descriptions`)
-- [ ] **TABS-05**: Ready to Bill is the default tab when no query param is present
+- [x] **TABS-01**: User sees a tab bar with "Ready to Bill" and "Service Descriptions" on the billing page
+- [x] **TABS-02**: Ready to Bill tab displays the existing unbilled clients grid with create/continue actions
+- [x] **TABS-03**: Service Descriptions tab displays the existing SD table with status filter and search
+- [x] **TABS-04**: Active tab is persisted in the URL query param (e.g., `?tab=service-descriptions`)
+- [x] **TABS-05**: Ready to Bill is the default tab when no query param is present
 
 ### Date Range Filtering
 
@@ -41,11 +41,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TABS-01 | Phase 12 | Pending |
-| TABS-02 | Phase 12 | Pending |
-| TABS-03 | Phase 12 | Pending |
-| TABS-04 | Phase 12 | Pending |
-| TABS-05 | Phase 12 | Pending |
+| TABS-01 | Phase 12 | Complete |
+| TABS-02 | Phase 12 | Complete |
+| TABS-03 | Phase 12 | Complete |
+| TABS-04 | Phase 12 | Complete |
+| TABS-05 | Phase 12 | Complete |
 | FILT-01 | Phase 13 | Pending |
 | FILT-02 | Phase 13 | Pending |
 | FILT-03 | Phase 13 | Pending |

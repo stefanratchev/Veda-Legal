@@ -77,11 +77,10 @@ Plans:
   2. Opening the Service Descriptions tab defaults to This Month date range
   3. Changing the date range fetches only matching service descriptions from the server (not client-side filtering)
   4. Status filter (All/Draft/Finalized) and date range filter work together -- both constraints apply simultaneously
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 13-01: TBD
-- [ ] 13-02: TBD
+- [ ] 13-01-PLAN.md — DateRangePicker component + API date range params + BillingContent integration + tests
 
 ## Progress
 
@@ -102,4 +101,4 @@ Phases execute in numeric order: 12 -> 13
 | 10. Detail Tab Assembly | v1.2 | 2/2 | Complete | 2026-02-25 |
 | 11. Polish & Interactivity | v1.2 | 1/1 | Complete | 2026-02-26 |
 | 12. Tab Navigation | 1/1 | Complete    | 2026-02-27 | - |
-| 13. Date Range Filtering | v1.3 | 0/TBD | Not started | - |
+| 13. Date Range Filtering | v1.3 | 0/1 | Not started | - |

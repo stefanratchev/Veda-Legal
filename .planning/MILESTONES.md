@@ -48,3 +48,19 @@
 
 ---
 
+
+## v1.3 Billing Tabs (Shipped: 2026-02-28)
+
+**Phases completed:** 2 phases (12-13), 2 plans, 4 tasks
+**Timeline:** 2026-02-27
+**Git range:** `9494571..0fdc3c4` (4 commits, +992/-34 lines across 6 files)
+
+**Key accomplishments:**
+- Refactored billing page into two-tab layout (Ready to Bill / Service Descriptions) with URL-persisted tab state
+- Built DateRangePicker with This Month, Last Month, All Time, and Custom Range presets
+- Server-side date range filtering via periodStartFrom/periodStartTo query params on GET /api/billing
+- Client-side SD refetching with loading state when date range changes
+- 25 new tests (1114 total), zero regressions
+
+---
+

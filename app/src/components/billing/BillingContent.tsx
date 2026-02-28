@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DataTable } from "@/components/ui/DataTable";
-import { TableFilters } from "@/components/ui/TableFilters";
 import { ColumnDef } from "@/components/ui/table-types";
 import { CreateServiceDescriptionModal } from "./CreateServiceDescriptionModal";
 import { UnbilledClientsSection } from "./UnbilledClientsSection";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { DateRangePicker, DateRange, getDateRange } from "./DateRangePicker";
 import { ServiceDescriptionStatus } from "@/types";
 
 interface ServiceDescriptionListItem {
@@ -45,13 +45,79 @@ function formatPeriod(start: string, end: string): string {
   return `${startMonth} - ${endMonth}`;
 }
 
+type BillingTab = "ready-to-bill" | "service-descriptions";
+
+const billingTabs: { id: BillingTab; label: string }[] = [
+  { id: "ready-to-bill", label: "Ready to Bill" },
+  { id: "service-descriptions", label: "Service Descriptions" },
+];
+
 export function BillingContent({ initialServiceDescriptions, clients }: BillingContentProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Derive active tab from URL — default to "ready-to-bill"
+  const activeTab: BillingTab =
+    searchParams.get("tab") === "service-descriptions"
+      ? "service-descriptions"
+      : "ready-to-bill";
+
+  const handleTabClick = useCallback(
+    (tabId: BillingTab) => {
+      if (tabId === "ready-to-bill") {
+        router.replace("/billing", { scroll: false });
+      } else {
+        router.replace(`/billing?tab=${tabId}`, { scroll: false });
+      }
+    },
+    [router]
+  );
+
   const [serviceDescriptions, setServiceDescriptions] = useState(initialServiceDescriptions);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [sdToDelete, setSdToDelete] = useState<ServiceDescriptionListItem | null>(null);
+
+  // Date range state — default to "this-month"
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const { from, to } = getDateRange("this-month");
+    return { preset: "this-month" as const, from, to };
+  });
+  const [isLoadingSDs, setIsLoadingSDs] = useState(false);
+
+  // Fetch service descriptions when date range changes
+  const fetchServiceDescriptions = useCallback(
+    async (from: string | null, to: string | null) => {
+      setIsLoadingSDs(true);
+      try {
+        const params = new URLSearchParams();
+        if (from) params.set("periodStartFrom", from);
+        if (to) params.set("periodStartTo", to);
+        const queryString = params.toString();
+        const url = `/api/billing${queryString ? `?${queryString}` : ""}`;
+
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          setServiceDescriptions(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch service descriptions:", error);
+      } finally {
+        setIsLoadingSDs(false);
+      }
+    },
+    []
+  );
+
+  // Refetch when date range from/to values change
+  const dateRangeFrom = dateRange.from;
+  const dateRangeTo = dateRange.to;
+
+  useEffect(() => {
+    fetchServiceDescriptions(dateRangeFrom, dateRangeTo);
+  }, [dateRangeFrom, dateRangeTo, fetchServiceDescriptions]);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -221,36 +287,106 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
         <p className="text-[var(--text-muted)] text-[13px] mt-0.5">Manage service descriptions and billing</p>
       </div>
 
-      <UnbilledClientsSection onCreateServiceDescription={handleCreate} />
-
-      <div className="border-t border-[var(--bg-surface)] pt-6">
-        <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)] mb-4">
-          Service Descriptions
-        </h2>
-        <TableFilters
-          searchValue={searchQuery}
-          onSearchChange={setSearchQuery}
-          searchPlaceholder="Search by client name..."
-          filterOptions={[
-            { value: "ALL", label: "All Status" },
-            { value: "DRAFT", label: "Draft" },
-            { value: "FINALIZED", label: "Finalized" },
-          ]}
-          filterValue={statusFilter}
-          onFilterChange={(value) => setStatusFilter(value as "ALL" | ServiceDescriptionStatus)}
-          resultCount={filteredDescriptions.length}
-        />
+      {/* Tab Bar */}
+      <div className="flex border-b border-[var(--border-subtle)]">
+        {billingTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => handleTabClick(tab.id)}
+            className={`
+              px-4 py-2.5 text-[13px] font-medium transition-colors relative
+              ${
+                activeTab === tab.id
+                  ? "text-[var(--accent-pink)]"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              }
+            `}
+          >
+            {tab.label}
+            {activeTab === tab.id && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-pink)]" />
+            )}
+          </button>
+        ))}
       </div>
 
-      <DataTable
-        data={filteredDescriptions}
-        columns={columns}
-        getRowKey={(sd) => sd.id}
-        pageSize={25}
-        emptyMessage={serviceDescriptions.length === 0 ? "No service descriptions yet" : "No matching service descriptions"}
-        emptyIcon={emptyIcon}
-        onRowClick={handleRowClick}
-      />
+      {/* Tab Content */}
+      {activeTab === "ready-to-bill" && (
+        <UnbilledClientsSection onCreateServiceDescription={handleCreate} />
+      )}
+
+      {activeTab === "service-descriptions" && (
+        <>
+          <div className="flex items-center gap-3 mb-4">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
+
+            {/* Search Input */}
+            <div className="flex-1 max-w-md relative">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.5"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by client name..."
+                className="
+                  w-full pl-10 pr-3 py-2 rounded text-[13px]
+                  bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                  text-[var(--text-primary)] placeholder-[var(--text-muted)]
+                  focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+                  focus:outline-none transition-all duration-200
+                "
+              />
+            </div>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as "ALL" | ServiceDescriptionStatus)}
+              className="
+                px-3 py-2 rounded text-[13px]
+                bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+                text-[var(--text-primary)]
+                focus:border-[var(--border-accent)] focus:ring-[2px] focus:ring-[var(--accent-pink-glow)]
+                focus:outline-none transition-all duration-200
+                cursor-pointer
+              "
+            >
+              <option value="ALL">All Status</option>
+              <option value="DRAFT">Draft</option>
+              <option value="FINALIZED">Finalized</option>
+            </select>
+
+            {/* Result Count */}
+            <div className="text-[13px] text-[var(--text-muted)]">
+              {filteredDescriptions.length} {filteredDescriptions.length === 1 ? "result" : "results"}
+            </div>
+          </div>
+
+          <div style={{ opacity: isLoadingSDs ? 0.5 : 1, transition: "opacity 200ms" }}>
+            <DataTable
+              data={filteredDescriptions}
+              columns={columns}
+              getRowKey={(sd) => sd.id}
+              pageSize={25}
+              emptyMessage={serviceDescriptions.length === 0 ? "No service descriptions yet" : "No matching service descriptions"}
+              emptyIcon={emptyIcon}
+              onRowClick={handleRowClick}
+            />
+          </div>
+        </>
+      )}
 
       {showCreateModal && (
         <CreateServiceDescriptionModal

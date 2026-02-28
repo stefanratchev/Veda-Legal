@@ -1,11 +1,22 @@
-import { eq, asc, desc, and } from "drizzle-orm";
+import { Suspense } from "react";
+import { eq, asc, desc, and, gte, lte } from "drizzle-orm";
 import { db, clients, serviceDescriptions } from "@/lib/db";
 import { BillingContent } from "@/components/billing/BillingContent";
 import { calculateRetainerGrandTotal, calculateGrandTotal } from "@/lib/billing-pdf";
 
 export default async function BillingPage() {
+  // Pre-filter to "this month" to match client-side default
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
   // Fetch service descriptions with calculated totals
   const serviceDescriptionsList = await db.query.serviceDescriptions.findMany({
+    where: and(
+      gte(serviceDescriptions.periodStart, monthStart),
+      lte(serviceDescriptions.periodStart, monthEnd),
+    ),
     columns: {
       id: true,
       clientId: true,
@@ -92,5 +103,9 @@ export default async function BillingPage() {
     orderBy: [asc(clients.name)],
   });
 
-  return <BillingContent initialServiceDescriptions={listItems} clients={clientsList} />;
+  return (
+    <Suspense>
+      <BillingContent initialServiceDescriptions={listItems} clients={clientsList} />
+    </Suspense>
+  );
 }

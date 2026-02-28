@@ -38,10 +38,15 @@ Partners and admins can quickly understand firm performance — who worked on wh
 - ✓ Full entry table with Date, Employee, Client, Topic, Subtopic, Description, Hours, Revenue (admin) — v1.2
 - ✓ Summary stats row (entry count, total hours, admin revenue) updating with filters — v1.2
 - ✓ Chart bar click-to-filter interaction with visual dimming — v1.2
+- ✓ Tab-based billing page with Ready to Bill and Service Descriptions tabs — v1.3
+- ✓ URL-persisted tab state via useSearchParams — v1.3
+- ✓ Date range picker with This Month, Last Month, All Time, Custom Range presets — v1.3
+- ✓ Server-side date range filtering on Service Descriptions tab — v1.3
+- ✓ Status filter and date range filter work together — v1.3
 
 ### Active
 
-(No active requirements — planning next milestone)
+(No active milestone — run `/gsd:new-milestone` to start next)
 
 ### Out of Scope
 
@@ -63,7 +68,7 @@ Partners and admins can quickly understand firm performance — who worked on wh
 
 ## Context
 
-Shipped v1.0 Reports Improvements, v1.1 E2E Timesheets, and v1.2 Reports Detail View.
+Shipped v1.0 Reports Improvements, v1.1 E2E Timesheets, v1.2 Reports Detail View, and v1.3 Billing Tabs.
 
 **Reports** (v1.0): Overview with summary cards + paired Hours/Revenue charts by Client and Employee. Client and Employee drill-downs with topic breakdowns, side-by-side charts, and full entry DataTables.
 
@@ -71,8 +76,10 @@ Shipped v1.0 Reports Improvements, v1.1 E2E Timesheets, and v1.2 Reports Detail 
 
 **Detail Analytics** (v1.2): Detail tab with multi-select filter bar (Client, Employee, Topic), six paired bar charts (3 Hours + 3 Revenue, admin-gated), full entry table with sorting/pagination, summary stats row, and chart bar click-to-filter interaction. 94 new tests (1059 total).
 
+**Billing** (v1.3): Tabbed billing page (Ready to Bill / Service Descriptions) with URL-persisted tab state and date range filtering (This Month, Last Month, All Time, Custom Range) with server-side period filtering.
+
 Tech stack: Next.js 16, Recharts, Drizzle ORM, PostgreSQL, Tailwind CSS v4, Playwright.
-Codebase: ~46,400 LOC TypeScript.
+Codebase: ~47,600 LOC TypeScript.
 
 ## Constraints
 
@@ -105,6 +112,11 @@ Codebase: ~46,400 LOC TypeScript.
 | Comparison badges excluded from Detail tab | Unfiltered comparison data would mislead | ✓ Good |
 | FilterState as single source of truth | Bar selection and FilterBar dropdowns share state (no separate chart state) | ✓ Good |
 | getBarOpacity duplicated in both chart files | 4-line function, avoids cross-component coupling | ✓ Good |
+| router.replace for tab switching (not push) | Avoid polluting browser history with tab changes | ✓ Good |
+| Default tab uses clean /billing URL (no ?tab=) | Clean URL for default state | ✓ Good |
+| Inlined filter bar instead of TableFilters | TableFilters doesn't support arbitrary left-side elements like DateRangePicker | ✓ Good |
+| Primitive useEffect deps (from, to strings) | Avoid unnecessary refetches from object reference changes | ✓ Good |
+| SSR pre-filtered to current month | Match client-side default to avoid visual flash | ✓ Good |
 
 ---
-*Last updated: 2026-02-26 after v1.2 milestone*
+*Last updated: 2026-02-28 after v1.3 milestone*

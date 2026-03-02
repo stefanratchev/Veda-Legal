@@ -92,8 +92,8 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
       setIsLoadingSDs(true);
       try {
         const params = new URLSearchParams();
-        if (from) params.set("periodStartFrom", from);
-        if (to) params.set("periodStartTo", to);
+        if (from) params.set("createdFrom", from);
+        if (to) params.set("createdTo", to);
         const queryString = params.toString();
         const url = `/api/billing${queryString ? `?${queryString}` : ""}`;
 

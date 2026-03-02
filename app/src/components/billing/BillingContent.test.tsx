@@ -244,7 +244,7 @@ describe("BillingContent", () => {
       await flushPromises();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/billing?periodStartFrom=2026-02-01&periodStartTo=2026-02-28"
+        "/api/billing?createdFrom=2026-02-01&createdTo=2026-02-28"
       );
     });
   });
@@ -269,7 +269,7 @@ describe("BillingContent", () => {
       await flushPromises();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/billing?periodStartFrom=2026-01-01&periodStartTo=2026-01-31"
+        "/api/billing?createdFrom=2026-01-01&createdTo=2026-01-31"
       );
     });
 

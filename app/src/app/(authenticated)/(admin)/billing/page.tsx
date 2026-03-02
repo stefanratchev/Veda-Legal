@@ -14,8 +14,8 @@ export default async function BillingPage() {
   // Fetch service descriptions with calculated totals
   const serviceDescriptionsList = await db.query.serviceDescriptions.findMany({
     where: and(
-      gte(serviceDescriptions.periodStart, monthStart),
-      lte(serviceDescriptions.periodStart, monthEnd),
+      gte(serviceDescriptions.createdAt, monthStart + "T00:00:00.000"),
+      lte(serviceDescriptions.createdAt, monthEnd + "T23:59:59.999"),
     ),
     columns: {
       id: true,

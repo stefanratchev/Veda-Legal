@@ -67,7 +67,7 @@ None.
 | 8 | Extract getChartHeight to shared utility | 2026-02-26 | ad5daf0 | | .planning/quick/8-extract-getchartheight-to-shared-util-an/ |
 | 9 | Update retainer PDF service description summary | 2026-02-26 | e4797c1 | Verified | [9-update-retainer-pdf-service-descriptions](.planning/quick/9-update-retainer-pdf-service-descriptions/) |
 | 10 | Hide all-EXCLUDED topics from PDF | 2026-02-26 | da13187 | Done | [10-when-all-line-items-are-waived-and-not-v](.planning/quick/10-when-all-line-items-are-waived-and-not-v/) |
-| 11 | Add Discard button to service description detail | 2026-03-02 | 4cca7ce | Done | [11-add-discard-button-to-service-descriptio](.planning/quick/11-add-discard-button-to-service-descriptio/) |
+| 11 | Add Discard button to service description detail | 2026-03-02 | 4cca7ce | Verified | [11-add-discard-button-to-service-descriptio](.planning/quick/11-add-discard-button-to-service-descriptio/) |
 
 ## Session Continuity
 

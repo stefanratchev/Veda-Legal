@@ -1,11 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ServiceDescriptionDetail } from "./ServiceDescriptionDetail";
 import type { ServiceDescription } from "@/types";
 
+const mockPush = vi.fn();
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: mockPush,
   }),
 }));
 
@@ -87,5 +89,86 @@ describe("ServiceDescriptionDetail client notes", () => {
     const noteText = screen.getByText(longNote);
     expect(noteText.className).toContain("whitespace-pre-wrap");
     expect(noteText.className).toContain("break-words");
+  });
+});
+
+describe("ServiceDescriptionDetail discard button", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockPush.mockReset();
+  });
+
+  it("shows Discard button for draft service descriptions", () => {
+    render(
+      <ServiceDescriptionDetail
+        serviceDescription={createServiceDescription(null)}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /discard/i })).toBeInTheDocument();
+  });
+
+  it("does not show Discard button for finalized service descriptions", () => {
+    const finalized: ServiceDescription = {
+      ...createServiceDescription(null),
+      status: "FINALIZED" as const,
+      finalizedAt: "2026-01-15T00:00:00.000Z",
+    };
+    render(
+      <ServiceDescriptionDetail serviceDescription={finalized} />
+    );
+
+    expect(screen.queryByRole("button", { name: /discard/i })).toBeNull();
+  });
+
+  it("shows confirmation modal when Discard is clicked", () => {
+    render(
+      <ServiceDescriptionDetail
+        serviceDescription={createServiceDescription(null)}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /discard/i }));
+
+    expect(screen.getByText("Discard Service Description")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Discard this service description for Acme Corp/)
+    ).toBeInTheDocument();
+  });
+
+  it("calls DELETE API and navigates on confirm", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      })
+    );
+
+    render(
+      <ServiceDescriptionDetail
+        serviceDescription={createServiceDescription(null)}
+      />
+    );
+
+    // Click the Discard button in footer
+    fireEvent.click(screen.getByRole("button", { name: /discard/i }));
+
+    // Click the confirm button in the modal
+    const discardButtons = screen.getAllByRole("button", { name: /discard/i });
+    const confirmButton = discardButtons[discardButtons.length - 1];
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith("/api/billing/sd-1", {
+        method: "DELETE",
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/billing?tab=service-descriptions");
+    });
+
+    vi.unstubAllGlobals();
   });
 });

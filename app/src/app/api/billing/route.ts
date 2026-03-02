@@ -25,26 +25,26 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Parse optional date range query params
-    const periodStartFrom = request.nextUrl.searchParams.get("periodStartFrom");
-    const periodStartTo = request.nextUrl.searchParams.get("periodStartTo");
+    // Parse optional date range query params (filter by creation date)
+    const createdFrom = request.nextUrl.searchParams.get("createdFrom");
+    const createdTo = request.nextUrl.searchParams.get("createdTo");
 
     // Validate date format if provided (YYYY-MM-DD)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (periodStartFrom && !dateRegex.test(periodStartFrom)) {
-      return errorResponse("Invalid periodStartFrom format. Expected YYYY-MM-DD.", 400);
+    if (createdFrom && !dateRegex.test(createdFrom)) {
+      return errorResponse("Invalid createdFrom format. Expected YYYY-MM-DD.", 400);
     }
-    if (periodStartTo && !dateRegex.test(periodStartTo)) {
-      return errorResponse("Invalid periodStartTo format. Expected YYYY-MM-DD.", 400);
+    if (createdTo && !dateRegex.test(createdTo)) {
+      return errorResponse("Invalid createdTo format. Expected YYYY-MM-DD.", 400);
     }
 
-    // Build where conditions for date range filtering
+    // Build where conditions for date range filtering on createdAt timestamp
     const conditions = [];
-    if (periodStartFrom) {
-      conditions.push(gte(serviceDescriptions.periodStart, periodStartFrom));
+    if (createdFrom) {
+      conditions.push(gte(serviceDescriptions.createdAt, createdFrom + "T00:00:00.000"));
     }
-    if (periodStartTo) {
-      conditions.push(lte(serviceDescriptions.periodStart, periodStartTo));
+    if (createdTo) {
+      conditions.push(lte(serviceDescriptions.createdAt, createdTo + "T23:59:59.999"));
     }
 
     const allServiceDescriptions = await db.query.serviceDescriptions.findMany({

@@ -68,7 +68,7 @@ None.
 | 9 | Update retainer PDF service description summary | 2026-02-26 | e4797c1 | Verified | [9-update-retainer-pdf-service-descriptions](.planning/quick/9-update-retainer-pdf-service-descriptions/) |
 | 10 | Hide all-EXCLUDED topics from PDF | 2026-02-26 | da13187 | Done | [10-when-all-line-items-are-waived-and-not-v](.planning/quick/10-when-all-line-items-are-waived-and-not-v/) |
 | 11 | Add Discard button to service description detail | 2026-03-02 | 4cca7ce | Verified | [11-add-discard-button-to-service-descriptio](.planning/quick/11-add-discard-button-to-service-descriptio/) |
-| 12 | Filter service descriptions by creation date | 2026-03-02 | 095c920 | Done | [12-filter-service-descriptions-by-creation-](.planning/quick/12-filter-service-descriptions-by-creation-/) |
+| 12 | Filter service descriptions by creation date | 2026-03-02 | 095c920 | Verified | [12-filter-service-descriptions-by-creation-](.planning/quick/12-filter-service-descriptions-by-creation-/) |
 
 ## Session Continuity
 

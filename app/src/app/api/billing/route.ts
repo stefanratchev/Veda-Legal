@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import {
@@ -25,7 +25,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Parse optional date range query params (filter by creation date)
+    const createdFrom = request.nextUrl.searchParams.get("createdFrom");
+    const createdTo = request.nextUrl.searchParams.get("createdTo");
+
+    // Validate date format if provided (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (createdFrom && !dateRegex.test(createdFrom)) {
+      return errorResponse("Invalid createdFrom format. Expected YYYY-MM-DD.", 400);
+    }
+    if (createdTo && !dateRegex.test(createdTo)) {
+      return errorResponse("Invalid createdTo format. Expected YYYY-MM-DD.", 400);
+    }
+
+    // Build where conditions for date range filtering on createdAt timestamp
+    const conditions = [];
+    if (createdFrom) {
+      conditions.push(gte(serviceDescriptions.createdAt, createdFrom + "T00:00:00.000"));
+    }
+    if (createdTo) {
+      conditions.push(lte(serviceDescriptions.createdAt, createdTo + "T23:59:59.999"));
+    }
+
     const allServiceDescriptions = await db.query.serviceDescriptions.findMany({
+      ...(conditions.length > 0 ? { where: and(...conditions) } : {}),
       columns: {
         id: true,
         clientId: true,

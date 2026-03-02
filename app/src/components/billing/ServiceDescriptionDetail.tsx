@@ -50,6 +50,8 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
   const [topicToDelete, setTopicToDelete] = useState<string | null>(null);
   const [lineItemToDelete, setLineItemToDelete] = useState<{ topicId: string; itemId: string } | null>(null);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
 
   const isFinalized = data.status === "FINALIZED";
   const isEditable = !isFinalized;
@@ -714,6 +716,23 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     }
   }, [data.id, data.client.invoicedName, data.client.name]);
 
+  const handleDiscard = useCallback(async () => {
+    setShowDiscardConfirm(false);
+    setIsDiscarding(true);
+    try {
+      const response = await fetch(`/api/billing/${data.id}`, { method: "DELETE" });
+      if (response.ok) {
+        router.push("/billing?tab=service-descriptions");
+      } else {
+        alert("Failed to discard service description");
+      }
+    } catch {
+      alert("Failed to discard service description");
+    } finally {
+      setIsDiscarding(false);
+    }
+  }, [data.id, router]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1092,6 +1111,18 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
 
       {/* Footer Actions */}
       <div className="flex items-center justify-end gap-3 pt-4">
+        {isEditable && (
+          <button
+            onClick={() => setShowDiscardConfirm(true)}
+            disabled={isDiscarding}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[var(--danger)] border border-[var(--danger)] rounded hover:bg-[var(--danger-bg)] transition-colors disabled:opacity-50"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Discard
+          </button>
+        )}
         <button
           onClick={handleExportPDF}
           className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)] rounded hover:bg-[var(--bg-surface)] transition-colors"
@@ -1173,6 +1204,18 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
           confirmLabel="Finalize"
           onConfirm={performToggleStatus}
           onCancel={() => setShowFinalizeConfirm(false)}
+        />
+      )}
+
+      {/* Discard Confirmation */}
+      {showDiscardConfirm && (
+        <ConfirmModal
+          title="Discard Service Description"
+          message={`Discard this service description for ${data.client.name}? All line items will be removed and time entries will become available for billing again. This action cannot be undone.`}
+          confirmLabel="Discard"
+          isDestructive
+          onConfirm={handleDiscard}
+          onCancel={() => setShowDiscardConfirm(false)}
         />
       )}
     </div>

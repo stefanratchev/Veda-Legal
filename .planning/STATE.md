@@ -1,24 +1,36 @@
+---
+gsd_state_version: 1.0
+milestone: v1.3
+milestone_name: Billing Tabs
+status: complete
+last_updated: "2026-02-28T12:45:00.000Z"
+progress:
+  total_phases: 2
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+---
+
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-26)
+See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Partners and admins can quickly understand firm performance -- revenue, hours, and work distribution -- from the reports page.
 **Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 11 of 11
-Status: Milestone v1.2 complete
-Last activity: 2026-02-26 - Completed quick task 10: Hide all-EXCLUDED topics from PDF
+Milestone: v1.3 Billing Tabs -- SHIPPED 2026-02-28
+All phases complete. UAT passed (9/9). Audit passed (9/9 requirements).
 
-Progress: [██████████████████████████████] 23/23 plans (100%)
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 23 (v1.0: 10, v1.1: 6, v1.2: 7)
+- Total plans completed: 25 (v1.0: 10, v1.1: 6, v1.2: 7, v1.3: 2)
 - Average duration: --
 - Total execution time: --
 
@@ -29,6 +41,7 @@ Progress: [███████████████████████
 | 1-4 (v1.0) | 10 | -- | -- |
 | 5-7 (v1.1) | 6 | -- | -- |
 | 8-11 (v1.2) | 7 | -- | -- |
+| 12-13 (v1.3) | 2 | 8 min | 4 min |
 
 ## Accumulated Context
 
@@ -54,9 +67,11 @@ None.
 | 8 | Extract getChartHeight to shared utility | 2026-02-26 | ad5daf0 | | .planning/quick/8-extract-getchartheight-to-shared-util-an/ |
 | 9 | Update retainer PDF service description summary | 2026-02-26 | e4797c1 | Verified | [9-update-retainer-pdf-service-descriptions](.planning/quick/9-update-retainer-pdf-service-descriptions/) |
 | 10 | Hide all-EXCLUDED topics from PDF | 2026-02-26 | da13187 | Done | [10-when-all-line-items-are-waived-and-not-v](.planning/quick/10-when-all-line-items-are-waived-and-not-v/) |
+| 11 | Add Discard button to service description detail | 2026-03-02 | 4cca7ce | Verified | [11-add-discard-button-to-service-descriptio](.planning/quick/11-add-discard-button-to-service-descriptio/) |
+| 12 | Filter service descriptions by creation date | 2026-03-02 | 095c920 | Verified | [12-filter-service-descriptions-by-creation-](.planning/quick/12-filter-service-descriptions-by-creation-/) |
 
 ## Session Continuity
 
-Last session: 2026-02-26
-Stopped at: Completed quick task 10
-Resume file: .planning/ROADMAP.md
+Last session: 2026-03-02
+Stopped at: Completed quick task 12 (filter SDs by createdAt)
+Resume file: N/A -- start next milestone with /gsd:new-milestone

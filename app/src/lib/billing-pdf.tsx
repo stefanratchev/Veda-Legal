@@ -2,6 +2,7 @@ import React from "react";
 import path from "path";
 import {
   Document,
+  Font,
   Page,
   Text,
   View,
@@ -11,6 +12,15 @@ import {
 import { ServiceDescription } from "@/types";
 import { firmDetails } from "./firm-details";
 import { formatHours } from "./date-utils";
+
+// Register Roboto for Cyrillic (Bulgarian) support — built-in Helvetica is Latin-only
+Font.register({
+  family: "Roboto",
+  fonts: [
+    { src: path.join(process.cwd(), "public", "fonts", "Roboto-Regular.ttf"), fontWeight: "normal" },
+    { src: path.join(process.cwd(), "public", "fonts", "Roboto-Bold.ttf"), fontWeight: "bold" },
+  ],
+});
 
 // Pre-rendered PNG with gradient for reliable PDF rendering
 const logoPath = path.join(process.cwd(), "public", "logo-print.png");
@@ -30,8 +40,8 @@ const styles = StyleSheet.create({
   page: {
     padding: 40,
     paddingBottom: 80, // Extra space for footer
-    fontSize: 9,
-    fontFamily: "Helvetica",
+    fontSize: 8.5,
+    fontFamily: "Roboto",
     color: colors.textPrimary,
     position: "relative",
   },
@@ -52,8 +62,8 @@ const styles = StyleSheet.create({
 
   // Title
   title: {
-    fontSize: 16,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 15,
+    fontFamily: "Roboto",
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 20,
@@ -72,12 +82,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   clientName: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "bold",
     marginBottom: 2,
   },
   clientDetail: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: colors.textSecondary,
     marginBottom: 1,
   },
@@ -85,21 +95,21 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   documentLabel: {
-    fontSize: 8,
+    fontSize: 7.5,
     color: colors.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   documentValue: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "bold",
     marginBottom: 4,
   },
 
   // Section titles
   sectionTitle: {
-    fontSize: 10,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 9,
+    fontFamily: "Roboto",
     fontWeight: "bold",
     color: colors.textPrimary,
     marginTop: 16,
@@ -124,11 +134,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   summaryTopic: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: colors.textSecondary,
   },
   summaryAmount: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: colors.textSecondary,
   },
   totalRow: {
@@ -140,15 +150,15 @@ const styles = StyleSheet.create({
     borderTopColor: colors.coralPinkDark,
   },
   totalLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "bold",
   },
   totalAmount: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "bold",
   },
   vatNote: {
-    fontSize: 8,
+    fontSize: 7.5,
     color: colors.textSecondary,
     textAlign: "right",
     marginTop: 2,
@@ -164,9 +174,9 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   topicName: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Roboto",
     fontWeight: "bold",
-    fontSize: 10,
+    fontSize: 9,
     color: colors.white,
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -182,7 +192,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderLight,
   },
   tableHeaderText: {
-    fontSize: 8,
+    fontSize: 7.5,
     fontWeight: "bold",
     color: colors.textSecondary,
     textTransform: "uppercase",
@@ -207,16 +217,16 @@ const styles = StyleSheet.create({
   },
   dateCol: {
     width: 55,
-    fontSize: 9,
+    fontSize: 8.5,
   },
   serviceCol: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 8.5,
     paddingRight: 8,
   },
   timeCol: {
     width: 45,
-    fontSize: 9,
+    fontSize: 8.5,
     textAlign: "right",
   },
 
@@ -236,13 +246,13 @@ const styles = StyleSheet.create({
     width: 140,
     textAlign: "right",
     marginRight: 12,
-    fontSize: 9,
+    fontSize: 8.5,
     color: colors.textSecondary,
   },
   topicFooterValue: {
     width: 70,
     textAlign: "right",
-    fontSize: 9,
+    fontSize: 8.5,
   },
   topicFooterTotal: {
     flexDirection: "row",
@@ -256,13 +266,13 @@ const styles = StyleSheet.create({
     width: 140,
     textAlign: "right",
     marginRight: 12,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "bold",
   },
   topicFooterTotalValue: {
     width: 70,
     textAlign: "right",
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "bold",
   },
 
@@ -284,18 +294,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   firmName: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: "bold",
     color: colors.coralPinkDark,
     marginBottom: 2,
   },
   firmDetail: {
-    fontSize: 7,
+    fontSize: 6.5,
     color: colors.textSecondary,
     marginBottom: 1,
   },
   pageNumber: {
-    fontSize: 8,
+    fontSize: 7.5,
     color: colors.textSecondary,
     textAlign: "right",
   },

@@ -80,4 +80,4 @@ See: [milestones/v1.3-ROADMAP.md](./milestones/v1.3-ROADMAP.md)
 **Plans:** 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Add date range filtering and client name search to Ready to Bill tab
+- [x] 01-01-PLAN.md — Add date range filtering and client name search to Ready to Bill tab (completed 2026-03-10)

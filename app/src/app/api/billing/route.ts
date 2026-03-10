@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
           },
         },
       },
-      orderBy: [asc(timeEntries.topicName), asc(timeEntries.date)],
+      orderBy: [asc(timeEntries.topicName), asc(timeEntries.date), asc(timeEntries.createdAt)],
     });
 
     // Filter entries: include only those in date range, not finalized, and not written off

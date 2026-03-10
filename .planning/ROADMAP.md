@@ -71,3 +71,13 @@ See: [milestones/v1.3-ROADMAP.md](./milestones/v1.3-ROADMAP.md)
 | 11. Polish & Interactivity | v1.2 | 1/1 | Complete | 2026-02-26 |
 | 12. Tab Navigation | v1.3 | 1/1 | Complete | 2026-02-27 |
 | 13. Date Range Filtering | v1.3 | 1/1 | Complete | 2026-02-27 |
+
+### Phase 1: Add date filter along with search by client name to the ready to bill clients
+
+**Goal:** Add date range filter and client name search to the Ready to Bill tab, mirroring the Service Descriptions tab filter UX
+**Requirements**: [RTB-FILTER]
+**Depends on:** None
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — Add date range filtering and client name search to Ready to Bill tab

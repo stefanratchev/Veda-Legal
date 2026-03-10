@@ -83,6 +83,17 @@ export function UnbilledClientsSection({
     return clients.filter((c) => c.clientName.toLowerCase().includes(query));
   }, [clients, searchQuery]);
 
+  // Summary stats derived from filtered clients
+  const summaryStats = useMemo(() => {
+    let totalHours = 0;
+    let totalRevenue = 0;
+    for (const c of filteredClients) {
+      totalHours += c.totalUnbilledHours;
+      if (c.estimatedValue !== null) totalRevenue += c.estimatedValue;
+    }
+    return { totalHours, totalRevenue, clientCount: filteredClients.length };
+  }, [filteredClients]);
+
   // Wrap onCreateServiceDescription to substitute filter dates when a date filter is active
   const handleCreateServiceDescription = useCallback(
     async (clientId: string, periodStart: string, periodEnd: string) => {
@@ -158,9 +169,22 @@ export function UnbilledClientsSection({
           />
         </div>
 
-        {/* Result Count */}
-        <div className="text-[13px] text-[var(--text-muted)]">
-          {filteredClients.length} {filteredClients.length === 1 ? "result" : "results"}
+        {/* Summary stats */}
+        <div
+          className="flex items-center gap-4 ml-auto text-[13px]"
+          style={{ opacity: isRefetching ? 0.5 : 1, transition: "opacity 200ms" }}
+        >
+          <span className="text-[var(--text-muted)]">
+            <span className="font-medium text-[var(--text-secondary)]">{summaryStats.totalHours.toLocaleString("en-GB", { maximumFractionDigits: 1 })}h</span>
+          </span>
+          <span className="text-[var(--border-subtle)]">|</span>
+          <span className="text-[var(--text-muted)]">
+            <span className="font-medium text-[var(--accent-pink)]">&euro;{summaryStats.totalRevenue.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </span>
+          <span className="text-[var(--border-subtle)]">|</span>
+          <span className="text-[var(--text-muted)]">
+            <span className="font-medium text-[var(--text-secondary)]">{summaryStats.clientCount}</span> {summaryStats.clientCount === 1 ? "client" : "clients"}
+          </span>
         </div>
       </div>
 
@@ -176,14 +200,6 @@ export function UnbilledClientsSection({
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="font-heading text-lg font-semibold text-[var(--text-primary)]">
-              Clients Ready to Bill
-            </h2>
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--accent-pink)] text-[var(--bg-deep)]">
-              {filteredClients.length}
-            </span>
-          </div>
           <div
             style={{ opacity: isRefetching ? 0.5 : 1, transition: "opacity 200ms" }}
           >

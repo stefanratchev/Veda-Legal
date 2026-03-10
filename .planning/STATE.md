@@ -69,9 +69,10 @@ None.
 | 10 | Hide all-EXCLUDED topics from PDF | 2026-02-26 | da13187 | Done | [10-when-all-line-items-are-waived-and-not-v](.planning/quick/10-when-all-line-items-are-waived-and-not-v/) |
 | 11 | Add Discard button to service description detail | 2026-03-02 | 4cca7ce | Verified | [11-add-discard-button-to-service-descriptio](.planning/quick/11-add-discard-button-to-service-descriptio/) |
 | 12 | Filter service descriptions by creation date | 2026-03-02 | 095c920 | Verified | [12-filter-service-descriptions-by-creation-](.planning/quick/12-filter-service-descriptions-by-creation-/) |
+| 13 | Fix SD line item sort order (createdAt tiebreaker) | 2026-03-10 | c2cf47b | Done | [13-fix-service-description-sort-order-to-as](.planning/quick/13-fix-service-description-sort-order-to-as/) |
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Completed quick task 12 (filter SDs by createdAt)
+Last session: 2026-03-10
+Stopped at: Completed quick task 13 (fix SD line item sort order)
 Resume file: N/A -- start next milestone with /gsd:new-milestone

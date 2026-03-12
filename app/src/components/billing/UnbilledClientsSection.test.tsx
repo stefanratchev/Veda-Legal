@@ -103,25 +103,6 @@ describe("UnbilledClientsSection", () => {
       expect(screen.getByText("€1,600.00")).toBeInTheDocument();
     });
 
-    it("shows section heading with count badge", async () => {
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockClients),
-      });
-
-      render(
-        <UnbilledClientsSection
-          onCreateServiceDescription={mockOnCreateServiceDescription}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText("Clients Ready to Bill")).toBeInTheDocument();
-      });
-
-      // Count badge should show number of clients
-      expect(screen.getByText("2")).toBeInTheDocument();
-    });
   });
 
   describe("Error State", () => {

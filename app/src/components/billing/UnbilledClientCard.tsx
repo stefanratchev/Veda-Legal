@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useClickOutside } from "@/hooks/useClickOutside";
 
 export interface UnbilledClientCardProps {
   clientId: string;
@@ -16,6 +17,7 @@ export interface UnbilledClientCardProps {
     periodStart: string,
     periodEnd: string
   ) => Promise<void>;
+  onWaive?: (clientId: string, clientName: string, totalHours: number) => void;
 }
 
 function formatDateRange(startDate: string, endDate: string): string {
@@ -60,9 +62,13 @@ export function UnbilledClientCard({
   newestEntryDate,
   existingDraftId,
   onCreateServiceDescription,
+  onWaive,
 }: UnbilledClientCardProps) {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useClickOutside(menuRef, () => setMenuOpen(false), menuOpen);
 
   const hasDraft = existingDraftId !== null;
 
@@ -89,7 +95,44 @@ export function UnbilledClientCard({
   ]);
 
   return (
-    <div className="bg-[var(--bg-elevated)] rounded-lg p-5 flex flex-col gap-3">
+    <div className="group relative bg-[var(--bg-elevated)] rounded-lg p-5 flex flex-col gap-3">
+      {/* Three-dot options menu */}
+      {onWaive && (
+        <div ref={menuRef}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((prev) => !prev);
+            }}
+            className="absolute top-3 right-3 p-1.5 rounded opacity-0 group-hover:opacity-100 focus:opacity-100 text-white/30 hover:text-white/70 hover:bg-[var(--bg-surface)] transition-all duration-200"
+            aria-label="Options"
+          >
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+              <circle cx="8" cy="3" r="1.5" />
+              <circle cx="8" cy="8" r="1.5" />
+              <circle cx="8" cy="13" r="1.5" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <div className="absolute top-10 right-3 z-50 bg-[var(--bg-surface)] border border-white/10 rounded-lg shadow-lg shadow-black/40 animate-fade-up">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onWaive(clientId, clientName, totalUnbilledHours);
+                  setMenuOpen(false);
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-[13px] font-medium text-[var(--danger)] hover:bg-[var(--danger)]/10 rounded-lg transition-colors whitespace-nowrap"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Write Off All
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header: Client name and optional DRAFT badge */}
       <div className="flex items-center justify-between">
         <h3 className="font-heading text-[15px] font-semibold text-[var(--text-primary)] truncate">

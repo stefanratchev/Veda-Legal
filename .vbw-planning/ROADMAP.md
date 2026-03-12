@@ -8,13 +8,13 @@
 | Phase | Status | Plans | Tasks | Commits |
 |-------|--------|-------|-------|---------|
 | 1 | Complete | 1 | — | — |
-| 02 | ○ Planned |
+| 02 | ● Done |
 
 ---
 
 ## Phase List
 - [x] [Phase 1: Add date filter and search to Ready to Bill](#phase-1-add-date-filter-and-search-to-ready-to-bill) (completed in GSD)
-- [ ] [Phase 2: Add bulk waive option to Ready to Bill](#phase-2-add-bulk-waive-option-to-ready-to-bill)
+- [x] [Phase 2: Add bulk waive option to Ready to Bill](#phase-2-add-bulk-waive-option-to-ready-to-bill)
 
 ---
 

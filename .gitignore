@@ -36,3 +36,7 @@ app/src/generated/
 
 # Worktrees
 .worktrees/
+
+# Planning artifacts (local workflow state)
+.planning/
+.vbw-planning/

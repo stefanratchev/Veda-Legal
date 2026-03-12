@@ -8,7 +8,7 @@ import {
   serviceDescriptionTopics,
   serviceDescriptions,
 } from "@/lib/schema";
-import { eq, and, isNull, sql, min, max, sum, gte } from "drizzle-orm";
+import { eq, and, isNull, sql, min, max, sum, gte, lte } from "drizzle-orm";
 import { BILLING_START_DATE } from "@/lib/billing-config";
 
 /**
@@ -32,6 +32,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Parse optional date range query params
+    const dateFrom = request.nextUrl.searchParams.get("dateFrom");
+    const dateTo = request.nextUrl.searchParams.get("dateTo");
+
+    // Build WHERE conditions
+    const whereConditions = [
+      eq(clients.status, "ACTIVE"),
+      gte(timeEntries.date, BILLING_START_DATE),
+      // Exclude entries that are in a FINALIZED service description
+      isNull(serviceDescriptions.id),
+      // Exclude written-off entries
+      eq(timeEntries.isWrittenOff, false),
+    ];
+
+    if (dateFrom) {
+      whereConditions.push(gte(timeEntries.date, dateFrom));
+    }
+    if (dateTo) {
+      whereConditions.push(lte(timeEntries.date, dateTo));
+    }
+
     // Query 1: Get unbilled hours aggregated per client
     // - Join time entries with clients
     // - Left join with service description chain to find entries in FINALIZED SDs
@@ -64,16 +85,7 @@ export async function GET(request: NextRequest) {
           eq(serviceDescriptions.status, "FINALIZED")
         )
       )
-      .where(
-        and(
-          eq(clients.status, "ACTIVE"),
-          gte(timeEntries.date, BILLING_START_DATE),
-          // Exclude entries that are in a FINALIZED service description
-          isNull(serviceDescriptions.id),
-          // Exclude written-off entries
-          eq(timeEntries.isWrittenOff, false)
-        )
-      )
+      .where(and(...whereConditions))
       .groupBy(clients.id, clients.name, clients.hourlyRate, clients.retainerFee, clients.retainerHours)
       .orderBy(
         sql`(${sum(timeEntries.hours)} * ${clients.hourlyRate}) DESC NULLS LAST`

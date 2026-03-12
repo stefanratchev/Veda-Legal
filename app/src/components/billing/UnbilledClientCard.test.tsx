@@ -205,6 +205,71 @@ describe("UnbilledClientCard", () => {
     });
   });
 
+  describe("Options Menu", () => {
+    const mockOnWaive = vi.fn();
+
+    it("renders menu button when onWaive prop is provided", () => {
+      render(<UnbilledClientCard {...defaultProps} onWaive={mockOnWaive} />);
+
+      expect(screen.getByRole("button", { name: "Options" })).toBeInTheDocument();
+    });
+
+    it("does not render menu button when onWaive prop is not provided", () => {
+      render(<UnbilledClientCard {...defaultProps} />);
+
+      expect(screen.queryByRole("button", { name: "Options" })).not.toBeInTheDocument();
+    });
+
+    it("opens dropdown menu when clicking three-dot button", () => {
+      render(<UnbilledClientCard {...defaultProps} onWaive={mockOnWaive} />);
+
+      const menuButton = screen.getByRole("button", { name: "Options" });
+      fireEvent.click(menuButton);
+
+      expect(screen.getByText("Write Off All")).toBeInTheDocument();
+    });
+
+    it("calls onWaive with correct args when clicking Write Off All", () => {
+      render(<UnbilledClientCard {...defaultProps} onWaive={mockOnWaive} />);
+
+      // Open menu
+      const menuButton = screen.getByRole("button", { name: "Options" });
+      fireEvent.click(menuButton);
+
+      // Click Write Off All
+      const writeOffButton = screen.getByText("Write Off All");
+      fireEvent.click(writeOffButton);
+
+      expect(mockOnWaive).toHaveBeenCalledWith("client-1", "Acme Corporation", 17.5);
+    });
+
+    it("closes dropdown after clicking Write Off All", () => {
+      render(<UnbilledClientCard {...defaultProps} onWaive={mockOnWaive} />);
+
+      const menuButton = screen.getByRole("button", { name: "Options" });
+      fireEvent.click(menuButton);
+
+      const writeOffButton = screen.getByText("Write Off All");
+      fireEvent.click(writeOffButton);
+
+      expect(screen.queryByText("Write Off All")).not.toBeInTheDocument();
+    });
+
+    it("closes dropdown when clicking outside", () => {
+      render(<UnbilledClientCard {...defaultProps} onWaive={mockOnWaive} />);
+
+      // Open menu
+      const menuButton = screen.getByRole("button", { name: "Options" });
+      fireEvent.click(menuButton);
+      expect(screen.getByText("Write Off All")).toBeInTheDocument();
+
+      // Click outside (useClickOutside listens for mousedown)
+      fireEvent.mouseDown(document.body);
+
+      expect(screen.queryByText("Write Off All")).not.toBeInTheDocument();
+    });
+  });
+
   describe("Edge Cases", () => {
     it("formats large estimated values with commas", () => {
       render(

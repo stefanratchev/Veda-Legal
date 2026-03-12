@@ -1,0 +1,100 @@
+{
+  "conventions": [
+    {
+      "id": "naming-components",
+      "category": "naming",
+      "rule": "Component files use PascalCase matching the component name",
+      "example": "ServiceDescriptionDetail.tsx"
+    },
+    {
+      "id": "naming-utils",
+      "category": "naming",
+      "rule": "Utility files use kebab-case with descriptive suffix",
+      "example": "api-utils.ts, billing-config.ts"
+    },
+    {
+      "id": "naming-constants",
+      "category": "naming",
+      "rule": "Constants use UPPER_SNAKE_CASE",
+      "example": "ADMIN_POSITIONS, MAX_HOURS_PER_ENTRY"
+    },
+    {
+      "id": "naming-enums",
+      "category": "naming",
+      "rule": "Enum values use UPPER_SNAKE_CASE strings",
+      "example": "'DRAFT', 'FINALIZED', 'SENIOR_ASSOCIATE'"
+    },
+    {
+      "id": "naming-props",
+      "category": "naming",
+      "rule": "Component props interfaces named {ComponentName}Props",
+      "example": "EntryFormProps, DurationPickerProps"
+    },
+    {
+      "id": "naming-db",
+      "category": "naming",
+      "rule": "Tables camelCase in Drizzle, IDs are CUID2 text via createId()",
+      "example": "timeEntries table, text().primaryKey()"
+    },
+    {
+      "id": "arch-two-layer-auth",
+      "category": "architecture",
+      "rule": "Every protected resource has both UI-level and API-level guards",
+      "example": "(admin) layout redirect + requireAdmin() in API routes"
+    },
+    {
+      "id": "arch-server-client-split",
+      "category": "architecture",
+      "rule": "Server Components for data fetching, Client Components for interactivity, API routes for mutations",
+      "example": "No server actions used"
+    },
+    {
+      "id": "arch-named-exports",
+      "category": "architecture",
+      "rule": "Named exports only for components (no default exports)",
+      "example": "export function EntryForm(...)"
+    },
+    {
+      "id": "api-route-structure",
+      "category": "quality",
+      "rule": "API handlers follow: auth guard → input validation → DB operation → response",
+      "example": "requireAuth → validate body → db.insert → NextResponse.json"
+    },
+    {
+      "id": "api-auth-pattern",
+      "category": "quality",
+      "rule": "Auth guard uses discriminated union: if ('error' in auth) return auth.error",
+      "example": "const auth = await requireAuth(request); if ('error' in auth) return auth.error;"
+    },
+    {
+      "id": "api-numeric-serialization",
+      "category": "quality",
+      "rule": "Drizzle numeric fields serialized via serializeDecimal() at route handler level",
+      "example": "serializeDecimal(row.hours)"
+    },
+    {
+      "id": "test-colocated",
+      "category": "testing",
+      "rule": "Tests colocated with source files using .test.ts/.test.tsx suffix",
+      "example": "date-utils.test.ts next to date-utils.ts"
+    },
+    {
+      "id": "test-canonical-mock",
+      "category": "testing",
+      "rule": "Canonical test pattern: vi.hoisted() → vi.mock() → import handler",
+      "example": "See billing/[id]/topics/reorder/route.test.ts"
+    },
+    {
+      "id": "style-tailwind-dark",
+      "category": "styling",
+      "rule": "Dark theme via CSS variables in globals.css, Tailwind v4 with @theme inline",
+      "example": "--bg-deep, --bg-elevated, --accent-pink"
+    },
+    {
+      "id": "style-no-entrance-animations",
+      "category": "styling",
+      "rule": "No page entrance animations; animate-fade-up only for interactive elements",
+      "example": "dropdowns, modals, popovers"
+    }
+  ]
+}

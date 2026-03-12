@@ -1,0 +1,67 @@
+{
+  "imported_at": "2026-03-12T08:42:22Z",
+  "gsd_version": "unknown",
+  "phases_total": 8,
+  "phases_complete": 7,
+  "milestones": [
+    "Milestones",
+    "Phases",
+    "Progress"
+  ],
+  "quick_paths": {
+    "roadmap": "gsd-archive/ROADMAP.md",
+    "project": "gsd-archive/PROJECT.md",
+    "phases": "gsd-archive/phases/",
+    "config": "gsd-archive/config.json"
+  },
+  "phases": [
+    {
+      "num": 1,
+      "slug": "add-date-filter-along-with-search-by-client-name-to-the-ready-to-bill-clients",
+      "plans": 1,
+      "status": "complete"
+    },
+    {
+      "num": 1,
+      "slug": "data-layer",
+      "plans": 2,
+      "status": "complete"
+    },
+    {
+      "num": 2,
+      "slug": "add-bulk-waive-option-to-ready-to-bill-page",
+      "plans": 0,
+      "status": "in_progress"
+    },
+    {
+      "num": 2,
+      "slug": "overview-revenue-charts",
+      "plans": 2,
+      "status": "complete"
+    },
+    {
+      "num": 3,
+      "slug": "client-drill-down-enhancements",
+      "plans": 3,
+      "status": "complete"
+    },
+    {
+      "num": 4,
+      "slug": "employee-drill-down-enhancements",
+      "plans": 3,
+      "status": "complete"
+    },
+    {
+      "num": 12,
+      "slug": "tab-navigation",
+      "plans": 1,
+      "status": "complete"
+    },
+    {
+      "num": 13,
+      "slug": "date-range-filtering",
+      "plans": 1,
+      "status": "complete"
+    }
+  ]
+}

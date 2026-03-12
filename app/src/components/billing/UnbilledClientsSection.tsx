@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { UnbilledClientCard } from "./UnbilledClientCard";
 import { DateRangePicker, DateRange, getDateRange } from "./DateRangePicker";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 interface UnbilledClient {
   clientId: string;
@@ -30,6 +31,17 @@ export function UnbilledClientsSection({
   const [isLoading, setIsLoading] = useState(true);
   const [isRefetching, setIsRefetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Waive state
+  const [waiveTarget, setWaiveTarget] = useState<{
+    clientId: string;
+    clientName: string;
+    totalHours: number;
+  } | null>(null);
+  const [isWaiving, setIsWaiving] = useState(false);
+
+  // Refetch key — increment to trigger a refetch without changing date range
+  const [fetchKey, setFetchKey] = useState(0);
 
   // Date range state — default to "all-time"
   const [dateRange, setDateRange] = useState<DateRange>(() => {
@@ -74,7 +86,7 @@ export function UnbilledClientsSection({
 
     fetchUnbilledClients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRangeFrom, dateRangeTo]);
+  }, [dateRangeFrom, dateRangeTo, fetchKey]);
 
   // Client-side search filter
   const filteredClients = useMemo(() => {
@@ -106,6 +118,43 @@ export function UnbilledClientsSection({
     },
     [onCreateServiceDescription, dateRangeFrom, dateRangeTo]
   );
+
+  // Build confirmation message for the waive modal
+  const buildWaiveMessage = useCallback(
+    (target: { clientName: string; totalHours: number }) => {
+      const hoursStr = `${target.totalHours} ${target.totalHours === 1 ? "hour" : "hours"}`;
+      if (dateRangeFrom && dateRangeTo) {
+        return `All unbilled entries for ${target.clientName} from ${dateRangeFrom} to ${dateRangeTo} will be written off (${hoursStr}). This action cannot be undone from this page.`;
+      }
+      return `All unbilled entries for ${target.clientName} will be written off (${hoursStr}). This action cannot be undone from this page.`;
+    },
+    [dateRangeFrom, dateRangeTo]
+  );
+
+  // Handle bulk waive API call
+  const handleBulkWaive = useCallback(async () => {
+    if (!waiveTarget) return;
+    setIsWaiving(true);
+    try {
+      const res = await fetch("/api/timesheets/bulk-waive", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: waiveTarget.clientId,
+          ...(dateRangeFrom && { dateFrom: dateRangeFrom }),
+          ...(dateRangeTo && { dateTo: dateRangeTo }),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to waive entries");
+      setWaiveTarget(null);
+      // Trigger refetch to update the client list
+      setFetchKey((prev) => prev + 1);
+    } catch (error) {
+      console.error("Bulk waive error:", error);
+    } finally {
+      setIsWaiving(false);
+    }
+  }, [waiveTarget, dateRangeFrom, dateRangeTo]);
 
   if (isLoading) {
     return <div className="text-[var(--text-secondary)]">Loading...</div>;
@@ -215,11 +264,27 @@ export function UnbilledClientsSection({
                   newestEntryDate={client.newestEntryDate}
                   existingDraftId={client.existingDraftId}
                   onCreateServiceDescription={handleCreateServiceDescription}
+                  onWaive={(clientId, clientName, totalHours) =>
+                    setWaiveTarget({ clientId, clientName, totalHours })
+                  }
                 />
               ))}
             </div>
           </div>
         </>
+      )}
+
+      {/* Bulk waive confirmation modal */}
+      {waiveTarget && (
+        <ConfirmModal
+          title="Write Off Unbilled Entries"
+          message={buildWaiveMessage(waiveTarget)}
+          confirmLabel={isWaiving ? "Writing Off..." : "Write Off"}
+          cancelLabel="Cancel"
+          isDestructive={true}
+          onConfirm={handleBulkWaive}
+          onCancel={() => setWaiveTarget(null)}
+        />
       )}
     </section>
   );

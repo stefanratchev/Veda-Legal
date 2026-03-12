@@ -297,7 +297,7 @@ Custom session fields via type augmentation (`src/types/next-auth.d.ts`):
 ## Active Context
 
 **Work:** No active milestone
-**Last shipped:** _(none yet)_
+**Last shipped:** v1.0 Billing Improvements (2026-03-12) — date filter, search, bulk waive on Ready to Bill
 **Next action:** Run /vbw:vibe to start a new milestone, or /vbw:status to review progress
 
 ## VBW Rules

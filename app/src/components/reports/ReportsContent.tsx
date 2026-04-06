@@ -10,9 +10,6 @@ import { DetailTab } from "./DetailTab";
 import {
   getMonthRange,
   formatDateISO,
-  getPreviousPeriod,
-  getPreviousYear,
-  formatMonthShort,
 } from "@/lib/date-utils";
 import type { ReportData, DrillDownEntry } from "@/types/reports";
 
@@ -29,10 +26,11 @@ interface ReportsContentProps {
 
 export function ReportsContent({
   initialData,
-  initialComparisonData,
+  initialComparisonData: _initialComparisonData,
   isAdmin,
   currentUserId,
 }: ReportsContentProps) {
+  void _initialComparisonData; // Kept for parent interface compatibility; OverviewTab now fetches its own data
   // Date range state - default to current month
   const today = new Date();
   const defaultRange = getMonthRange(today);
@@ -48,9 +46,6 @@ export function ReportsContent({
 
   // Data state
   const [data, setData] = useState<ReportData>(initialData);
-  const [comparisonData, setComparisonData] = useState<ReportData | null>(
-    initialComparisonData
-  );
   const [loading, setLoading] = useState(false);
 
   // Selection state for drill-down
@@ -64,37 +59,19 @@ export function ReportsContent({
     async (
       start: Date,
       end: Date,
-      comparison: ComparisonType
-    ): Promise<{ main: ReportData; comparison: ReportData | null }> => {
+    ): Promise<ReportData> => {
       const mainParams = new URLSearchParams({
         startDate: formatDateISO(start),
         endDate: formatDateISO(end),
       });
 
-      // Calculate comparison range
-      const comparisonRange =
-        comparison === "previous-period"
-          ? getPreviousPeriod(start, end)
-          : getPreviousYear(start, end);
+      const response = await fetch(`/api/reports?${mainParams}`);
 
-      const compParams = new URLSearchParams({
-        startDate: formatDateISO(comparisonRange.start),
-        endDate: formatDateISO(comparisonRange.end),
-      });
-
-      const [mainResponse, compResponse] = await Promise.all([
-        fetch(`/api/reports?${mainParams}`),
-        fetch(`/api/reports?${compParams}`),
-      ]);
-
-      if (!mainResponse.ok) {
+      if (!response.ok) {
         throw new Error("Failed to fetch report data");
       }
 
-      const mainData = await mainResponse.json();
-      const compData = compResponse.ok ? await compResponse.json() : null;
-
-      return { main: mainData, comparison: compData };
+      return response.json();
     },
     []
   );
@@ -110,16 +87,15 @@ export function ReportsContent({
       setLoading(true);
 
       try {
-        const result = await fetchData(start, end, comparisonType);
-        setData(result.main);
-        setComparisonData(result.comparison);
+        const result = await fetchData(start, end);
+        setData(result);
       } catch (error) {
         console.error("Failed to fetch report data:", error);
       } finally {
         setLoading(false);
       }
     },
-    [comparisonType, fetchData]
+    [fetchData]
   );
 
   // Handle comparison change
@@ -129,31 +105,16 @@ export function ReportsContent({
       setLoading(true);
 
       try {
-        const result = await fetchData(startDate, endDate, newComparison);
-        setData(result.main);
-        setComparisonData(result.comparison);
+        const result = await fetchData(startDate, endDate);
+        setData(result);
       } catch (error) {
-        console.error("Failed to fetch comparison data:", error);
+        console.error("Failed to fetch report data:", error);
       } finally {
         setLoading(false);
       }
     },
     [startDate, endDate, fetchData]
   );
-
-  // Handle employee click (from Overview chart)
-  const handleEmployeeClick = useCallback((id: string) => {
-    setSelectedEmployeeId(id);
-    setSelectedClientId(null);
-    setActiveTab("by-employee");
-  }, []);
-
-  // Handle client click (from Overview chart)
-  const handleClientClick = useCallback((id: string) => {
-    setSelectedClientId(id);
-    setSelectedEmployeeId(null);
-    setActiveTab("by-client");
-  }, []);
 
   // Handle tab click
   const handleTabClick = useCallback((tab: TabType) => {
@@ -163,22 +124,6 @@ export function ReportsContent({
       setSelectedClientId(null);
     }
   }, []);
-
-  // Generate comparison label
-  const getComparisonLabel = (): string => {
-    const compRange =
-      comparisonType === "previous-period"
-        ? getPreviousPeriod(startDate, endDate)
-        : getPreviousYear(startDate, endDate);
-
-    const startMonth = formatMonthShort(compRange.start);
-    const endMonth = formatMonthShort(compRange.end);
-
-    if (startMonth === endMonth) {
-      return `vs ${startMonth}`;
-    }
-    return `vs ${startMonth} - ${endMonth}`;
-  };
 
   // Transform entries for tab components
   const transformedEntries: DrillDownEntry[] = data.entries.map((e) => ({
@@ -211,17 +156,19 @@ export function ReportsContent({
         <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">
           Reports
         </h1>
-        <div className="flex items-center gap-3">
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onChange={handleDateChange}
-          />
-          <ComparisonPicker
-            value={comparisonType}
-            onChange={handleComparisonChange}
-          />
-        </div>
+        {activeTab !== "overview" && (
+          <div className="flex items-center gap-3">
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onChange={handleDateChange}
+            />
+            <ComparisonPicker
+              value={comparisonType}
+              onChange={handleComparisonChange}
+            />
+          </div>
+        )}
       </div>
 
       {/* Tab Bar */}
@@ -257,14 +204,7 @@ export function ReportsContent({
       ) : (
         <>
           {activeTab === "overview" && (
-            <OverviewTab
-              data={data}
-              comparison={comparisonData}
-              comparisonLabel={getComparisonLabel()}
-              isAdmin={isAdmin}
-              onEmployeeClick={handleEmployeeClick}
-              onClientClick={handleClientClick}
-            />
+            <OverviewTab />
           )}
           {activeTab === "by-employee" && (
             <ByEmployeeTab

@@ -1,216 +1,188 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useEffect } from "react";
 import { SummaryCard } from "./SummaryCard";
-import { BarChart } from "./charts/BarChart";
-import { RevenueBarChart } from "./charts/RevenueBarChart";
+import { TrendChart } from "./charts/TrendChart";
+import { EmployeeTrendChart } from "./charts/EmployeeTrendChart";
 import { formatHours } from "@/lib/date-utils";
-import { getChartHeight } from "@/lib/chart-utils";
+import { formatEurAbbreviated } from "./charts/RevenueBarChart";
+import type { TrendResponse } from "@/types/reports";
 
-interface OverviewTabProps {
-  data: {
-    summary: {
-      totalHours: number;
-      totalRevenue: number | null;
-      activeClients: number;
-    };
-    byEmployee: { id: string; name: string; totalHours: number; revenue: number | null }[];
-    byClient: { id: string; name: string; totalHours: number; revenue: number | null }[];
-  };
-  comparison: {
-    summary: {
-      totalHours: number;
-      totalRevenue: number | null;
-      activeClients: number;
-    };
-    byClient: { id: string; name: string; revenue: number | null }[];
-    byEmployee: { id: string; name: string; revenue: number | null }[];
-  } | null;
-  comparisonLabel: string;
-  isAdmin: boolean;
-  onEmployeeClick: (id: string) => void;
-  onClientClick: (id: string) => void;
+// Module-level cache so tab switching does not re-fetch
+let cachedTrendData: TrendResponse | null = null;
+
+function getPercentChange(
+  current: number,
+  previous: number
+): number | null {
+  if (previous === 0) return null;
+  return ((current - previous) / previous) * 100;
 }
 
-export function OverviewTab({
-  data,
-  comparison,
-  comparisonLabel,
-  isAdmin,
-  onEmployeeClick,
-  onClientClick,
-}: OverviewTabProps) {
-  const { summary, byEmployee, byClient } = data;
+function getPreviousMonthLabel(data: TrendResponse): string {
+  if (data.months.length < 2) return "";
+  // Extract short month name from the second-to-last label (e.g., "Mar '26" -> "Mar")
+  const label = data.months[data.months.length - 2].label;
+  return label.split(" ")[0];
+}
 
-  const getPercentChange = (current: number, previous: number | null | undefined) => {
-    if (previous === null || previous === undefined || previous === 0) return null;
-    return ((current - previous) / previous) * 100;
-  };
+function isAllEmpty(data: TrendResponse): boolean {
+  return data.months.every((m) => m.totalHours === 0);
+}
 
-  const hoursComparison = comparison
-    ? {
-        value: getPercentChange(summary.totalHours, comparison.summary.totalHours) ?? 0,
-        label: comparisonLabel,
-        type: "percentage" as const,
+export function OverviewTab() {
+  const [trendData, setTrendData] = useState<TrendResponse | null>(
+    cachedTrendData
+  );
+  const [loading, setLoading] = useState(cachedTrendData === null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cachedTrendData !== null) return;
+
+    let cancelled = false;
+
+    async function fetchTrends() {
+      try {
+        const res = await fetch("/api/reports/trends");
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data: TrendResponse = await res.json();
+        if (!cancelled) {
+          cachedTrendData = data;
+          setTrendData(data);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setError(
+            "Failed to load trend data. Check your connection and try refreshing the page."
+          );
+          setLoading(false);
+        }
       }
-    : null;
+    }
 
-  const revenueComparison = comparison && summary.totalRevenue !== null
-    ? {
-        value: getPercentChange(summary.totalRevenue, comparison.summary.totalRevenue) ?? 0,
-        label: comparisonLabel,
-        type: "percentage" as const,
-      }
-    : null;
+    fetchTrends();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const clientsComparison = comparison
-    ? {
-        value: summary.activeClients - comparison.summary.activeClients,
-        label: comparisonLabel,
-        type: "absolute" as const,
-      }
-    : null;
-
-  const employeeChartData = byEmployee.map((e) => ({
-    name: e.name,
-    value: e.totalHours,
-    id: e.id,
-  }));
-
-  const clientChartData = byClient.map((c) => ({
-    name: c.name,
-    value: c.totalHours,
-    id: c.id,
-  }));
-
-  const clientRevenueData = useMemo(() => {
-    if (!isAdmin) return [];
-    return byClient
-      .filter((c) => c.revenue != null && c.revenue > 0)
-      .map((c) => ({ name: c.name, value: c.revenue!, id: c.id }));
-  }, [isAdmin, byClient]);
-
-  const employeeRevenueData = useMemo(() => {
-    if (!isAdmin) return [];
-    return byEmployee
-      .filter((e) => e.revenue != null && e.revenue > 0)
-      .map((e) => ({ name: e.name, value: e.revenue!, id: e.id }));
-  }, [isAdmin, byEmployee]);
-
-  const clientComparisonRevenue = useMemo(() => {
-    if (!comparison?.byClient) return undefined;
-    return comparison.byClient
-      .filter((c) => c.revenue != null && c.revenue > 0)
-      .map((c) => ({ name: c.name, value: c.revenue!, id: c.id }));
-  }, [comparison?.byClient]);
-
-  const employeeComparisonRevenue = useMemo(() => {
-    if (!comparison?.byEmployee) return undefined;
-    return comparison.byEmployee
-      .filter((e) => e.revenue != null && e.revenue > 0)
-      .map((e) => ({ name: e.name, value: e.revenue!, id: e.id }));
-  }, [comparison?.byEmployee]);
-
-  if (summary.totalHours === 0) {
+  if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-12 h-12 rounded bg-[var(--bg-surface)] flex items-center justify-center mb-3">
-          <svg className="w-6 h-6 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-        </div>
-        <p className="text-[var(--text-secondary)] text-[13px]">No time entries for this period</p>
+      <div className="flex items-center justify-center py-16">
+        <span className="text-[var(--text-secondary)] text-[13px]">
+          Loading...
+        </span>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <p className="text-[var(--text-secondary)] text-[13px]">{error}</p>
+      </div>
+    );
+  }
+
+  if (!trendData || isAllEmpty(trendData)) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="w-12 h-12 rounded bg-[var(--bg-surface)] flex items-center justify-center mb-3">
+          <svg
+            className="w-6 h-6 text-[var(--text-muted)]"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.5"
+              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+            />
+          </svg>
+        </div>
+        <p className="text-[var(--text-secondary)] text-[13px]">
+          No hours logged in the last 12 months
+        </p>
+        <p className="text-[var(--text-muted)] text-[11px] mt-1">
+          Time entries will appear here once team members start logging hours.
+        </p>
+      </div>
+    );
+  }
+
+  const { latest, previous } = trendData;
+  const prevMonthName = getPreviousMonthLabel(trendData);
+
+  const hoursComparison = {
+    value: getPercentChange(latest.totalHours, previous.totalHours) ?? 0,
+    label: prevMonthName,
+    type: "percentage" as const,
+  };
+
+  const revenueComparison = {
+    value: getPercentChange(latest.revenue, previous.revenue) ?? 0,
+    label: prevMonthName,
+    type: "percentage" as const,
+  };
+
+  const clientsComparison = {
+    value: latest.activeClients - previous.activeClients,
+    label: prevMonthName,
+    type: "absolute" as const,
+  };
+
+  const utilizationComparison = {
+    value: latest.utilization - previous.utilization,
+    label: prevMonthName,
+    type: "absolute" as const,
+  };
+
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className={`grid gap-4 ${isAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
+      {/* KPI Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <SummaryCard
           label="Total Hours"
-          value={formatHours(summary.totalHours)}
+          value={formatHours(latest.totalHours)}
           comparison={hoursComparison}
         />
-        {isAdmin && (
-          <SummaryCard
-            label="Total Revenue"
-            value={summary.totalRevenue !== null ? `€${summary.totalRevenue.toLocaleString()}` : "—"}
-            comparison={revenueComparison}
-          />
-        )}
+        <SummaryCard
+          label="Revenue"
+          value={formatEurAbbreviated(latest.revenue)}
+          comparison={revenueComparison}
+        />
         <SummaryCard
           label="Active Clients"
-          value={summary.activeClients.toString()}
+          value={latest.activeClients.toString()}
           comparison={clientsComparison}
+        />
+        <SummaryCard
+          label="Utilization"
+          value={`${latest.utilization}%`}
+          comparison={utilizationComparison}
         />
       </div>
 
-      {/* Row 1: Client Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-          <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-            Hours by Client
-          </h3>
-          <div style={{ height: getChartHeight(clientChartData.length, 15) }}>
-            <BarChart
-              data={clientChartData}
-              onBarClick={onClientClick}
-              valueFormatter={formatHours}
-              layout="vertical"
-              maxBars={15}
-            />
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-              Revenue by Client
-            </h3>
-            <div style={{ height: getChartHeight(clientRevenueData.length, 15) }}>
-              <RevenueBarChart
-                data={clientRevenueData}
-                comparisonData={clientComparisonRevenue}
-                onBarClick={onClientClick}
-                maxBars={15}
-              />
-            </div>
-          </div>
-        )}
+      {/* Firm Trends Chart */}
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+        <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
+          Firm Trends (12 Months)
+        </h3>
+        <TrendChart data={trendData.months} />
       </div>
 
-      {/* Row 2: Employee Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-          <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-            Hours by Employee
-          </h3>
-          <div style={{ height: getChartHeight(employeeChartData.length, 20) }}>
-            <BarChart
-              data={employeeChartData}
-              onBarClick={onEmployeeClick}
-              valueFormatter={formatHours}
-              layout="vertical"
-              maxBars={20}
-            />
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-            <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-              Revenue by Employee
-            </h3>
-            <div style={{ height: getChartHeight(employeeRevenueData.length, 20) }}>
-              <RevenueBarChart
-                data={employeeRevenueData}
-                comparisonData={employeeComparisonRevenue}
-                onBarClick={onEmployeeClick}
-                maxBars={20}
-              />
-            </div>
-          </div>
-        )}
+      {/* Employee Chart */}
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+        <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
+          Hours by Employee (12 Months)
+        </h3>
+        <EmployeeTrendChart data={trendData.months} />
       </div>
     </div>
   );

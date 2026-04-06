@@ -1,30 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SummaryCard } from "./SummaryCard";
 import { TrendChart } from "./charts/TrendChart";
-import { EmployeeTrendChart } from "./charts/EmployeeTrendChart";
-import { formatHours } from "@/lib/date-utils";
-import { formatEurAbbreviated } from "./charts/RevenueBarChart";
+import { RevenueChart } from "./charts/RevenueChart";
+import { EmployeeTrendTable, type EmployeeHoursMode } from "./charts/EmployeeTrendTable";
 import type { TrendResponse } from "@/types/reports";
 
 // Module-level cache so tab switching does not re-fetch
 let cachedTrendData: TrendResponse | null = null;
-
-function getPercentChange(
-  current: number,
-  previous: number
-): number | null {
-  if (previous === 0) return null;
-  return ((current - previous) / previous) * 100;
-}
-
-function getPreviousMonthLabel(data: TrendResponse): string {
-  if (data.months.length < 2) return "";
-  // Extract short month name from the second-to-last label (e.g., "Mar '26" -> "Mar")
-  const label = data.months[data.months.length - 2].label;
-  return label.split(" ")[0];
-}
 
 function isAllEmpty(data: TrendResponse): boolean {
   return data.months.every((m) => m.totalHours === 0);
@@ -36,6 +19,7 @@ export function OverviewTab() {
   );
   const [loading, setLoading] = useState(cachedTrendData === null);
   const [error, setError] = useState<string | null>(null);
+  const [employeeMode, setEmployeeMode] = useState<EmployeeHoursMode>("billable");
 
   useEffect(() => {
     if (cachedTrendData !== null) return;
@@ -116,73 +100,54 @@ export function OverviewTab() {
     );
   }
 
-  const { latest, previous } = trendData;
-  const prevMonthName = getPreviousMonthLabel(trendData);
-
-  const hoursComparison = {
-    value: getPercentChange(latest.totalHours, previous.totalHours) ?? 0,
-    label: prevMonthName,
-    type: "percentage" as const,
-  };
-
-  const revenueComparison = {
-    value: getPercentChange(latest.revenue, previous.revenue) ?? 0,
-    label: prevMonthName,
-    type: "percentage" as const,
-  };
-
-  const clientsComparison = {
-    value: latest.activeClients - previous.activeClients,
-    label: prevMonthName,
-    type: "absolute" as const,
-  };
-
-  const utilizationComparison = {
-    value: latest.utilization - previous.utilization,
-    label: prevMonthName,
-    type: "absolute" as const,
-  };
-
   return (
     <div className="space-y-6">
-      {/* KPI Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <SummaryCard
-          label="Total Hours"
-          value={formatHours(latest.totalHours)}
-          comparison={hoursComparison}
-        />
-        <SummaryCard
-          label="Revenue"
-          value={formatEurAbbreviated(latest.revenue)}
-          comparison={revenueComparison}
-        />
-        <SummaryCard
-          label="Active Clients"
-          value={latest.activeClients.toString()}
-          comparison={clientsComparison}
-        />
-        <SummaryCard
-          label="Utilization"
-          value={`${latest.utilization}%`}
-          comparison={utilizationComparison}
-        />
-      </div>
-
       {/* Firm Trends Chart */}
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
         <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-          Firm Trends (12 Months)
+          Billable Hours (12 Months)
         </h3>
         <TrendChart data={trendData.months} />
       </div>
 
-      {/* Employee Chart */}
+      {/* Billed Revenue Chart */}
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
         <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
-          Hours by Employee (12 Months)
+          Billed Revenue (12 Months)
         </h3>
-        <EmployeeTrendChart data={trendData.months} />
+        <RevenueChart data={trendData.months} />
+      </div>
+
+      {/* Employee Table */}
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
+            By Employee (12 Months)
+          </h3>
+          <div className="flex items-center gap-1 bg-[var(--bg-surface)] rounded p-0.5">
+            <button
+              onClick={() => setEmployeeMode("billable")}
+              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+                employeeMode === "billable"
+                  ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              }`}
+            >
+              Billable
+            </button>
+            <button
+              onClick={() => setEmployeeMode("total")}
+              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+                employeeMode === "total"
+                  ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              }`}
+            >
+              Total
+            </button>
+          </div>
+        </div>
+        <EmployeeTrendTable data={trendData.months} mode={employeeMode} />
       </div>
     </div>
   );

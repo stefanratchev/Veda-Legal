@@ -10,20 +10,25 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { formatHours } from "@/lib/date-utils";
 import type { MonthlyTrendPoint } from "@/types/reports";
 
-interface TrendTooltipProps {
+function formatEur(value: number): string {
+  if (value >= 1000) {
+    return `€${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}K`;
+  }
+  return `€${Math.round(value)}`;
+}
+
+interface RevenueTooltipProps {
   active?: boolean;
   payload?: {
     dataKey: string;
     value: number;
     payload: MonthlyTrendPoint;
   }[];
-  label?: string;
 }
 
-function TrendTooltip({ active, payload }: TrendTooltipProps) {
+function RevenueTooltip({ active, payload }: RevenueTooltipProps) {
   if (!active || !payload?.length) return null;
 
   const point = payload[0].payload;
@@ -54,10 +59,10 @@ function TrendTooltip({ active, payload }: TrendTooltipProps) {
             width: 8,
             height: 8,
             borderRadius: "50%",
-            backgroundColor: "#FF9999",
+            backgroundColor: "#4ECDC4",
           }}
         />
-        Billable: {formatHours(point.billableHours)}
+        Billed: €{point.billedRevenue.toLocaleString()}
       </div>
       <div style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
         <span
@@ -66,20 +71,20 @@ function TrendTooltip({ active, payload }: TrendTooltipProps) {
             width: 8,
             height: 8,
             borderRadius: "50%",
-            backgroundColor: "#4A9D6E",
+            backgroundColor: "#F5A623",
           }}
         />
-        Utilization: {point.utilization}%
+        Realization: {point.realization}%
       </div>
     </div>
   );
 }
 
-interface TrendChartProps {
+interface RevenueChartProps {
   data: MonthlyTrendPoint[];
 }
 
-export function TrendChart({ data }: TrendChartProps) {
+export function RevenueChart({ data }: RevenueChartProps) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <ComposedChart
@@ -97,19 +102,19 @@ export function TrendChart({ data }: TrendChartProps) {
           tick={{ fill: "var(--text-muted)", fontSize: 11 }}
           axisLine={{ stroke: "var(--border-subtle)" }}
           tickLine={false}
-          tickFormatter={formatHours}
+          tickFormatter={formatEur}
         />
         <YAxis
           yAxisId="right"
           orientation="right"
-          domain={[0, 100]}
+          domain={[0, (max: number) => Math.max(100, Math.ceil(max / 10) * 10)]}
           tick={{ fill: "var(--text-muted)", fontSize: 11 }}
           axisLine={{ stroke: "var(--border-subtle)" }}
           tickLine={false}
           tickFormatter={(v: number) => `${v}%`}
         />
         <Tooltip
-          content={<TrendTooltip />}
+          content={<RevenueTooltip />}
           cursor={{ fill: "var(--bg-surface)", fillOpacity: 0.5 }}
         />
         <Legend
@@ -121,22 +126,22 @@ export function TrendChart({ data }: TrendChartProps) {
         />
         <Bar
           yAxisId="left"
-          dataKey="billableHours"
-          fill="#FF9999"
+          dataKey="billedRevenue"
+          fill="#4ECDC4"
           fillOpacity={0.4}
           radius={[4, 4, 0, 0]}
-          name="Billable Hours"
+          name="Billed Revenue"
           isAnimationActive={false}
         />
         <Line
           yAxisId="right"
-          dataKey="utilization"
+          dataKey="realization"
           type="monotone"
-          stroke="#4A9D6E"
+          stroke="#F5A623"
           strokeWidth={2}
           dot={false}
           activeDot={{ r: 4, strokeWidth: 0 }}
-          name="Utilization"
+          name="Realization"
           isAnimationActive={false}
         />
       </ComposedChart>

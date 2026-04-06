@@ -20,6 +20,10 @@ vi.mock("recharts", () => ({
   Tooltip: () => <div data-testid="tooltip" />,
   Legend: () => <div data-testid="legend" />,
   Cell: () => <div data-testid="cell" />,
+  AreaChart: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="area-chart">{children}</div>
+  ),
+  Area: () => <div data-testid="area" />,
 }));
 
 const mockTrendResponse: TrendResponse = {
@@ -28,31 +32,43 @@ const mockTrendResponse: TrendResponse = {
       month: "2025-05",
       label: "May '25",
       totalHours: 280,
+      billableHours: 190,
       revenue: 42000,
+      billedRevenue: 38000,
+      standardRateValue: 42000,
+      realization: 90,
       activeClients: 14,
       utilization: 68,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 140 },
-        { id: "u2", name: "Bob", hours: 140 },
+        { id: "u1", name: "Alice", hours: 140, billableHours: 95, billedRevenue: 19000 },
+        { id: "u2", name: "Bob", hours: 140, billableHours: 95, billedRevenue: 19000 },
       ],
     },
     {
       month: "2025-06",
       label: "Jun '25",
       totalHours: 300,
+      billableHours: 210,
       revenue: 45000,
+      billedRevenue: 40000,
+      standardRateValue: 45000,
+      realization: 89,
       activeClients: 15,
       utilization: 70,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 150 },
-        { id: "u2", name: "Bob", hours: 150 },
+        { id: "u1", name: "Alice", hours: 150, billableHours: 105, billedRevenue: 20000 },
+        { id: "u2", name: "Bob", hours: 150, billableHours: 105, billedRevenue: 20000 },
       ],
     },
     {
       month: "2025-07",
       label: "Jul '25",
       totalHours: 0,
+      billableHours: 0,
       revenue: 0,
+      billedRevenue: 0,
+      standardRateValue: 0,
+      realization: 0,
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
@@ -61,7 +77,11 @@ const mockTrendResponse: TrendResponse = {
       month: "2025-08",
       label: "Aug '25",
       totalHours: 0,
+      billableHours: 0,
       revenue: 0,
+      billedRevenue: 0,
+      standardRateValue: 0,
+      realization: 0,
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
@@ -70,7 +90,11 @@ const mockTrendResponse: TrendResponse = {
       month: "2025-09",
       label: "Sep '25",
       totalHours: 0,
+      billableHours: 0,
       revenue: 0,
+      billedRevenue: 0,
+      standardRateValue: 0,
+      realization: 0,
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
@@ -79,7 +103,11 @@ const mockTrendResponse: TrendResponse = {
       month: "2025-10",
       label: "Oct '25",
       totalHours: 0,
+      billableHours: 0,
       revenue: 0,
+      billedRevenue: 0,
+      standardRateValue: 0,
+      realization: 0,
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
@@ -88,7 +116,11 @@ const mockTrendResponse: TrendResponse = {
       month: "2025-11",
       label: "Nov '25",
       totalHours: 0,
+      billableHours: 0,
       revenue: 0,
+      billedRevenue: 0,
+      standardRateValue: 0,
+      realization: 0,
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
@@ -97,7 +129,11 @@ const mockTrendResponse: TrendResponse = {
       month: "2025-12",
       label: "Dec '25",
       totalHours: 0,
+      billableHours: 0,
       revenue: 0,
+      billedRevenue: 0,
+      standardRateValue: 0,
+      realization: 0,
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
@@ -106,7 +142,11 @@ const mockTrendResponse: TrendResponse = {
       month: "2026-01",
       label: "Jan '26",
       totalHours: 0,
+      billableHours: 0,
       revenue: 0,
+      billedRevenue: 0,
+      standardRateValue: 0,
+      realization: 0,
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
@@ -115,36 +155,48 @@ const mockTrendResponse: TrendResponse = {
       month: "2026-02",
       label: "Feb '26",
       totalHours: 310,
+      billableHours: 220,
       revenue: 46500,
+      billedRevenue: 42000,
+      standardRateValue: 46500,
+      realization: 90,
       activeClients: 16,
       utilization: 71,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 160 },
-        { id: "u2", name: "Bob", hours: 150 },
+        { id: "u1", name: "Alice", hours: 160, billableHours: 110, billedRevenue: 21000 },
+        { id: "u2", name: "Bob", hours: 150, billableHours: 110, billedRevenue: 21000 },
       ],
     },
     {
       month: "2026-03",
       label: "Mar '26",
       totalHours: 350,
+      billableHours: 262,
       revenue: 52500,
+      billedRevenue: 48000,
+      standardRateValue: 52500,
+      realization: 91,
       activeClients: 17,
       utilization: 75,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 180 },
-        { id: "u2", name: "Bob", hours: 170 },
+        { id: "u1", name: "Alice", hours: 180, billableHours: 131, billedRevenue: 24000 },
+        { id: "u2", name: "Bob", hours: 170, billableHours: 131, billedRevenue: 24000 },
       ],
     },
     {
       month: "2026-04",
       label: "Apr '26",
       totalHours: 342.5,
+      billableHours: 246.5,
       revenue: 48200,
+      billedRevenue: 44000,
+      standardRateValue: 48200,
+      realization: 91,
       activeClients: 18,
       utilization: 72,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 172.5 },
-        { id: "u2", name: "Bob", hours: 170 },
+        { id: "u1", name: "Alice", hours: 172.5, billableHours: 123, billedRevenue: 22000 },
+        { id: "u2", name: "Bob", hours: 170, billableHours: 123, billedRevenue: 22000 },
       ],
     },
   ],
@@ -167,7 +219,11 @@ const emptyTrendResponse: TrendResponse = {
     month: `2025-${String(i + 1).padStart(2, "0")}`,
     label: `Month ${i + 1}`,
     totalHours: 0,
+    billableHours: 0,
     revenue: 0,
+    billedRevenue: 0,
+    standardRateValue: 0,
+    realization: 0,
     activeClients: 0,
     utilization: 0,
     byEmployee: [],
@@ -206,7 +262,7 @@ describe("OverviewTab", () => {
     expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
 
-  it("renders 4 summary cards on success", async () => {
+  it("renders chart sections on success", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(mockTrendResponse),
@@ -216,54 +272,14 @@ describe("OverviewTab", () => {
     render(<FreshOverviewTab />);
 
     await waitFor(() => {
-      expect(screen.getByText("Total Hours")).toBeInTheDocument();
+      expect(
+        screen.getByText("Billable Hours (12 Months)")
+      ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Revenue")).toBeInTheDocument();
-    expect(screen.getByText("Active Clients")).toBeInTheDocument();
-    expect(screen.getByText("Utilization")).toBeInTheDocument();
-  });
-
-  it("formats summary card values correctly", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockTrendResponse),
-    });
-
-    const { OverviewTab: FreshOverviewTab } = await import("./OverviewTab");
-    render(<FreshOverviewTab />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Total Hours")).toBeInTheDocument();
-    });
-
-    // 342.5 hours -> "342h 30m"
-    expect(screen.getByText("342h 30m")).toBeInTheDocument();
-    // 48200 EUR -> "\u20AC48.2K"
-    expect(screen.getByText("\u20AC48.2K")).toBeInTheDocument();
-    // 18 active clients
-    expect(screen.getByText("18")).toBeInTheDocument();
-    // 72% utilization
-    expect(screen.getByText("72%")).toBeInTheDocument();
-  });
-
-  it("shows comparison arrows", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockTrendResponse),
-    });
-
-    const { OverviewTab: FreshOverviewTab } = await import("./OverviewTab");
-    render(<FreshOverviewTab />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Total Hours")).toBeInTheDocument();
-    });
-
-    // Latest totalHours (342.5) < previous (350), so should show down arrow
-    // Latest activeClients (18) > previous (17), so should show up arrow with +1
-    const comparisonTexts = screen.getAllByText(/vs Mar/);
-    expect(comparisonTexts.length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/By Employee/)
+    ).toBeInTheDocument();
   });
 
   it("shows empty state when no data", async () => {
@@ -307,23 +323,4 @@ describe("OverviewTab", () => {
     });
   });
 
-  it("renders chart section headings", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockTrendResponse),
-    });
-
-    const { OverviewTab: FreshOverviewTab } = await import("./OverviewTab");
-    render(<FreshOverviewTab />);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("Firm Trends (12 Months)")
-      ).toBeInTheDocument();
-    });
-
-    expect(
-      screen.getByText("Hours by Employee (12 Months)")
-    ).toBeInTheDocument();
-  });
 });

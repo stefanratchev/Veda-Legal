@@ -4,18 +4,16 @@ import { useState, useCallback } from "react";
 import { DateRangePicker, Preset } from "./DateRangePicker";
 import { ComparisonPicker, ComparisonType } from "./ComparisonPicker";
 import { OverviewTab } from "./OverviewTab";
-import { ByEmployeeTab } from "./ByEmployeeTab";
-import { ByClientTab } from "./ByClientTab";
 import { DetailTab } from "./DetailTab";
 import {
   getMonthRange,
   formatDateISO,
 } from "@/lib/date-utils";
-import type { ReportData, DrillDownEntry } from "@/types/reports";
+import type { ReportData } from "@/types/reports";
 
 export type { ReportData };
 
-type TabType = "overview" | "by-employee" | "by-client" | "detail";
+type TabType = "overview" | "detail";
 
 interface ReportsContentProps {
   initialData: ReportData;
@@ -28,62 +26,44 @@ export function ReportsContent({
   initialData,
   initialComparisonData: _initialComparisonData,
   isAdmin,
-  currentUserId,
+  currentUserId: _currentUserId,
 }: ReportsContentProps) {
-  void _initialComparisonData; // Kept for parent interface compatibility; OverviewTab now fetches its own data
-  // Date range state - default to current month
+  void _initialComparisonData;
+  void _currentUserId;
   const today = new Date();
   const defaultRange = getMonthRange(today);
   const [startDate, setStartDate] = useState(defaultRange.start);
   const [endDate, setEndDate] = useState(defaultRange.end);
 
-  // Comparison state
   const [comparisonType, setComparisonType] =
     useState<ComparisonType>("previous-period");
 
-  // Tab state
   const [activeTab, setActiveTab] = useState<TabType>("overview");
 
-  // Data state
   const [data, setData] = useState<ReportData>(initialData);
   const [loading, setLoading] = useState(false);
 
-  // Selection state for drill-down
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
-    null
-  );
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-
-  // Fetch data from API
   const fetchData = useCallback(
-    async (
-      start: Date,
-      end: Date,
-    ): Promise<ReportData> => {
+    async (start: Date, end: Date): Promise<ReportData> => {
       const mainParams = new URLSearchParams({
         startDate: formatDateISO(start),
         endDate: formatDateISO(end),
       });
 
       const response = await fetch(`/api/reports?${mainParams}`);
-
       if (!response.ok) {
         throw new Error("Failed to fetch report data");
       }
-
       return response.json();
     },
     []
   );
 
-  // Handle date change
   const handleDateChange = useCallback(
     async (start: Date, end: Date, _preset?: Preset) => {
-      void _preset; // Unused but required by DateRangePicker callback signature
+      void _preset;
       setStartDate(start);
       setEndDate(end);
-      setSelectedEmployeeId(null);
-      setSelectedClientId(null);
       setLoading(true);
 
       try {
@@ -98,7 +78,6 @@ export function ReportsContent({
     [fetchData]
   );
 
-  // Handle comparison change
   const handleComparisonChange = useCallback(
     async (newComparison: ComparisonType) => {
       setComparisonType(newComparison);
@@ -116,36 +95,12 @@ export function ReportsContent({
     [startDate, endDate, fetchData]
   );
 
-  // Handle tab click
   const handleTabClick = useCallback((tab: TabType) => {
     setActiveTab(tab);
-    if (tab === "overview") {
-      setSelectedEmployeeId(null);
-      setSelectedClientId(null);
-    }
   }, []);
-
-  // Transform entries for tab components
-  const transformedEntries: DrillDownEntry[] = data.entries.map((e) => ({
-    id: e.id,
-    date: e.date,
-    hours: e.hours,
-    description: e.description,
-    topicName: e.topicName,
-    client: {
-      id: e.clientId,
-      name: e.clientName,
-    },
-    employee: {
-      id: e.userId,
-      name: e.userName,
-    },
-  }));
 
   const tabs: { id: TabType; label: string }[] = [
     { id: "overview", label: "Overview" },
-    { id: "by-employee", label: "By Employee" },
-    { id: "by-client", label: "By Client" },
     { id: "detail", label: "Detail" },
   ];
 
@@ -203,28 +158,7 @@ export function ReportsContent({
         </div>
       ) : (
         <>
-          {activeTab === "overview" && (
-            <OverviewTab />
-          )}
-          {activeTab === "by-employee" && (
-            <ByEmployeeTab
-              employees={data.byEmployee}
-              entries={transformedEntries}
-              isAdmin={isAdmin}
-              currentUserId={currentUserId}
-              selectedEmployeeId={selectedEmployeeId}
-              onSelectEmployee={setSelectedEmployeeId}
-            />
-          )}
-          {activeTab === "by-client" && (
-            <ByClientTab
-              clients={data.byClient}
-              entries={transformedEntries}
-              isAdmin={isAdmin}
-              selectedClientId={selectedClientId}
-              onSelectClient={setSelectedClientId}
-            />
-          )}
+          {activeTab === "overview" && <OverviewTab />}
           {activeTab === "detail" && (
             <DetailTab
               key="detail"

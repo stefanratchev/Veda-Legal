@@ -63,13 +63,19 @@ export interface MonthlyTrendPoint {
   month: string;        // "2025-04" ISO month format
   label: string;        // "Apr '25" display label
   totalHours: number;
+  billableHours: number; // REGULAR client hours, not written off
   revenue: number;      // theoretical revenue (hours * rate)
   activeClients: number;
   utilization: number;  // percentage 0-100
+  billedRevenue: number;     // grand total from finalized SDs
+  standardRateValue: number; // potential revenue at standard rates
+  realization: number;       // percentage: billedRevenue / standardRateValue * 100
   byEmployee: {
     id: string;
     name: string;
     hours: number;
+    billableHours: number;
+    billedRevenue: number;
   }[];
 }
 

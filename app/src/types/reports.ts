@@ -58,6 +58,38 @@ export interface ReportData {
   entries: ReportEntry[];
 }
 
+/** Monthly data point for the 12-month trend dashboard */
+export interface MonthlyTrendPoint {
+  month: string;        // "2025-04" ISO month format
+  label: string;        // "Apr '25" display label
+  totalHours: number;
+  revenue: number;      // theoretical revenue (hours * rate)
+  activeClients: number;
+  utilization: number;  // percentage 0-100
+  byEmployee: {
+    id: string;
+    name: string;
+    hours: number;
+  }[];
+}
+
+/** Response shape from GET /api/reports/trends */
+export interface TrendResponse {
+  months: MonthlyTrendPoint[];  // 12 items, oldest first
+  latest: {
+    totalHours: number;
+    revenue: number;
+    activeClients: number;
+    utilization: number;
+  };
+  previous: {
+    totalHours: number;
+    revenue: number;
+    activeClients: number;
+    utilization: number;
+  };
+}
+
 /** Entry shape used by drill-down tab components (ByClientTab, ByEmployeeTab) */
 export interface DrillDownEntry {
   id: string;

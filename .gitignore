@@ -40,3 +40,9 @@ app/src/generated/
 # Planning artifacts (local workflow state)
 .planning/
 .vbw-planning/
+
+# Claude plugins
+.claude-octopus/
+.claude/get-shit-done/
+.claude/commands/gsd/
+.claude/agents/gsd-*

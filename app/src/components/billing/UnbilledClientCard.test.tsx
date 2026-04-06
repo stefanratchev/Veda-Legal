@@ -120,7 +120,7 @@ describe("UnbilledClientCard", () => {
       const button = screen.getByRole("button", { name: /Continue Draft/i });
       fireEvent.click(button);
 
-      expect(mockPush).toHaveBeenCalledWith("/billing/draft-123");
+      expect(mockPush).toHaveBeenCalledWith("/billing/draft-123?from=ready-to-bill");
       expect(mockOnCreateServiceDescription).not.toHaveBeenCalled();
     });
   });

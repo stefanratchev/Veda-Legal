@@ -158,8 +158,8 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
         return;
       }
 
-      // Navigate to the new service description
-      router.push(`/billing/${data.id}`);
+      // Navigate to the new service description, preserving which tab we came from
+      router.push(`/billing/${data.id}?from=${activeTab}`);
     } catch {
       setCreateError("Failed to create service description");
     } finally {
@@ -168,7 +168,7 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
   }, [router]);
 
   const handleRowClick = useCallback((sd: ServiceDescriptionListItem) => {
-    router.push(`/billing/${sd.id}`);
+    router.push(`/billing/${sd.id}?from=service-descriptions`);
   }, [router]);
 
   const handleDelete = useCallback((sd: ServiceDescriptionListItem, e: React.MouseEvent) => {
@@ -311,9 +311,9 @@ export function BillingContent({ initialServiceDescriptions, clients }: BillingC
       </div>
 
       {/* Tab Content */}
-      {activeTab === "ready-to-bill" && (
+      <div style={{ display: activeTab === "ready-to-bill" ? "block" : "none" }}>
         <UnbilledClientsSection onCreateServiceDescription={handleCreate} />
-      )}
+      </div>
 
       {activeTab === "service-descriptions" && (
         <>

@@ -4,21 +4,16 @@ import { useState, useCallback } from "react";
 import { DateRangePicker, Preset } from "./DateRangePicker";
 import { ComparisonPicker, ComparisonType } from "./ComparisonPicker";
 import { OverviewTab } from "./OverviewTab";
-import { ByEmployeeTab } from "./ByEmployeeTab";
-import { ByClientTab } from "./ByClientTab";
 import { DetailTab } from "./DetailTab";
 import {
   getMonthRange,
   formatDateISO,
-  getPreviousPeriod,
-  getPreviousYear,
-  formatMonthShort,
 } from "@/lib/date-utils";
-import type { ReportData, DrillDownEntry } from "@/types/reports";
+import type { ReportData } from "@/types/reports";
 
 export type { ReportData };
 
-type TabType = "overview" | "by-employee" | "by-client" | "detail";
+type TabType = "overview" | "detail";
 
 interface ReportsContentProps {
   initialData: ReportData;
@@ -29,111 +24,70 @@ interface ReportsContentProps {
 
 export function ReportsContent({
   initialData,
-  initialComparisonData,
+  initialComparisonData: _initialComparisonData,
   isAdmin,
-  currentUserId,
+  currentUserId: _currentUserId,
 }: ReportsContentProps) {
-  // Date range state - default to current month
+  void _initialComparisonData;
+  void _currentUserId;
   const today = new Date();
   const defaultRange = getMonthRange(today);
   const [startDate, setStartDate] = useState(defaultRange.start);
   const [endDate, setEndDate] = useState(defaultRange.end);
 
-  // Comparison state
   const [comparisonType, setComparisonType] =
     useState<ComparisonType>("previous-period");
 
-  // Tab state
   const [activeTab, setActiveTab] = useState<TabType>("overview");
 
-  // Data state
   const [data, setData] = useState<ReportData>(initialData);
-  const [comparisonData, setComparisonData] = useState<ReportData | null>(
-    initialComparisonData
-  );
   const [loading, setLoading] = useState(false);
 
-  // Selection state for drill-down
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
-    null
-  );
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-
-  // Fetch data from API
   const fetchData = useCallback(
-    async (
-      start: Date,
-      end: Date,
-      comparison: ComparisonType
-    ): Promise<{ main: ReportData; comparison: ReportData | null }> => {
+    async (start: Date, end: Date): Promise<ReportData> => {
       const mainParams = new URLSearchParams({
         startDate: formatDateISO(start),
         endDate: formatDateISO(end),
       });
 
-      // Calculate comparison range
-      const comparisonRange =
-        comparison === "previous-period"
-          ? getPreviousPeriod(start, end)
-          : getPreviousYear(start, end);
-
-      const compParams = new URLSearchParams({
-        startDate: formatDateISO(comparisonRange.start),
-        endDate: formatDateISO(comparisonRange.end),
-      });
-
-      const [mainResponse, compResponse] = await Promise.all([
-        fetch(`/api/reports?${mainParams}`),
-        fetch(`/api/reports?${compParams}`),
-      ]);
-
-      if (!mainResponse.ok) {
+      const response = await fetch(`/api/reports?${mainParams}`);
+      if (!response.ok) {
         throw new Error("Failed to fetch report data");
       }
-
-      const mainData = await mainResponse.json();
-      const compData = compResponse.ok ? await compResponse.json() : null;
-
-      return { main: mainData, comparison: compData };
+      return response.json();
     },
     []
   );
 
-  // Handle date change
   const handleDateChange = useCallback(
     async (start: Date, end: Date, _preset?: Preset) => {
-      void _preset; // Unused but required by DateRangePicker callback signature
+      void _preset;
       setStartDate(start);
       setEndDate(end);
-      setSelectedEmployeeId(null);
-      setSelectedClientId(null);
       setLoading(true);
 
       try {
-        const result = await fetchData(start, end, comparisonType);
-        setData(result.main);
-        setComparisonData(result.comparison);
+        const result = await fetchData(start, end);
+        setData(result);
       } catch (error) {
         console.error("Failed to fetch report data:", error);
       } finally {
         setLoading(false);
       }
     },
-    [comparisonType, fetchData]
+    [fetchData]
   );
 
-  // Handle comparison change
   const handleComparisonChange = useCallback(
     async (newComparison: ComparisonType) => {
       setComparisonType(newComparison);
       setLoading(true);
 
       try {
-        const result = await fetchData(startDate, endDate, newComparison);
-        setData(result.main);
-        setComparisonData(result.comparison);
+        const result = await fetchData(startDate, endDate);
+        setData(result);
       } catch (error) {
-        console.error("Failed to fetch comparison data:", error);
+        console.error("Failed to fetch report data:", error);
       } finally {
         setLoading(false);
       }
@@ -141,66 +95,12 @@ export function ReportsContent({
     [startDate, endDate, fetchData]
   );
 
-  // Handle employee click (from Overview chart)
-  const handleEmployeeClick = useCallback((id: string) => {
-    setSelectedEmployeeId(id);
-    setSelectedClientId(null);
-    setActiveTab("by-employee");
-  }, []);
-
-  // Handle client click (from Overview chart)
-  const handleClientClick = useCallback((id: string) => {
-    setSelectedClientId(id);
-    setSelectedEmployeeId(null);
-    setActiveTab("by-client");
-  }, []);
-
-  // Handle tab click
   const handleTabClick = useCallback((tab: TabType) => {
     setActiveTab(tab);
-    if (tab === "overview") {
-      setSelectedEmployeeId(null);
-      setSelectedClientId(null);
-    }
   }, []);
-
-  // Generate comparison label
-  const getComparisonLabel = (): string => {
-    const compRange =
-      comparisonType === "previous-period"
-        ? getPreviousPeriod(startDate, endDate)
-        : getPreviousYear(startDate, endDate);
-
-    const startMonth = formatMonthShort(compRange.start);
-    const endMonth = formatMonthShort(compRange.end);
-
-    if (startMonth === endMonth) {
-      return `vs ${startMonth}`;
-    }
-    return `vs ${startMonth} - ${endMonth}`;
-  };
-
-  // Transform entries for tab components
-  const transformedEntries: DrillDownEntry[] = data.entries.map((e) => ({
-    id: e.id,
-    date: e.date,
-    hours: e.hours,
-    description: e.description,
-    topicName: e.topicName,
-    client: {
-      id: e.clientId,
-      name: e.clientName,
-    },
-    employee: {
-      id: e.userId,
-      name: e.userName,
-    },
-  }));
 
   const tabs: { id: TabType; label: string }[] = [
     { id: "overview", label: "Overview" },
-    { id: "by-employee", label: "By Employee" },
-    { id: "by-client", label: "By Client" },
     { id: "detail", label: "Detail" },
   ];
 
@@ -211,17 +111,19 @@ export function ReportsContent({
         <h1 className="font-heading text-2xl font-semibold text-[var(--text-primary)]">
           Reports
         </h1>
-        <div className="flex items-center gap-3">
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onChange={handleDateChange}
-          />
-          <ComparisonPicker
-            value={comparisonType}
-            onChange={handleComparisonChange}
-          />
-        </div>
+        {activeTab !== "overview" && (
+          <div className="flex items-center gap-3">
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onChange={handleDateChange}
+            />
+            <ComparisonPicker
+              value={comparisonType}
+              onChange={handleComparisonChange}
+            />
+          </div>
+        )}
       </div>
 
       {/* Tab Bar */}
@@ -256,35 +158,7 @@ export function ReportsContent({
         </div>
       ) : (
         <>
-          {activeTab === "overview" && (
-            <OverviewTab
-              data={data}
-              comparison={comparisonData}
-              comparisonLabel={getComparisonLabel()}
-              isAdmin={isAdmin}
-              onEmployeeClick={handleEmployeeClick}
-              onClientClick={handleClientClick}
-            />
-          )}
-          {activeTab === "by-employee" && (
-            <ByEmployeeTab
-              employees={data.byEmployee}
-              entries={transformedEntries}
-              isAdmin={isAdmin}
-              currentUserId={currentUserId}
-              selectedEmployeeId={selectedEmployeeId}
-              onSelectEmployee={setSelectedEmployeeId}
-            />
-          )}
-          {activeTab === "by-client" && (
-            <ByClientTab
-              clients={data.byClient}
-              entries={transformedEntries}
-              isAdmin={isAdmin}
-              selectedClientId={selectedClientId}
-              onSelectClient={setSelectedClientId}
-            />
-          )}
+          {activeTab === "overview" && <OverviewTab />}
           {activeTab === "detail" && (
             <DetailTab
               key="detail"

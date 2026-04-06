@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ServiceDescription, ServiceDescriptionTopic, PricingMode, WriteOffAction } from "@/types";
 import { calculateTopicTotal, calculateGrandTotal, calculateRetainerSummary, formatCurrency } from "@/lib/billing-pdf";
 import { TopicSection } from "./TopicSection";
@@ -41,6 +41,8 @@ function formatPeriod(start: string, end: string): string {
 
 export function ServiceDescriptionDetail({ serviceDescription: initialData }: ServiceDescriptionDetailProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromTab = searchParams.get("from");
   const [data, setData] = useState<ServiceDescription>(initialData);
   const [showAddTopicModal, setShowAddTopicModal] = useState(false);
   const [isAddingTopic, setIsAddingTopic] = useState(false);
@@ -381,10 +383,11 @@ export function ServiceDescriptionDetail({ serviceDescription: initialData }: Se
     [data.id, data.discountType]
   );
 
-  // Navigate back
+  // Navigate back to whichever tab the user came from
   const handleBack = useCallback(() => {
-    router.push("/billing");
-  }, [router]);
+    const backUrl = fromTab === "ready-to-bill" ? "/billing" : "/billing?tab=service-descriptions";
+    router.push(backUrl);
+  }, [router, fromTab]);
 
   // Add topic
   const handleOpenAddTopic = useCallback(() => {

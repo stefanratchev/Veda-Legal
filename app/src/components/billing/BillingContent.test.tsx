@@ -146,8 +146,8 @@ describe("BillingContent", () => {
       expect(screen.getByTestId("data-table")).toBeInTheDocument();
       expect(screen.getByTestId("date-range-picker")).toBeInTheDocument();
       expect(
-        screen.queryByTestId("unbilled-clients-section")
-      ).not.toBeInTheDocument();
+        screen.getByTestId("unbilled-clients-section").parentElement
+      ).toHaveStyle({ display: "none" });
     });
   });
 

@@ -74,7 +74,7 @@ export function UnbilledClientCard({
 
   const handleClick = useCallback(async () => {
     if (hasDraft) {
-      router.push(`/billing/${existingDraftId}`);
+      router.push(`/billing/${existingDraftId}?from=ready-to-bill`);
       return;
     }
 

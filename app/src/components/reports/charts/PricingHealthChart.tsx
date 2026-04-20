@@ -95,20 +95,6 @@ function PricingHealthTooltip({ active, payload }: PricingHealthTooltipProps) {
         />
         Effective Rate: {rateLabel}
       </div>
-      <div
-        style={{
-          borderTop: "1px solid var(--border-subtle)",
-          marginTop: 6,
-          paddingTop: 6,
-          color: "var(--text-muted)",
-          fontSize: "10px",
-          lineHeight: 1.5,
-        }}
-      >
-        <div>Billed: €{point.billedRevenue.toLocaleString()}</div>
-        <div>Hours: {point.billedHours.toFixed(1)}h</div>
-        <div>Standard: €{point.standardRateValue.toLocaleString()}</div>
-      </div>
     </div>
   );
 }

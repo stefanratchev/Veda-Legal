@@ -69,6 +69,7 @@ export interface MonthlyTrendPoint {
   utilization: number;  // percentage 0-100
   billedRevenue: number;     // grand total from finalized SDs
   standardRateValue: number; // potential revenue at standard rates
+  billedHours: number;       // hours billed on finalized SDs bucketed by periodEnd
   realization: number;       // percentage: billedRevenue / standardRateValue * 100
   byEmployee: {
     id: string;

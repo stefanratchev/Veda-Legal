@@ -50,6 +50,53 @@ export function calculateUtilization(
 }
 
 /**
+ * Compute total billed hours and total standard-rate value for a single
+ * serialized service description's topics array.
+ *
+ * - billedHours: sum of hours across all line items (HOURLY + FIXED both contribute), per D-01
+ * - standardValue: hours * rate, where rate is topic.hourlyRate (HOURLY) or
+ *   clientHourlyRate (FIXED). When rate is missing, that line contributes 0
+ *   to standardValue but still contributes to billedHours.
+ *
+ * Line items with hours <= 0 are skipped. For TE-linked items, originalHours
+ * is preferred over hours (matches the legacy inline loop at trend-utils.ts:250).
+ *
+ * Exported for unit testing — getTrendData uses this internally per SD.
+ */
+export function accumulateBilledHoursForSd(
+  topics: Array<{
+    pricingMode: string;
+    hourlyRate: number | null;
+    lineItems: Array<{
+      timeEntryId: string | null;
+      originalHours?: number | null;
+      hours: number | null;
+    }>;
+  }>,
+  clientHourlyRate: number | null
+): { standardValue: number; billedHours: number } {
+  let standardValue = 0;
+  let billedHours = 0;
+  for (const topic of topics) {
+    for (const item of topic.lineItems) {
+      const hours = item.timeEntryId
+        ? (item.originalHours ?? item.hours ?? 0)
+        : (item.hours ?? 0);
+      if (hours <= 0) continue;
+
+      billedHours += hours;
+
+      if (topic.pricingMode === "HOURLY" && topic.hourlyRate) {
+        standardValue += hours * topic.hourlyRate;
+      } else if (topic.pricingMode === "FIXED" && clientHourlyRate) {
+        standardValue += hours * clientHourlyRate;
+      }
+    }
+  }
+  return { standardValue, billedHours };
+}
+
+/**
  * Fetch and aggregate the last 12 months of time entry data for the trend dashboard.
  */
 export async function getTrendData(): Promise<TrendResponse> {
@@ -217,9 +264,12 @@ export async function getTrendData(): Promise<TrendResponse> {
     },
   });
 
-  // Compute billed revenue and standard rate value per month, bucketed by
-  // the SD's periodEnd so revenue lands in the month the work covered.
-  const billingMap = new Map<string, { billedRevenue: number; standardRateValue: number }>();
+  // Compute billed revenue, standard rate value, and billed hours per month,
+  // bucketed by the SD's periodEnd so revenue lands in the month the work covered.
+  const billingMap = new Map<
+    string,
+    { billedRevenue: number; standardRateValue: number; billedHours: number }
+  >();
   // Per-employee billed revenue keyed by "YYYY-MM-01:employeeName"
   const employeeBilledMap = new Map<string, number>();
 
@@ -242,26 +292,16 @@ export async function getTrendData(): Promise<TrendResponse> {
         )
       : calculateGrandTotal(sd.topics, sd.discountType, sd.discountValue);
 
-    // Compute standard rate value (denominator)
-    let standardValue = 0;
-    for (const topic of sd.topics) {
-      for (const item of topic.lineItems) {
-        const hours = item.timeEntryId
-          ? (item.originalHours ?? item.hours ?? 0) // time entry hours
-          : (item.hours ?? 0); // manual line item
-        if (hours <= 0) continue;
+    // Compute standard rate value (denominator) + billed hours via shared helper
+    const { standardValue, billedHours: billedHoursForSd } =
+      accumulateBilledHoursForSd(sd.topics, sd.client.hourlyRate ?? null);
 
-        if (topic.pricingMode === "HOURLY" && topic.hourlyRate) {
-          standardValue += hours * topic.hourlyRate;
-        } else if (topic.pricingMode === "FIXED" && sd.client.hourlyRate) {
-          standardValue += hours * sd.client.hourlyRate;
-        }
-      }
-    }
-
-    const entry = billingMap.get(bucketMonth) ?? { billedRevenue: 0, standardRateValue: 0 };
+    const entry =
+      billingMap.get(bucketMonth) ??
+      { billedRevenue: 0, standardRateValue: 0, billedHours: 0 };
     entry.billedRevenue += grandTotal;
     entry.standardRateValue += standardValue;
+    entry.billedHours += billedHoursForSd;
     billingMap.set(bucketMonth, entry);
 
     // Attribute billed revenue to employees proportionally by their standard-rate contribution
@@ -313,6 +353,7 @@ export async function getTrendData(): Promise<TrendResponse> {
     const billing = billingMap.get(monthStart);
     const billedRevenue = Math.round((billing?.billedRevenue ?? 0) * 100) / 100;
     const standardRateValue = Math.round((billing?.standardRateValue ?? 0) * 100) / 100;
+    const billedHours = Math.round((billing?.billedHours ?? 0) * 100) / 100;
 
     return {
       month: monthStart.slice(0, 7), // "YYYY-MM"
@@ -324,6 +365,7 @@ export async function getTrendData(): Promise<TrendResponse> {
       utilization: calculateUtilization(regularHours, totalHours),
       billedRevenue,
       standardRateValue,
+      billedHours,
       realization: standardRateValue > 0 ? Math.round((billedRevenue / standardRateValue) * 100) : 0,
       byEmployee: (employeeMap.get(monthStart) ?? []).map((emp) => ({
         ...emp,

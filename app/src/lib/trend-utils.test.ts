@@ -8,6 +8,7 @@ import {
   generateLast12Months,
   formatMonthLabel,
   calculateUtilization,
+  accumulateBilledHoursForSd,
 } from "./trend-utils";
 
 describe("generateLast12Months", () => {
@@ -75,5 +76,129 @@ describe("calculateUtilization", () => {
 
   it("returns 100 when all hours are regular", () => {
     expect(calculateUtilization(100, 100)).toBe(100);
+  });
+});
+
+describe("accumulateBilledHoursForSd", () => {
+  it("counts HOURLY line item hours and computes standardValue using topic.hourlyRate", () => {
+    const result = accumulateBilledHoursForSd(
+      [
+        {
+          pricingMode: "HOURLY",
+          hourlyRate: 200,
+          lineItems: [
+            { timeEntryId: "te1", originalHours: 2, hours: 2 },
+            { timeEntryId: "te2", originalHours: 3, hours: 3 },
+          ],
+        },
+      ],
+      150 // client.hourlyRate (unused for HOURLY topics)
+    );
+    expect(result.billedHours).toBe(5);
+    expect(result.standardValue).toBe(5 * 200);
+  });
+
+  it("counts FIXED line item hours and computes standardValue using client.hourlyRate", () => {
+    const result = accumulateBilledHoursForSd(
+      [
+        {
+          pricingMode: "FIXED",
+          hourlyRate: null, // FIXED topics don't carry an hourly rate
+          lineItems: [{ timeEntryId: "te1", originalHours: 4, hours: 4 }],
+        },
+      ],
+      150 // client.hourlyRate
+    );
+    expect(result.billedHours).toBe(4);
+    expect(result.standardValue).toBe(4 * 150);
+  });
+
+  it("counts billedHours for FIXED topics even when client.hourlyRate is missing (no standardValue contribution)", () => {
+    const result = accumulateBilledHoursForSd(
+      [
+        {
+          pricingMode: "FIXED",
+          hourlyRate: null,
+          lineItems: [{ timeEntryId: "te1", originalHours: 2, hours: 2 }],
+        },
+      ],
+      null // no client rate
+    );
+    expect(result.billedHours).toBe(2); // hours still counted
+    expect(result.standardValue).toBe(0); // no rate -> no standard value
+  });
+
+  it("skips line items with hours <= 0", () => {
+    const result = accumulateBilledHoursForSd(
+      [
+        {
+          pricingMode: "HOURLY",
+          hourlyRate: 200,
+          lineItems: [
+            { timeEntryId: "te1", originalHours: 0, hours: 0 },
+            { timeEntryId: "te2", originalHours: -1, hours: -1 },
+            { timeEntryId: "te3", originalHours: 1, hours: 1 },
+          ],
+        },
+      ],
+      150
+    );
+    expect(result.billedHours).toBe(1);
+    expect(result.standardValue).toBe(200);
+  });
+
+  it("prefers originalHours over hours when both are present (TE-linked items)", () => {
+    const result = accumulateBilledHoursForSd(
+      [
+        {
+          pricingMode: "HOURLY",
+          hourlyRate: 100,
+          lineItems: [
+            // TE was 5h, billed at 3h after edit — originalHours wins
+            { timeEntryId: "te1", originalHours: 5, hours: 3 },
+          ],
+        },
+      ],
+      150
+    );
+    expect(result.billedHours).toBe(5);
+    expect(result.standardValue).toBe(500);
+  });
+
+  it("falls back to hours when timeEntryId is null (manual line items)", () => {
+    const result = accumulateBilledHoursForSd(
+      [
+        {
+          pricingMode: "HOURLY",
+          hourlyRate: 100,
+          lineItems: [
+            { timeEntryId: null, originalHours: undefined, hours: 2.5 },
+          ],
+        },
+      ],
+      150
+    );
+    expect(result.billedHours).toBe(2.5);
+    expect(result.standardValue).toBe(250);
+  });
+
+  it("aggregates across multiple topics", () => {
+    const result = accumulateBilledHoursForSd(
+      [
+        {
+          pricingMode: "HOURLY",
+          hourlyRate: 200,
+          lineItems: [{ timeEntryId: "te1", originalHours: 2, hours: 2 }],
+        },
+        {
+          pricingMode: "FIXED",
+          hourlyRate: null,
+          lineItems: [{ timeEntryId: "te2", originalHours: 3, hours: 3 }],
+        },
+      ],
+      150
+    );
+    expect(result.billedHours).toBe(5);
+    expect(result.standardValue).toBe(2 * 200 + 3 * 150);
   });
 });

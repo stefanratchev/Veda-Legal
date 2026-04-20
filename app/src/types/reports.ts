@@ -76,6 +76,7 @@ export interface MonthlyTrendPoint {
     name: string;
     hours: number;
     billableHours: number;
+    billableRevenue: number; // billableHours * client hourlyRate (theoretical)
     billedRevenue: number;
     billedHours: number; // hours billed on finalized SDs bucketed by periodEnd
   }[];

@@ -136,6 +136,7 @@ export async function getTrendData(): Promise<TrendResponse> {
       userName: users.name,
       hours: sql<string>`COALESCE(SUM(${timeEntries.hours}), 0)`,
       billableHours: sql<string>`COALESCE(SUM(CASE WHEN ${clients.clientType} = 'REGULAR' AND ${timeEntries.isWrittenOff} = false THEN ${timeEntries.hours} ELSE 0 END), 0)`,
+      billableRevenue: sql<string>`COALESCE(SUM(CASE WHEN ${clients.clientType} = 'REGULAR' AND ${timeEntries.isWrittenOff} = false THEN ${timeEntries.hours} * ${clients.hourlyRate} ELSE 0 END), 0)`,
     })
     .from(timeEntries)
     .innerJoin(users, eq(timeEntries.userId, users.id))
@@ -171,7 +172,7 @@ export async function getTrendData(): Promise<TrendResponse> {
 
   const employeeMap = new Map<
     string,
-    { id: string; name: string; hours: number; billableHours: number }[]
+    { id: string; name: string; hours: number; billableHours: number; billableRevenue: number }[]
   >();
 
   for (const row of employeeRows) {
@@ -184,6 +185,7 @@ export async function getTrendData(): Promise<TrendResponse> {
       name: row.userName || "Unknown",
       hours: Number(row.hours),
       billableHours: Number(row.billableHours),
+      billableRevenue: Number(row.billableRevenue),
     });
   }
 

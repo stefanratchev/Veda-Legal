@@ -272,6 +272,8 @@ export async function getTrendData(): Promise<TrendResponse> {
   >();
   // Per-employee billed revenue keyed by "YYYY-MM-01:employeeName"
   const employeeBilledMap = new Map<string, number>();
+  // Per-employee billed hours keyed by "YYYY-MM-01:employeeName"
+  const employeeBilledHoursMap = new Map<string, number>();
 
   for (const rawSd of finalizedSDs) {
     if (!rawSd.periodEnd) continue;
@@ -326,6 +328,15 @@ export async function getTrendData(): Promise<TrendResponse> {
         const existing = empStandardValues.get(empName) ?? { name: empName, value: 0 };
         existing.value += hours * rate;
         empStandardValues.set(empName, existing);
+
+        // Accumulate billed hours per employee per bucket month. Uses the
+        // same `originalHours ?? hours` source as the standard-value tally,
+        // so billedHours and billedRevenue stay consistent per employee.
+        const empBilledHoursKey = `${bucketMonth}:${empName}`;
+        employeeBilledHoursMap.set(
+          empBilledHoursKey,
+          (employeeBilledHoursMap.get(empBilledHoursKey) ?? 0) + hours,
+        );
       }
     }
 
@@ -370,6 +381,7 @@ export async function getTrendData(): Promise<TrendResponse> {
       byEmployee: (employeeMap.get(monthStart) ?? []).map((emp) => ({
         ...emp,
         billedRevenue: Math.round((employeeBilledMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
+        billedHours: Math.round((employeeBilledHoursMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
       })),
     };
   });

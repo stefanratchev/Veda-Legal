@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { TrendChart } from "./charts/TrendChart";
 import { RevenueChart } from "./charts/RevenueChart";
+import { PricingHealthChart } from "./charts/PricingHealthChart";
 import { EmployeeTrendTable, type EmployeeHoursMode } from "./charts/EmployeeTrendTable";
 import type { TrendResponse } from "@/types/reports";
 
@@ -116,6 +117,14 @@ export function OverviewTab() {
           Billed Revenue (12 Months)
         </h3>
         <RevenueChart data={trendData.months} />
+      </div>
+
+      {/* Pricing Health Chart */}
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+        <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
+          Pricing Health (12 Months)
+        </h3>
+        <PricingHealthChart data={trendData.months} />
       </div>
 
       {/* Employee Table */}

@@ -137,6 +137,7 @@ export function PricingHealthChart({ data }: PricingHealthChartProps) {
           cursor={{ fill: "var(--bg-surface)", fillOpacity: 0.5 }}
         />
         <Legend
+          itemSorter={(item) => (item.dataKey === "lostRevenue" ? 0 : 1)}
           formatter={(value: string) => (
             <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>
               {value}

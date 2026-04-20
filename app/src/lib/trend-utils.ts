@@ -140,12 +140,15 @@ export async function getTrendData(): Promise<TrendResponse> {
     });
   }
 
-  // Query 3: Finalized service descriptions in the 12-month window (for billing metrics)
+  // Query 3: Finalized service descriptions whose billing period ends in the
+  // 12-month window. Bucketing by `periodEnd` (not `finalizedAt`) keeps
+  // revenue aligned with when the work was performed, not when the partner
+  // clicked Finalize.
   const finalizedSDs = await db.query.serviceDescriptions.findMany({
     where: and(
       eq(serviceDescriptions.status, "FINALIZED"),
-      gte(serviceDescriptions.finalizedAt, startDate),
-      lte(serviceDescriptions.finalizedAt, endDate + "T23:59:59.999"),
+      gte(serviceDescriptions.periodEnd, startDate),
+      lte(serviceDescriptions.periodEnd, endDate),
     ),
     columns: {
       id: true,
@@ -214,14 +217,15 @@ export async function getTrendData(): Promise<TrendResponse> {
     },
   });
 
-  // Compute billed revenue and standard rate value per month (by finalizedAt)
+  // Compute billed revenue and standard rate value per month, bucketed by
+  // the SD's periodEnd so revenue lands in the month the work covered.
   const billingMap = new Map<string, { billedRevenue: number; standardRateValue: number }>();
   // Per-employee billed revenue keyed by "YYYY-MM-01:employeeName"
   const employeeBilledMap = new Map<string, number>();
 
   for (const rawSd of finalizedSDs) {
-    if (!rawSd.finalizedAt) continue;
-    const finalizedMonth = rawSd.finalizedAt.slice(0, 7) + "-01"; // "YYYY-MM-01"
+    if (!rawSd.periodEnd) continue;
+    const bucketMonth = rawSd.periodEnd.slice(0, 7) + "-01"; // "YYYY-MM-01"
 
     const sd = serializeServiceDescription(rawSd as Parameters<typeof serializeServiceDescription>[0]);
 
@@ -255,10 +259,10 @@ export async function getTrendData(): Promise<TrendResponse> {
       }
     }
 
-    const entry = billingMap.get(finalizedMonth) ?? { billedRevenue: 0, standardRateValue: 0 };
+    const entry = billingMap.get(bucketMonth) ?? { billedRevenue: 0, standardRateValue: 0 };
     entry.billedRevenue += grandTotal;
     entry.standardRateValue += standardValue;
-    billingMap.set(finalizedMonth, entry);
+    billingMap.set(bucketMonth, entry);
 
     // Attribute billed revenue to employees proportionally by their standard-rate contribution
     // First compute per-employee standard value for this SD
@@ -292,7 +296,7 @@ export async function getTrendData(): Promise<TrendResponse> {
         const proportion = emp.value / totalStandard;
         const allocated = grandTotal * proportion;
 
-        const empKey = `${finalizedMonth}:${empName}`;
+        const empKey = `${bucketMonth}:${empName}`;
         const empEntry = employeeBilledMap.get(empKey) ?? 0;
         employeeBilledMap.set(empKey, empEntry + allocated);
       }

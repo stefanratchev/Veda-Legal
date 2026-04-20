@@ -9,7 +9,44 @@ interface EmployeeRow {
   monthlyValues: number[]; // one per month
 }
 
-export type EmployeeHoursMode = "billable" | "total" | "billed";
+export type EmployeeHoursMode =
+  | "billableHours"
+  | "billedHours"
+  | "unbillableHours"
+  | "billableRevenue"
+  | "billedRevenue";
+
+const EUR_MODES: readonly EmployeeHoursMode[] = ["billableRevenue", "billedRevenue"];
+// Unbillable uses a warning highlight — high value = more time that couldn't be billed.
+const WARN_MODES: readonly EmployeeHoursMode[] = ["unbillableHours"];
+
+function formatValue(value: number, mode: EmployeeHoursMode): string {
+  if (value <= 0) return "—";
+  if (EUR_MODES.includes(mode)) {
+    return value >= 1000
+      ? `€${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}K`
+      : `€${Math.round(value)}`;
+  }
+  return `${Math.round(value)}h`;
+}
+
+function pickValue(
+  emp: MonthlyTrendPoint["byEmployee"][number],
+  mode: EmployeeHoursMode,
+): number {
+  switch (mode) {
+    case "billableHours":
+      return emp.billableHours;
+    case "billedHours":
+      return emp.billedHours;
+    case "unbillableHours":
+      return Math.max(0, emp.hours - emp.billableHours);
+    case "billableRevenue":
+      return emp.billableRevenue;
+    case "billedRevenue":
+      return emp.billedRevenue;
+  }
+}
 
 interface EmployeeTrendTableProps {
   data: MonthlyTrendPoint[];
@@ -20,7 +57,6 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
   const { rows, monthLabels, topPerMonth } = useMemo(() => {
     const labels = data.map((m) => m.label);
 
-    // Collect per-employee billable hours by month
     const employeeMap = new Map<string, {
       id: string;
       name: string;
@@ -39,18 +75,12 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
           });
         }
         const entry = employeeMap.get(emp.id)!;
-        const hours =
-          mode === "billable"
-            ? emp.billableHours
-            : mode === "billed"
-              ? emp.billedHours
-              : emp.hours;
-        entry.monthly[i] = hours;
-        entry.total += hours;
+        const value = pickValue(emp, mode);
+        entry.monthly[i] = value;
+        entry.total += value;
       }
     }
 
-    // Sort by total descending
     const sorted = Array.from(employeeMap.values())
       .sort((a, b) => b.total - a.total)
       .map((emp): EmployeeRow => ({
@@ -59,21 +89,25 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
         monthlyValues: emp.monthly,
       }));
 
-    // Find top performer per month
+    // Max per month. For unbillable this gets a red tint; for others, green.
     const tops: (string | null)[] = labels.map((_, monthIdx) => {
-      let maxHours = 0;
+      let maxValue = 0;
       let topId: string | null = null;
       for (const row of sorted) {
-        if (row.monthlyValues[monthIdx] > maxHours) {
-          maxHours = row.monthlyValues[monthIdx];
+        if (row.monthlyValues[monthIdx] > maxValue) {
+          maxValue = row.monthlyValues[monthIdx];
           topId = row.id;
         }
       }
-      return maxHours > 0 ? topId : null;
+      return maxValue > 0 ? topId : null;
     });
 
     return { rows: sorted, monthLabels: labels, topPerMonth: tops };
   }, [data, mode]);
+
+  const highlightBg = WARN_MODES.includes(mode)
+    ? "rgba(239, 68, 68, 0.30)" // red-500 @ 30%
+    : "rgba(74, 157, 110, 0.35)"; // existing green
 
   if (rows.length === 0) {
     return (
@@ -114,11 +148,11 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
                     key={i}
                     className="text-right py-2 px-1.5 tabular-nums"
                     style={{
-                      backgroundColor: isTop ? "rgba(74, 157, 110, 0.35)" : "transparent",
+                      backgroundColor: isTop ? highlightBg : "transparent",
                       color: value > 0 ? "var(--text-primary)" : "var(--text-muted)",
                     }}
                   >
-                    {value > 0 ? `${Math.round(value)}h` : "—"}
+                    {formatValue(value, mode)}
                   </td>
                 );
               })}

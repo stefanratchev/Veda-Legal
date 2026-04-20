@@ -14,13 +14,61 @@ function isAllEmpty(data: TrendResponse): boolean {
   return data.months.every((m) => m.totalHours === 0);
 }
 
+interface ModeOption {
+  value: EmployeeHoursMode;
+  label: string;
+}
+
+const HOURS_MODE_OPTIONS: ModeOption[] = [
+  { value: "billableHours", label: "Billable" },
+  { value: "billedHours", label: "Billed" },
+  { value: "unbillableHours", label: "Unbillable" },
+];
+
+const EUR_MODE_OPTIONS: ModeOption[] = [
+  { value: "billableRevenue", label: "Billable" },
+  { value: "billedRevenue", label: "Billed" },
+];
+
+interface EmployeeModeGroupProps {
+  label: string;
+  options: ModeOption[];
+  current: EmployeeHoursMode;
+  onChange: (mode: EmployeeHoursMode) => void;
+}
+
+function EmployeeModeGroup({ label, options, current, onChange }: EmployeeModeGroupProps) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+        {label}
+      </span>
+      <div className="flex items-center gap-1 bg-[var(--bg-surface)] rounded p-0.5">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+              current === opt.value
+                ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function OverviewTab() {
   const [trendData, setTrendData] = useState<TrendResponse | null>(
     cachedTrendData
   );
   const [loading, setLoading] = useState(cachedTrendData === null);
   const [error, setError] = useState<string | null>(null);
-  const [employeeMode, setEmployeeMode] = useState<EmployeeHoursMode>("billable");
+  const [employeeMode, setEmployeeMode] = useState<EmployeeHoursMode>("billableHours");
 
   useEffect(() => {
     if (cachedTrendData !== null) return;
@@ -129,41 +177,23 @@ export function OverviewTab() {
 
       {/* Employee Table */}
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
           <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
             By Employee (12 Months)
           </h3>
-          <div className="flex items-center gap-1 bg-[var(--bg-surface)] rounded p-0.5">
-            <button
-              onClick={() => setEmployeeMode("billable")}
-              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
-                employeeMode === "billable"
-                  ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-              }`}
-            >
-              Billable
-            </button>
-            <button
-              onClick={() => setEmployeeMode("billed")}
-              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
-                employeeMode === "billed"
-                  ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-              }`}
-            >
-              Billed
-            </button>
-            <button
-              onClick={() => setEmployeeMode("total")}
-              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
-                employeeMode === "total"
-                  ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-              }`}
-            >
-              Total
-            </button>
+          <div className="flex items-center gap-4 flex-wrap">
+            <EmployeeModeGroup
+              label="Hours"
+              options={HOURS_MODE_OPTIONS}
+              current={employeeMode}
+              onChange={setEmployeeMode}
+            />
+            <EmployeeModeGroup
+              label="€"
+              options={EUR_MODE_OPTIONS}
+              current={employeeMode}
+              onChange={setEmployeeMode}
+            />
           </div>
         </div>
         <EmployeeTrendTable data={trendData.months} mode={employeeMode} />

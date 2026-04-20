@@ -10,14 +10,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { formatEur } from "./chart-format";
 import type { MonthlyTrendPoint } from "@/types/reports";
-
-function formatEur(value: number): string {
-  if (value >= 1000) {
-    return `€${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}K`;
-  }
-  return `€${Math.round(value)}`;
-}
 
 interface RevenueTooltipProps {
   active?: boolean;

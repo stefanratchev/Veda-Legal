@@ -145,6 +145,16 @@ export function OverviewTab() {
               Billable
             </button>
             <button
+              onClick={() => setEmployeeMode("billed")}
+              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+                employeeMode === "billed"
+                  ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              }`}
+            >
+              Billed
+            </button>
+            <button
               onClick={() => setEmployeeMode("total")}
               className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
                 employeeMode === "total"

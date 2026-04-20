@@ -9,7 +9,7 @@ interface EmployeeRow {
   monthlyValues: number[]; // one per month
 }
 
-export type EmployeeHoursMode = "billable" | "total";
+export type EmployeeHoursMode = "billable" | "total" | "billed";
 
 interface EmployeeTrendTableProps {
   data: MonthlyTrendPoint[];
@@ -39,7 +39,12 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
           });
         }
         const entry = employeeMap.get(emp.id)!;
-        const hours = mode === "billable" ? emp.billableHours : emp.hours;
+        const hours =
+          mode === "billable"
+            ? emp.billableHours
+            : mode === "billed"
+              ? emp.billedHours
+              : emp.hours;
         entry.monthly[i] = hours;
         entry.total += hours;
       }

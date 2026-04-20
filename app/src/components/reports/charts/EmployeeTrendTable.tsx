@@ -61,7 +61,6 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
       id: string;
       name: string;
       monthly: number[];
-      total: number;
     }>();
 
     for (let i = 0; i < data.length; i++) {
@@ -71,18 +70,22 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
             id: emp.id,
             name: emp.name,
             monthly: new Array(data.length).fill(0),
-            total: 0,
           });
         }
         const entry = employeeMap.get(emp.id)!;
-        const value = pickValue(emp, mode);
-        entry.monthly[i] = value;
-        entry.total += value;
+        entry.monthly[i] = pickValue(emp, mode);
       }
     }
 
+    // Sort by most-recent-month value (descending), alphabetical tie-break.
+    // Prioritizes "who's leading right now" over 12-month lifetime totals.
+    const lastIdx = data.length - 1;
     const sorted = Array.from(employeeMap.values())
-      .sort((a, b) => b.total - a.total)
+      .sort((a, b) => {
+        const aLast = a.monthly[lastIdx] ?? 0;
+        const bLast = b.monthly[lastIdx] ?? 0;
+        return (bLast - aLast) || a.name.localeCompare(b.name);
+      })
       .map((emp): EmployeeRow => ({
         id: emp.id,
         name: emp.name,

@@ -17,6 +17,7 @@ function makePoint(overrides: Partial<MonthlyTrendPoint>): MonthlyTrendPoint {
     billedHours: 0,
     realization: 0,
     byEmployee: [],
+    byClient: [],
     ...overrides,
   };
 }

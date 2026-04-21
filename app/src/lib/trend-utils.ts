@@ -221,6 +221,10 @@ export function allocateSdToBuckets(
   empBilledByMonth: Map<string, number>;
   empBilledHoursByMonth: Map<string, number>;
   empStandardByMonth: Map<string, number>;
+  clientBilledByMonth: Map<string, number>;
+  clientBilledHoursByMonth: Map<string, number>;
+  clientStandardByMonth: Map<string, number>;
+  clientNames: Map<string, string>;
 } {
   const items = buildSdLineItems(sd);
   const fallbackDate = pickFallbackDate(items, periodEnd);
@@ -266,6 +270,14 @@ export function allocateSdToBuckets(
   const empBilledByMonth = new Map<string, number>();
   const empBilledHoursByMonth = new Map<string, number>();
   const empStandardByMonth = new Map<string, number>();
+  const clientBilledByMonth = new Map<string, number>();
+  const clientBilledHoursByMonth = new Map<string, number>();
+  const clientStandardByMonth = new Map<string, number>();
+  const clientNames = new Map<string, string>();
+
+  const clientId = sd.client.id;
+  const clientName = sd.client.name;
+  clientNames.set(clientId, clientName);
 
   const ensureBucket = (month: string) => {
     let e = byMonth.get(month);
@@ -280,6 +292,13 @@ export function allocateSdToBuckets(
     const entry = ensureBucket(i.bucketMonth);
     // Standard value: all items contribute (waived too — they are lost revenue).
     entry.standardRateValue += i.standardValue;
+    // Per-client standard value mirrors firm-level: include waived so
+    // per-client realization is comparable with firm-level.
+    const clientStdKey = `${i.bucketMonth}:${clientId}`;
+    clientStandardByMonth.set(
+      clientStdKey,
+      (clientStandardByMonth.get(clientStdKey) ?? 0) + i.standardValue,
+    );
     // Per-employee standard value mirrors firm-level: include waived so
     // per-employee realization is comparable with firm-level.
     if (i.employeeName) {
@@ -297,6 +316,16 @@ export function allocateSdToBuckets(
       const revShare = (i.standardValue / nonWaivedTotal) * nonRetainerGrandTotal;
       entry.billedRevenue += revShare;
 
+      const clientKey = `${i.bucketMonth}:${clientId}`;
+      clientBilledByMonth.set(
+        clientKey,
+        (clientBilledByMonth.get(clientKey) ?? 0) + revShare,
+      );
+      clientBilledHoursByMonth.set(
+        clientKey,
+        (clientBilledHoursByMonth.get(clientKey) ?? 0) + i.hours,
+      );
+
       if (i.employeeName) {
         const empKey = `${i.bucketMonth}:${i.employeeName}`;
         empBilledByMonth.set(empKey, (empBilledByMonth.get(empKey) ?? 0) + revShare);
@@ -313,15 +342,28 @@ export function allocateSdToBuckets(
   // The pro-rata loop above had no non-waived base, so attribute the
   // orphaned revenue to the periodEnd bucket.
   if (nonWaivedTotal <= 0 && nonRetainerGrandTotal > 0) {
-    const entry = ensureBucket(periodEnd.slice(0, 7) + "-01");
+    const fallbackBucket = periodEnd.slice(0, 7) + "-01";
+    const entry = ensureBucket(fallbackBucket);
     entry.billedRevenue += nonRetainerGrandTotal;
+    const clientKey = `${fallbackBucket}:${clientId}`;
+    clientBilledByMonth.set(
+      clientKey,
+      (clientBilledByMonth.get(clientKey) ?? 0) + nonRetainerGrandTotal,
+    );
   }
 
   // Retainer fee: entirely to the dominant month. Per-employee allocation
-  // uses the SD's non-waived standard-value share.
+  // uses the SD's non-waived standard-value share. Per-client is trivial —
+  // the whole retainer goes to the SD's one client.
   if (retainerPortion > 0) {
     const dominantMonth = pickDominantMonth(itemsWithBucket, periodEnd);
     ensureBucket(dominantMonth).billedRevenue += retainerPortion;
+
+    const clientKey = `${dominantMonth}:${clientId}`;
+    clientBilledByMonth.set(
+      clientKey,
+      (clientBilledByMonth.get(clientKey) ?? 0) + retainerPortion,
+    );
 
     if (nonWaivedTotal > 0) {
       const perEmpShares = new Map<string, number>();
@@ -343,7 +385,78 @@ export function allocateSdToBuckets(
     }
   }
 
-  return { byMonth, empBilledByMonth, empBilledHoursByMonth, empStandardByMonth };
+  return {
+    byMonth,
+    empBilledByMonth,
+    empBilledHoursByMonth,
+    empStandardByMonth,
+    clientBilledByMonth,
+    clientBilledHoursByMonth,
+    clientStandardByMonth,
+    clientNames,
+  };
+}
+
+/**
+ * Merge Query-4 (time-entry-based) per-client rows with SD-allocation-based
+ * per-client billed/standard maps for one month. Also includes any clientId
+ * that has SD allocations in this month but no time entries (e.g. an SD
+ * finalized in this month whose entries all fall in an earlier month).
+ */
+function buildByClientForMonth(
+  monthStart: string,
+  clientMap: Map<
+    string,
+    { id: string; name: string; hours: number; billableHours: number; billableRevenue: number }[]
+  >,
+  clientBilledMap: Map<string, number>,
+  clientBilledHoursMap: Map<string, number>,
+  clientStandardMap: Map<string, number>,
+  clientNamesMap: Map<string, string>,
+): import("@/types/reports").MonthlyTrendPoint["byClient"] {
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const rows = clientMap.get(monthStart) ?? [];
+  const seenIds = new Set<string>();
+  const out = rows.map((c) => {
+    seenIds.add(c.id);
+    return {
+      ...c,
+      billedRevenue: round(clientBilledMap.get(`${monthStart}:${c.id}`) ?? 0),
+      billedHours: round(clientBilledHoursMap.get(`${monthStart}:${c.id}`) ?? 0),
+      standardRateValue: round(clientStandardMap.get(`${monthStart}:${c.id}`) ?? 0),
+    };
+  });
+
+  // Sweep SD-allocation maps for any clients that have billed/standard values
+  // in this month but no matching time entries. This can happen when an SD's
+  // period covers earlier months or when items are manual/undated.
+  const prefix = `${monthStart}:`;
+  const extraClientIds = new Set<string>();
+  for (const key of clientBilledMap.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    const id = key.slice(prefix.length);
+    if (!seenIds.has(id)) extraClientIds.add(id);
+  }
+  for (const key of clientStandardMap.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    const id = key.slice(prefix.length);
+    if (!seenIds.has(id)) extraClientIds.add(id);
+  }
+
+  for (const id of extraClientIds) {
+    out.push({
+      id,
+      name: clientNamesMap.get(id) ?? "Unknown",
+      hours: 0,
+      billableHours: 0,
+      billableRevenue: 0,
+      billedRevenue: round(clientBilledMap.get(`${monthStart}:${id}`) ?? 0),
+      billedHours: round(clientBilledHoursMap.get(`${monthStart}:${id}`) ?? 0),
+      standardRateValue: round(clientStandardMap.get(`${monthStart}:${id}`) ?? 0),
+    });
+  }
+
+  return out;
 }
 
 /**
@@ -399,6 +512,37 @@ export async function getTrendData(): Promise<TrendResponse> {
     )
     .orderBy(sql`month`);
 
+  // Query 4: Per-client monthly aggregation, REGULAR clients only.
+  // Mirrors Query 2 but grouped by clientId + client name. Excludes
+  // INTERNAL/MANAGEMENT clients since only REGULAR clients are relevant
+  // for the By Client trend view.
+  const clientRows = await db
+    .select({
+      month: sql<string>`DATE_TRUNC('month', ${timeEntries.date})::date`.as(
+        "month"
+      ),
+      clientId: timeEntries.clientId,
+      clientName: clients.name,
+      hours: sql<string>`COALESCE(SUM(${timeEntries.hours}), 0)`,
+      billableHours: sql<string>`COALESCE(SUM(CASE WHEN ${clients.clientType} = 'REGULAR' AND ${timeEntries.isWrittenOff} = false THEN ${timeEntries.hours} ELSE 0 END), 0)`,
+      billableRevenue: sql<string>`COALESCE(SUM(CASE WHEN ${clients.clientType} = 'REGULAR' AND ${timeEntries.isWrittenOff} = false THEN ${timeEntries.hours} * ${clients.hourlyRate} ELSE 0 END), 0)`,
+    })
+    .from(timeEntries)
+    .innerJoin(clients, eq(timeEntries.clientId, clients.id))
+    .where(
+      and(
+        gte(timeEntries.date, startDate),
+        lte(timeEntries.date, endDate),
+        eq(clients.clientType, "REGULAR"),
+      ),
+    )
+    .groupBy(
+      sql`DATE_TRUNC('month', ${timeEntries.date})::date`,
+      timeEntries.clientId,
+      clients.name,
+    )
+    .orderBy(sql`month`);
+
   // Build lookup maps keyed by "YYYY-MM-01" string
   const firmMap = new Map<
     string,
@@ -433,6 +577,25 @@ export async function getTrendData(): Promise<TrendResponse> {
     employeeMap.get(key)!.push({
       id: row.userId,
       name: row.userName || "Unknown",
+      hours: Number(row.hours),
+      billableHours: Number(row.billableHours),
+      billableRevenue: Number(row.billableRevenue),
+    });
+  }
+
+  const clientMap = new Map<
+    string,
+    { id: string; name: string; hours: number; billableHours: number; billableRevenue: number }[]
+  >();
+
+  for (const row of clientRows) {
+    const key = String(row.month);
+    if (!clientMap.has(key)) {
+      clientMap.set(key, []);
+    }
+    clientMap.get(key)!.push({
+      id: row.clientId,
+      name: row.clientName || "Unknown",
       hours: Number(row.hours),
       billableHours: Number(row.billableHours),
       billableRevenue: Number(row.billableRevenue),
@@ -524,6 +687,11 @@ export async function getTrendData(): Promise<TrendResponse> {
   const employeeBilledMap = new Map<string, number>();
   const employeeBilledHoursMap = new Map<string, number>();
   const employeeStandardMap = new Map<string, number>();
+  // Per-client billed revenue/hours + standard value keyed by "YYYY-MM-01:clientId".
+  const clientBilledMap = new Map<string, number>();
+  const clientBilledHoursMap = new Map<string, number>();
+  const clientStandardMap = new Map<string, number>();
+  const clientNamesMap = new Map<string, string>();
 
   for (const rawSd of finalizedSDs) {
     if (!rawSd.periodEnd) continue;
@@ -554,6 +722,21 @@ export async function getTrendData(): Promise<TrendResponse> {
     }
     for (const [key, val] of allocation.empStandardByMonth) {
       employeeStandardMap.set(key, (employeeStandardMap.get(key) ?? 0) + val);
+    }
+    for (const [key, val] of allocation.clientBilledByMonth) {
+      clientBilledMap.set(key, (clientBilledMap.get(key) ?? 0) + val);
+    }
+    for (const [key, val] of allocation.clientBilledHoursByMonth) {
+      clientBilledHoursMap.set(
+        key,
+        (clientBilledHoursMap.get(key) ?? 0) + val,
+      );
+    }
+    for (const [key, val] of allocation.clientStandardByMonth) {
+      clientStandardMap.set(key, (clientStandardMap.get(key) ?? 0) + val);
+    }
+    for (const [id, name] of allocation.clientNames) {
+      clientNamesMap.set(id, name);
     }
   }
 
@@ -587,6 +770,14 @@ export async function getTrendData(): Promise<TrendResponse> {
         billedHours: Math.round((employeeBilledHoursMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
         standardRateValue: Math.round((employeeStandardMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
       })),
+      byClient: buildByClientForMonth(
+        monthStart,
+        clientMap,
+        clientBilledMap,
+        clientBilledHoursMap,
+        clientStandardMap,
+        clientNamesMap,
+      ),
     };
   });
 

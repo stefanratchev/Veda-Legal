@@ -410,8 +410,15 @@ describe("allocateSdToBuckets", () => {
       ],
     });
 
-    const { byMonth, empBilledByMonth, empBilledHoursByMonth } =
-      allocateSdToBuckets(sd, "2026-03-31");
+    const {
+      byMonth,
+      empBilledByMonth,
+      empBilledHoursByMonth,
+      clientBilledByMonth,
+      clientBilledHoursByMonth,
+      clientStandardByMonth,
+      clientNames,
+    } = allocateSdToBuckets(sd, "2026-03-31");
 
     expect(byMonth.get("2026-02-01")?.billedRevenue).toBeCloseTo(600, 2);
     expect(byMonth.get("2026-03-01")?.billedRevenue).toBeCloseTo(200, 2);
@@ -421,6 +428,15 @@ describe("allocateSdToBuckets", () => {
     expect(empBilledByMonth.get("2026-03-01:Bob")).toBeCloseTo(200, 2);
     expect(empBilledHoursByMonth.get("2026-02-01:Alice")).toBe(6);
     expect(empBilledHoursByMonth.get("2026-03-01:Bob")).toBe(2);
+
+    // Per-client assertions (clientId "c1" from buildSd defaults)
+    expect(clientBilledByMonth.get("2026-02-01:c1")).toBeCloseTo(600, 2);
+    expect(clientBilledByMonth.get("2026-03-01:c1")).toBeCloseTo(200, 2);
+    expect(clientBilledHoursByMonth.get("2026-02-01:c1")).toBe(6);
+    expect(clientBilledHoursByMonth.get("2026-03-01:c1")).toBe(2);
+    expect(clientStandardByMonth.get("2026-02-01:c1")).toBe(600);
+    expect(clientStandardByMonth.get("2026-03-01:c1")).toBe(200);
+    expect(clientNames.get("c1")).toBe("Acme");
   });
 
   it("places the retainer portion in the dominant month; rest pro-rata per item date", () => {
@@ -480,13 +496,22 @@ describe("allocateSdToBuckets", () => {
       ],
     });
 
-    const { byMonth } = allocateSdToBuckets(sd, "2026-03-31");
+    const { byMonth, clientBilledByMonth, clientBilledHoursByMonth, clientStandardByMonth } =
+      allocateSdToBuckets(sd, "2026-03-31");
 
     expect(byMonth.get("2026-02-01")?.billedRevenue).toBeCloseTo(300, 2);
     expect(byMonth.get("2026-03-01")?.billedRevenue).toBeCloseTo(5450, 2);
     // Both months have hours = billed hours (non-waived)
     expect(byMonth.get("2026-02-01")?.billedHours).toBe(10);
     expect(byMonth.get("2026-03-01")?.billedHours).toBe(15);
+
+    // Per-client retainer allocation mirrors firm-level (one client per SD)
+    expect(clientBilledByMonth.get("2026-02-01:c1")).toBeCloseTo(300, 2);
+    expect(clientBilledByMonth.get("2026-03-01:c1")).toBeCloseTo(5450, 2);
+    expect(clientBilledHoursByMonth.get("2026-02-01:c1")).toBe(10);
+    expect(clientBilledHoursByMonth.get("2026-03-01:c1")).toBe(15);
+    expect(clientStandardByMonth.get("2026-02-01:c1")).toBe(2000);
+    expect(clientStandardByMonth.get("2026-03-01:c1")).toBe(3000);
   });
 
   it("waived items contribute to standardRateValue only (not billedHours or billedRevenue share)", () => {
@@ -535,11 +560,17 @@ describe("allocateSdToBuckets", () => {
       ],
     });
 
-    const { byMonth } = allocateSdToBuckets(sd, "2026-03-31");
+    const { byMonth, clientBilledByMonth, clientBilledHoursByMonth, clientStandardByMonth } =
+      allocateSdToBuckets(sd, "2026-03-31");
     const march = byMonth.get("2026-03-01")!;
     expect(march.billedHours).toBe(4); // waived 2h excluded
     expect(march.standardRateValue).toBe(600); // 400 + 200 (waived still counted)
     expect(march.billedRevenue).toBeCloseTo(400, 2); // waived contributes 0
+
+    // Per-client: waived items contribute to standard but not to billed maps
+    expect(clientBilledByMonth.get("2026-03-01:c1")).toBeCloseTo(400, 2);
+    expect(clientBilledHoursByMonth.get("2026-03-01:c1")).toBe(4);
+    expect(clientStandardByMonth.get("2026-03-01:c1")).toBe(600);
   });
 
   it("manual line items without a date use the fallback (largest non-waived dated item)", () => {

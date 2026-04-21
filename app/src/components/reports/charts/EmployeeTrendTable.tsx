@@ -54,7 +54,7 @@ interface EmployeeTrendTableProps {
 }
 
 export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
-  const { rows, monthLabels, topPerMonth } = useMemo(() => {
+  const { rows, monthLabels, topPerMonth, totals } = useMemo(() => {
     const labels = data.map((m) => m.label);
 
     const employeeMap = new Map<string, {
@@ -105,7 +105,12 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
       return maxValue > 0 ? topId : null;
     });
 
-    return { rows: sorted, monthLabels: labels, topPerMonth: tops };
+    // Per-month sum across all employees (the footer total row).
+    const totals: number[] = labels.map((_, monthIdx) =>
+      sorted.reduce((sum, row) => sum + (row.monthlyValues[monthIdx] ?? 0), 0),
+    );
+
+    return { rows: sorted, monthLabels: labels, topPerMonth: tops, totals };
   }, [data, mode]);
 
   const highlightBg = WARN_MODES.includes(mode)
@@ -162,6 +167,24 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-[var(--border-subtle)]">
+            <td className="py-2 pr-2 whitespace-nowrap sticky left-0 bg-[var(--bg-elevated)] z-10">
+              <span className="text-[var(--text-primary)] font-medium">Total</span>
+            </td>
+            {totals.map((value, i) => (
+              <td
+                key={i}
+                className="text-right py-2 px-1.5 tabular-nums font-medium"
+                style={{
+                  color: value > 0 ? "var(--text-primary)" : "var(--text-muted)",
+                }}
+              >
+                {formatValue(value, mode)}
+              </td>
+            ))}
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

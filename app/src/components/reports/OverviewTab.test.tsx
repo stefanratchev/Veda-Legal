@@ -41,8 +41,8 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 14,
       utilization: 68,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 140, billableHours: 95, billableRevenue: 19000, billedRevenue: 19000, billedHours: 95 },
-        { id: "u2", name: "Bob", hours: 140, billableHours: 95, billableRevenue: 19000, billedRevenue: 19000, billedHours: 95 },
+        { id: "u1", name: "Alice", hours: 140, billableHours: 95, billableRevenue: 19000, billedRevenue: 19000, billedHours: 95, standardRateValue: 19000 },
+        { id: "u2", name: "Bob", hours: 140, billableHours: 95, billableRevenue: 19000, billedRevenue: 19000, billedHours: 95, standardRateValue: 19000 },
       ],
     },
     {
@@ -58,8 +58,8 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 15,
       utilization: 70,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 150, billableHours: 105, billableRevenue: 20000, billedRevenue: 20000, billedHours: 105 },
-        { id: "u2", name: "Bob", hours: 150, billableHours: 105, billableRevenue: 20000, billedRevenue: 20000, billedHours: 105 },
+        { id: "u1", name: "Alice", hours: 150, billableHours: 105, billableRevenue: 20000, billedRevenue: 20000, billedHours: 105, standardRateValue: 20000 },
+        { id: "u2", name: "Bob", hours: 150, billableHours: 105, billableRevenue: 20000, billedRevenue: 20000, billedHours: 105, standardRateValue: 20000 },
       ],
     },
     {
@@ -173,8 +173,8 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 16,
       utilization: 71,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 160, billableHours: 110, billableRevenue: 21000, billedRevenue: 21000, billedHours: 110 },
-        { id: "u2", name: "Bob", hours: 150, billableHours: 110, billableRevenue: 21000, billedRevenue: 21000, billedHours: 110 },
+        { id: "u1", name: "Alice", hours: 160, billableHours: 110, billableRevenue: 21000, billedRevenue: 21000, billedHours: 110, standardRateValue: 21000 },
+        { id: "u2", name: "Bob", hours: 150, billableHours: 110, billableRevenue: 21000, billedRevenue: 21000, billedHours: 110, standardRateValue: 21000 },
       ],
     },
     {
@@ -190,8 +190,8 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 17,
       utilization: 75,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 180, billableHours: 131, billableRevenue: 24000, billedRevenue: 24000, billedHours: 131 },
-        { id: "u2", name: "Bob", hours: 170, billableHours: 131, billableRevenue: 24000, billedRevenue: 24000, billedHours: 131 },
+        { id: "u1", name: "Alice", hours: 180, billableHours: 131, billableRevenue: 24000, billedRevenue: 24000, billedHours: 131, standardRateValue: 24000 },
+        { id: "u2", name: "Bob", hours: 170, billableHours: 131, billableRevenue: 24000, billedRevenue: 24000, billedHours: 131, standardRateValue: 24000 },
       ],
     },
     {
@@ -207,8 +207,8 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 18,
       utilization: 72,
       byEmployee: [
-        { id: "u1", name: "Alice", hours: 172.5, billableHours: 123, billableRevenue: 22000, billedRevenue: 22000, billedHours: 123 },
-        { id: "u2", name: "Bob", hours: 170, billableHours: 123, billableRevenue: 22000, billedRevenue: 22000, billedHours: 123 },
+        { id: "u1", name: "Alice", hours: 172.5, billableHours: 123, billableRevenue: 22000, billedRevenue: 22000, billedHours: 123, standardRateValue: 22000 },
+        { id: "u2", name: "Bob", hours: 170, billableHours: 123, billableRevenue: 22000, billedRevenue: 22000, billedHours: 123, standardRateValue: 22000 },
       ],
     },
   ],

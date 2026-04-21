@@ -220,6 +220,7 @@ export function allocateSdToBuckets(
   byMonth: Map<string, { billedRevenue: number; standardRateValue: number; billedHours: number }>;
   empBilledByMonth: Map<string, number>;
   empBilledHoursByMonth: Map<string, number>;
+  empStandardByMonth: Map<string, number>;
 } {
   const items = buildSdLineItems(sd);
   const fallbackDate = pickFallbackDate(items, periodEnd);
@@ -264,6 +265,7 @@ export function allocateSdToBuckets(
   >();
   const empBilledByMonth = new Map<string, number>();
   const empBilledHoursByMonth = new Map<string, number>();
+  const empStandardByMonth = new Map<string, number>();
 
   const ensureBucket = (month: string) => {
     let e = byMonth.get(month);
@@ -278,6 +280,15 @@ export function allocateSdToBuckets(
     const entry = ensureBucket(i.bucketMonth);
     // Standard value: all items contribute (waived too — they are lost revenue).
     entry.standardRateValue += i.standardValue;
+    // Per-employee standard value mirrors firm-level: include waived so
+    // per-employee realization is comparable with firm-level.
+    if (i.employeeName) {
+      const empKey = `${i.bucketMonth}:${i.employeeName}`;
+      empStandardByMonth.set(
+        empKey,
+        (empStandardByMonth.get(empKey) ?? 0) + i.standardValue,
+      );
+    }
     if (i.isWaived) continue;
 
     entry.billedHours += i.hours;
@@ -332,7 +343,7 @@ export function allocateSdToBuckets(
     }
   }
 
-  return { byMonth, empBilledByMonth, empBilledHoursByMonth };
+  return { byMonth, empBilledByMonth, empBilledHoursByMonth, empStandardByMonth };
 }
 
 /**
@@ -509,9 +520,10 @@ export async function getTrendData(): Promise<TrendResponse> {
     string,
     { billedRevenue: number; standardRateValue: number; billedHours: number }
   >();
-  // Per-employee billed revenue/hours keyed by "YYYY-MM-01:employeeName".
+  // Per-employee billed revenue/hours + standard value keyed by "YYYY-MM-01:employeeName".
   const employeeBilledMap = new Map<string, number>();
   const employeeBilledHoursMap = new Map<string, number>();
+  const employeeStandardMap = new Map<string, number>();
 
   for (const rawSd of finalizedSDs) {
     if (!rawSd.periodEnd) continue;
@@ -539,6 +551,9 @@ export async function getTrendData(): Promise<TrendResponse> {
         key,
         (employeeBilledHoursMap.get(key) ?? 0) + val,
       );
+    }
+    for (const [key, val] of allocation.empStandardByMonth) {
+      employeeStandardMap.set(key, (employeeStandardMap.get(key) ?? 0) + val);
     }
   }
 
@@ -570,6 +585,7 @@ export async function getTrendData(): Promise<TrendResponse> {
         ...emp,
         billedRevenue: Math.round((employeeBilledMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
         billedHours: Math.round((employeeBilledHoursMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
+        standardRateValue: Math.round((employeeStandardMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
       })),
     };
   });

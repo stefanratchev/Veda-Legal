@@ -79,6 +79,7 @@ export interface MonthlyTrendPoint {
     billableRevenue: number; // billableHours * client hourlyRate (theoretical)
     billedRevenue: number;
     billedHours: number; // hours billed on finalized SDs bucketed by periodEnd
+    standardRateValue: number; // per-employee standard-rate value of items on finalized SDs (denominator of realization)
   }[];
 }
 

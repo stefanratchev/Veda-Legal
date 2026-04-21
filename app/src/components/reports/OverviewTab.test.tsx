@@ -44,6 +44,10 @@ const mockTrendResponse: TrendResponse = {
         { id: "u1", name: "Alice", hours: 140, billableHours: 95, billableRevenue: 19000, billedRevenue: 19000, billedHours: 95, standardRateValue: 19000 },
         { id: "u2", name: "Bob", hours: 140, billableHours: 95, billableRevenue: 19000, billedRevenue: 19000, billedHours: 95, standardRateValue: 19000 },
       ],
+      byClient: [
+        { id: "c1", name: "Acme", hours: 140, billableHours: 95, billableRevenue: 19000, billedRevenue: 19000, billedHours: 95, standardRateValue: 19000 },
+        { id: "c2", name: "Globex", hours: 140, billableHours: 95, billableRevenue: 19000, billedRevenue: 19000, billedHours: 95, standardRateValue: 19000 },
+      ],
     },
     {
       month: "2025-06",
@@ -61,6 +65,10 @@ const mockTrendResponse: TrendResponse = {
         { id: "u1", name: "Alice", hours: 150, billableHours: 105, billableRevenue: 20000, billedRevenue: 20000, billedHours: 105, standardRateValue: 20000 },
         { id: "u2", name: "Bob", hours: 150, billableHours: 105, billableRevenue: 20000, billedRevenue: 20000, billedHours: 105, standardRateValue: 20000 },
       ],
+      byClient: [
+        { id: "c1", name: "Acme", hours: 150, billableHours: 105, billableRevenue: 20000, billedRevenue: 20000, billedHours: 105, standardRateValue: 20000 },
+        { id: "c2", name: "Globex", hours: 150, billableHours: 105, billableRevenue: 20000, billedRevenue: 20000, billedHours: 105, standardRateValue: 20000 },
+      ],
     },
     {
       month: "2025-07",
@@ -75,6 +83,7 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
+      byClient: [],
     },
     {
       month: "2025-08",
@@ -89,6 +98,7 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
+      byClient: [],
     },
     {
       month: "2025-09",
@@ -103,6 +113,7 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
+      byClient: [],
     },
     {
       month: "2025-10",
@@ -117,6 +128,7 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
+      byClient: [],
     },
     {
       month: "2025-11",
@@ -131,6 +143,7 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
+      byClient: [],
     },
     {
       month: "2025-12",
@@ -145,6 +158,7 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
+      byClient: [],
     },
     {
       month: "2026-01",
@@ -159,6 +173,7 @@ const mockTrendResponse: TrendResponse = {
       activeClients: 0,
       utilization: 0,
       byEmployee: [],
+      byClient: [],
     },
     {
       month: "2026-02",
@@ -175,6 +190,10 @@ const mockTrendResponse: TrendResponse = {
       byEmployee: [
         { id: "u1", name: "Alice", hours: 160, billableHours: 110, billableRevenue: 21000, billedRevenue: 21000, billedHours: 110, standardRateValue: 21000 },
         { id: "u2", name: "Bob", hours: 150, billableHours: 110, billableRevenue: 21000, billedRevenue: 21000, billedHours: 110, standardRateValue: 21000 },
+      ],
+      byClient: [
+        { id: "c1", name: "Acme", hours: 160, billableHours: 110, billableRevenue: 21000, billedRevenue: 21000, billedHours: 110, standardRateValue: 21000 },
+        { id: "c2", name: "Globex", hours: 150, billableHours: 110, billableRevenue: 21000, billedRevenue: 21000, billedHours: 110, standardRateValue: 21000 },
       ],
     },
     {
@@ -193,6 +212,10 @@ const mockTrendResponse: TrendResponse = {
         { id: "u1", name: "Alice", hours: 180, billableHours: 131, billableRevenue: 24000, billedRevenue: 24000, billedHours: 131, standardRateValue: 24000 },
         { id: "u2", name: "Bob", hours: 170, billableHours: 131, billableRevenue: 24000, billedRevenue: 24000, billedHours: 131, standardRateValue: 24000 },
       ],
+      byClient: [
+        { id: "c1", name: "Acme", hours: 180, billableHours: 131, billableRevenue: 24000, billedRevenue: 24000, billedHours: 131, standardRateValue: 24000 },
+        { id: "c2", name: "Globex", hours: 170, billableHours: 131, billableRevenue: 24000, billedRevenue: 24000, billedHours: 131, standardRateValue: 24000 },
+      ],
     },
     {
       month: "2026-04",
@@ -209,6 +232,10 @@ const mockTrendResponse: TrendResponse = {
       byEmployee: [
         { id: "u1", name: "Alice", hours: 172.5, billableHours: 123, billableRevenue: 22000, billedRevenue: 22000, billedHours: 123, standardRateValue: 22000 },
         { id: "u2", name: "Bob", hours: 170, billableHours: 123, billableRevenue: 22000, billedRevenue: 22000, billedHours: 123, standardRateValue: 22000 },
+      ],
+      byClient: [
+        { id: "c1", name: "Acme", hours: 172.5, billableHours: 123, billableRevenue: 22000, billedRevenue: 22000, billedHours: 123, standardRateValue: 22000 },
+        { id: "c2", name: "Globex", hours: 170, billableHours: 123, billableRevenue: 22000, billedRevenue: 22000, billedHours: 123, standardRateValue: 22000 },
       ],
     },
   ],
@@ -240,6 +267,7 @@ const emptyTrendResponse: TrendResponse = {
     activeClients: 0,
     utilization: 0,
     byEmployee: [],
+    byClient: [],
   })),
   latest: { totalHours: 0, revenue: 0, activeClients: 0, utilization: 0 },
   previous: { totalHours: 0, revenue: 0, activeClients: 0, utilization: 0 },
@@ -293,6 +321,33 @@ describe("OverviewTab", () => {
     expect(
       screen.getByText(/By Employee/)
     ).toBeInTheDocument();
+  });
+
+  it("renders By Client card below the By Employee card with its own toggles", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockTrendResponse),
+    });
+
+    const { OverviewTab: FreshOverviewTab } = await import("./OverviewTab");
+    render(<FreshOverviewTab />);
+
+    // Wait for both cards to render.
+    const employeeHeading = await screen.findByText("By Employee (12 Months)");
+    const clientHeading = await screen.findByText("By Client (12 Months)");
+
+    expect(employeeHeading).toBeInTheDocument();
+    expect(clientHeading).toBeInTheDocument();
+
+    // By Client card must sit BELOW By Employee card in document order.
+    const pos = employeeHeading.compareDocumentPosition(clientHeading);
+    expect(pos & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Each card has its own Hours + € groups (2 "Billable" buttons per card,
+    // 4 total across the two cards). This also confirms the two cards render
+    // independent toggle groups rather than sharing one.
+    const billableButtons = screen.getAllByText("Billable");
+    expect(billableButtons.length).toBeGreaterThanOrEqual(4);
   });
 
   it("shows empty state when no data", async () => {

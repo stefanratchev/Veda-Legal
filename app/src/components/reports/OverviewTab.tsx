@@ -5,6 +5,7 @@ import { TrendChart } from "./charts/TrendChart";
 import { RevenueChart } from "./charts/RevenueChart";
 import { PricingHealthChart } from "./charts/PricingHealthChart";
 import { EmployeeTrendTable, type EmployeeHoursMode } from "./charts/EmployeeTrendTable";
+import { ByClientTable } from "./charts/ByClientTable";
 import type { TrendResponse } from "@/types/reports";
 
 // Module-level cache so tab switching does not re-fetch
@@ -70,6 +71,7 @@ export function OverviewTab() {
   const [loading, setLoading] = useState(cachedTrendData === null);
   const [error, setError] = useState<string | null>(null);
   const [employeeMode, setEmployeeMode] = useState<EmployeeHoursMode>("billableHours");
+  const [clientMode, setClientMode] = useState<EmployeeHoursMode>("billableHours");
 
   useEffect(() => {
     if (cachedTrendData !== null) return;
@@ -198,6 +200,30 @@ export function OverviewTab() {
           </div>
         </div>
         <EmployeeTrendTable data={trendData.months} mode={employeeMode} />
+      </div>
+
+      {/* Client Table */}
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+        <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+          <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
+            By Client (12 Months)
+          </h3>
+          <div className="flex items-center gap-4 flex-wrap">
+            <EmployeeModeGroup
+              label="Hours"
+              options={HOURS_MODE_OPTIONS}
+              current={clientMode}
+              onChange={setClientMode}
+            />
+            <EmployeeModeGroup
+              label="€"
+              options={EUR_MODE_OPTIONS}
+              current={clientMode}
+              onChange={setClientMode}
+            />
+          </div>
+        </div>
+        <ByClientTable data={trendData.months} mode={clientMode} />
       </div>
     </div>
   );

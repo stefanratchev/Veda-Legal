@@ -46,6 +46,25 @@ describe("generateLast12Months", () => {
       expect(curr.getUTCMonth()).toBe(expectedMonth % 12);
     }
   });
+
+  it("truncates to the floor month when provided", () => {
+    // now = April 2026, floor = 2026-02-01 → Feb, Mar, Apr
+    const result = generateLast12Months(new Date(2026, 3, 6), "2026-02-01");
+    expect(result).toEqual(["2026-02-01", "2026-03-01", "2026-04-01"]);
+  });
+
+  it("ignores a floor older than the 12-month window", () => {
+    // now = April 2026, floor way in the past → full 12 months
+    const result = generateLast12Months(new Date(2026, 3, 6), "2020-01-01");
+    expect(result).toHaveLength(12);
+    expect(result[0]).toBe("2025-05-01");
+  });
+
+  it("floor day granularity still includes the floor month", () => {
+    // Floor = 2026-02-15 should still include February.
+    const result = generateLast12Months(new Date(2026, 3, 6), "2026-02-15");
+    expect(result[0]).toBe("2026-02-01");
+  });
 });
 
 describe("formatMonthLabel", () => {

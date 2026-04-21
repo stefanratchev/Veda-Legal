@@ -6,20 +6,28 @@ import {
   calculateGrandTotal,
   calculateRetainerGrandTotal,
 } from "@/lib/billing-pdf";
+import { BILLING_START_DATE } from "@/lib/billing-config";
 import type { MonthlyTrendPoint, TrendResponse } from "@/types/reports";
 import type { ServiceDescription } from "@/types";
 
 /**
- * Generate an array of 12 ISO date strings representing the first day of each
- * month, from 11 months ago through the current month.
+ * Generate ISO date strings for the first day of each month in the trend
+ * window. Default window is the last 12 months ending at `now`, but when a
+ * `floor` date is provided, any months before the floor's month are excluded.
+ *
+ * With a floor newer than 11 months ago the array is shorter than 12; the
+ * window grows month-by-month until the rolling 12-month cap takes over.
  */
-export function generateLast12Months(now: Date = new Date()): string[] {
+export function generateLast12Months(now: Date = new Date(), floor?: string): string[] {
+  const floorMonthKey = floor ? floor.slice(0, 7) + "-01" : null;
   const months: string[] = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
-    months.push(`${year}-${month}-01`);
+    const iso = `${year}-${month}-01`;
+    if (floorMonthKey && iso < floorMonthKey) continue;
+    months.push(iso);
   }
   return months;
 }
@@ -331,8 +339,8 @@ export function allocateSdToBuckets(
  * Fetch and aggregate the last 12 months of time entry data for the trend dashboard.
  */
 export async function getTrendData(): Promise<TrendResponse> {
-  const monthStarts = generateLast12Months();
-  const startDate = monthStarts[0]; // first day of oldest month
+  const monthStarts = generateLast12Months(new Date(), BILLING_START_DATE);
+  const startDate = monthStarts[0]; // first day of oldest month (floored at BILLING_START_DATE)
 
   // Last day of the most recent month
   const lastMonthStart = monthStarts[monthStarts.length - 1];
@@ -566,22 +574,25 @@ export async function getTrendData(): Promise<TrendResponse> {
     };
   });
 
+  // When the window is short (e.g. only 1 month past the floor), fall back
+  // to zeros for missing latest/previous so callers can render a month-1
+  // trend without special-casing.
   const latest = months[months.length - 1];
   const previous = months[months.length - 2];
 
   return {
     months,
     latest: {
-      totalHours: latest.totalHours,
-      revenue: latest.revenue,
-      activeClients: latest.activeClients,
-      utilization: latest.utilization,
+      totalHours: latest?.totalHours ?? 0,
+      revenue: latest?.revenue ?? 0,
+      activeClients: latest?.activeClients ?? 0,
+      utilization: latest?.utilization ?? 0,
     },
     previous: {
-      totalHours: previous.totalHours,
-      revenue: previous.revenue,
-      activeClients: previous.activeClients,
-      utilization: previous.utilization,
+      totalHours: previous?.totalHours ?? 0,
+      revenue: previous?.revenue ?? 0,
+      activeClients: previous?.activeClients ?? 0,
+      utilization: previous?.utilization ?? 0,
     },
   };
 }

@@ -14,11 +14,16 @@ export type EmployeeHoursMode =
   | "billedHours"
   | "unbillableHours"
   | "billableRevenue"
-  | "billedRevenue";
+  | "billedRevenue"
+  | "lostRevenue";
 
-const EUR_MODES: readonly EmployeeHoursMode[] = ["billableRevenue", "billedRevenue"];
-// Unbillable uses a warning highlight — high value = more time that couldn't be billed.
-const WARN_MODES: readonly EmployeeHoursMode[] = ["unbillableHours"];
+const EUR_MODES: readonly EmployeeHoursMode[] = [
+  "billableRevenue",
+  "billedRevenue",
+  "lostRevenue",
+];
+// Modes where high value = bad (red highlight).
+const WARN_MODES: readonly EmployeeHoursMode[] = ["unbillableHours", "lostRevenue"];
 
 function formatValue(value: number, mode: EmployeeHoursMode): string {
   if (value <= 0) return "—";
@@ -45,6 +50,8 @@ function pickValue(
       return emp.billableRevenue;
     case "billedRevenue":
       return emp.billedRevenue;
+    case "lostRevenue":
+      return Math.max(0, emp.standardRateValue - emp.billedRevenue);
   }
 }
 

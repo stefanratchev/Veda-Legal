@@ -28,6 +28,7 @@ const HOURS_MODE_OPTIONS: ModeOption[] = [
 const EUR_MODE_OPTIONS: ModeOption[] = [
   { value: "billableRevenue", label: "Billable" },
   { value: "billedRevenue", label: "Billed" },
+  { value: "lostRevenue", label: "Lost" },
 ];
 
 interface EmployeeModeGroupProps {

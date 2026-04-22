@@ -372,7 +372,7 @@ describe("OverviewTab", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows error state on fetch failure", async () => {
+  it("shows a server-error message on 500", async () => {
     mockFetch.mockResolvedValue({
       ok: false,
       status: 500,
@@ -384,9 +384,37 @@ describe("OverviewTab", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(
-          "Failed to load trend data. Check your connection and try refreshing the page."
-        )
+        screen.getByText(/the server hit an error/i)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows an access-revoked message on 403", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ error: "Forbidden" }),
+    });
+
+    const { OverviewTab: FreshOverviewTab } = await import("./OverviewTab");
+    render(<FreshOverviewTab />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/no longer have access/i)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows a network-error message when fetch rejects", async () => {
+    mockFetch.mockRejectedValue(new Error("network down"));
+
+    const { OverviewTab: FreshOverviewTab } = await import("./OverviewTab");
+    render(<FreshOverviewTab />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/couldn't reach the server/i)
       ).toBeInTheDocument();
     });
   });

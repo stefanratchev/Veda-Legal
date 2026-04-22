@@ -15,6 +15,19 @@ function isAllEmpty(data: TrendResponse): boolean {
   return data.months.every((m) => m.totalHours === 0);
 }
 
+function messageForStatus(status: number): string {
+  if (status === 401) {
+    return "Your session expired. Sign in again to load the dashboard.";
+  }
+  if (status === 403) {
+    return "You no longer have access to reports. Ask an admin to restore your access.";
+  }
+  if (status >= 500) {
+    return "The server hit an error loading trend data. Try again in a moment.";
+  }
+  return "Something went wrong loading trend data. Try refreshing the page.";
+}
+
 interface ModeOption {
   value: EmployeeHoursMode;
   label: string;
@@ -88,7 +101,12 @@ export function OverviewTab() {
       try {
         const res = await fetch("/api/reports/trends");
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+          if (!cancelled) {
+            setError(messageForStatus(res.status));
+            setLoading(false);
+          }
+          console.error(`Trend fetch failed: HTTP ${res.status}`);
+          return;
         }
         const data: TrendResponse = await res.json();
         if (!cancelled) {
@@ -96,10 +114,11 @@ export function OverviewTab() {
           setTrendData(data);
           setLoading(false);
         }
-      } catch {
+      } catch (err) {
+        console.error("Trend fetch failed:", err);
         if (!cancelled) {
           setError(
-            "Failed to load trend data. Check your connection and try refreshing the page."
+            "Couldn't reach the server. Check your connection and try refreshing the page."
           );
           setLoading(false);
         }

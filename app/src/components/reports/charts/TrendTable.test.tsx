@@ -615,6 +615,50 @@ describe("TrendTable", () => {
     expect(marThAfter.textContent).toContain("▼");
   });
 
+  it("clamps stale sort to default when monthLabels shrinks out of range", () => {
+    const rows = [
+      makeRow("a", "Alice", [10, 20, 30]),
+      makeRow("b", "Bob", [5, 15, 25]),
+    ];
+    const { container, rerender } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableHours"
+        entityLabel="Employee"
+      />,
+    );
+
+    // Click Apr (idx=2, the last column) to anchor sort there.
+    const headerThs = container.querySelectorAll("thead th");
+    const aprButton = (headerThs[3] as HTMLElement).querySelector("button") as HTMLButtonElement;
+    fireEvent.click(aprButton);
+    expect((headerThs[3] as HTMLElement).getAttribute("aria-sort")).toBe("descending");
+
+    // Shrink the window to only Feb + Mar — the sorted column is now out of range.
+    const rowsShort: TrendTableRow[] = rows.map((r) => ({
+      ...r,
+      monthlyCells: r.monthlyCells.slice(0, 2),
+    }));
+    rerender(
+      <TrendTable
+        rows={rowsShort}
+        monthLabels={MONTH_LABELS.slice(0, 2)}
+        mode="billableHours"
+        entityLabel="Employee"
+      />,
+    );
+
+    // No header should advertise aria-sort after the clamp — default kicks in.
+    const newHeaderThs = container.querySelectorAll("thead th");
+    for (const th of Array.from(newHeaderThs)) {
+      expect(th.getAttribute("aria-sort") || "none").toBe("none");
+    }
+    // And no caret anywhere.
+    expect(container.textContent).not.toContain("▼");
+    expect(container.textContent).not.toContain("▲");
+  });
+
   it("Total row in <tfoot> is never reordered by sort", () => {
     const rows = [
       makeRow("a", "Alice", [10, 20, 30]),

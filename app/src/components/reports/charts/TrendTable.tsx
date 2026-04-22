@@ -136,12 +136,21 @@ export function TrendTable({
 }: TrendTableProps) {
   const [sort, setSort] = useState<MonthSort>(null);
 
+  // Guard against `sort` being anchored to a column that has since scrolled
+  // out of range (e.g. if monthLabels shrinks between renders). Without this,
+  // `sortIdx` would read `monthlyCells[outOfRange]` → undefined → every row
+  // appears null and the table silently collapses to an alpha tiebreak while
+  // aria-sort still advertises a stale direction on a header that no longer
+  // maps to the intended month.
+  const effectiveSort: MonthSort =
+    sort && sort.columnIdx < monthLabels.length ? sort : null;
+
   const { displayRows, totals } = useMemo(() => {
     // Active column: explicit sort column, or default to the last visible month.
     // Direction: user-selected, or default to desc.
     const lastIdx = monthLabels.length - 1;
-    const sortIdx = sort?.columnIdx ?? lastIdx;
-    const sortFactor = sort?.direction === "asc" ? -1 : 1;
+    const sortIdx = effectiveSort?.columnIdx ?? lastIdx;
+    const sortFactor = effectiveSort?.direction === "asc" ? -1 : 1;
 
     const sorted = [...rows].sort((a, b) => {
       const aCell = a.monthlyCells[sortIdx];
@@ -193,7 +202,7 @@ export function TrendTable({
     });
 
     return { displayRows: withOthers, totals: totalsArr };
-  }, [rows, monthLabels, mode, topN, sort]);
+  }, [rows, monthLabels, mode, topN, effectiveSort]);
 
   if (rows.length === 0) {
     const msg = emptyMessage ?? `No ${entityLabel.toLowerCase()} data`;
@@ -216,12 +225,14 @@ export function TrendTable({
               {entityLabel}
             </th>
             {monthLabels.map((label, idx) => {
-              const isActive = sort?.columnIdx === idx;
-              const ariaSort: "ascending" | "descending" | "none" = isActive
-                ? sort!.direction === "asc"
+              const activeDirection =
+                effectiveSort?.columnIdx === idx ? effectiveSort.direction : null;
+              const ariaSort: "ascending" | "descending" | "none" =
+                activeDirection === "asc"
                   ? "ascending"
-                  : "descending"
-                : "none";
+                  : activeDirection === "desc"
+                    ? "descending"
+                    : "none";
               return (
                 <th
                   key={label}
@@ -235,12 +246,12 @@ export function TrendTable({
                     className="inline-flex items-center gap-1 uppercase tracking-wider cursor-pointer hover:text-[var(--text-primary)] transition-colors"
                   >
                     <span>{label.split(" ")[0]}</span>
-                    {isActive && (
+                    {activeDirection && (
                       <span
                         aria-hidden="true"
                         className="text-[var(--text-primary)]"
                       >
-                        {sort!.direction === "desc" ? "▼" : "▲"}
+                        {activeDirection === "desc" ? "▼" : "▲"}
                       </span>
                     )}
                   </button>

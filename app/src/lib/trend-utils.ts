@@ -189,6 +189,15 @@ export function splitRetainerGrandTotal(
     null,
   );
   if (preDiscountTotal <= 0) {
+    if (grandTotal > 0) {
+      // Data anomaly: the retainer math can't allocate a positive grand total
+      // when pre-discount is zero (would divide by zero). Retainer fee silently
+      // disappears from per-employee/per-client allocation. Surface it.
+      console.warn(
+        `[trend-utils] Retainer SD has non-positive preDiscountTotal=${preDiscountTotal} ` +
+          `with grandTotal=${grandTotal}; retainer fee will not be attributed.`,
+      );
+    }
     return { retainerPortion: 0, nonRetainerGrandTotal: grandTotal };
   }
   const discountFactor = grandTotal / preDiscountTotal;
@@ -694,7 +703,15 @@ export async function getTrendData(): Promise<TrendResponse> {
   const clientNamesMap = new Map<string, string>();
 
   for (const rawSd of finalizedSDs) {
-    if (!rawSd.periodEnd) continue;
+    if (!rawSd.periodEnd) {
+      // Finalized SDs without periodEnd are dropped from reporting because
+      // bucketing cannot default them. This is a data-integrity red flag
+      // (periodEnd should be set before finalize) — log once per occurrence.
+      console.warn(
+        `[trend-utils] Skipping finalized SD without periodEnd: id=${rawSd.id}`,
+      );
+      continue;
+    }
     const sd = serializeServiceDescription(
       rawSd as Parameters<typeof serializeServiceDescription>[0],
     );

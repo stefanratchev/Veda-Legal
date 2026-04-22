@@ -77,7 +77,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                   columns: { description: true, hours: true },
                   with: {
                     user: {
-                      columns: { name: true },
+                      columns: { id: true, name: true },
                     },
                   },
                 },

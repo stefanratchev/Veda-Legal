@@ -67,6 +67,7 @@ export interface LineItemForAllocation {
   hours: number;
   standardValue: number;
   isWaived: boolean;
+  employeeId: string | null;
   employeeName: string | null;
 }
 
@@ -90,6 +91,7 @@ export function buildSdLineItems(sd: {
       hours: number | null;
       date: string | null;
       waiveMode: "EXCLUDED" | "ZERO" | null;
+      employeeId?: string;
       employeeName?: string;
     }>;
   }>;
@@ -111,6 +113,7 @@ export function buildSdLineItems(sd: {
         hours,
         standardValue: hours * rate,
         isWaived: li.waiveMode === "EXCLUDED" || li.waiveMode === "ZERO",
+        employeeId: li.employeeId ?? null,
         employeeName: li.employeeName ?? null,
       });
     }
@@ -309,9 +312,11 @@ export function allocateSdToBuckets(
       (clientStandardByMonth.get(clientStdKey) ?? 0) + i.standardValue,
     );
     // Per-employee standard value mirrors firm-level: include waived so
-    // per-employee realization is comparable with firm-level.
-    if (i.employeeName) {
-      const empKey = `${i.bucketMonth}:${i.employeeName}`;
+    // per-employee realization is comparable with firm-level. Keyed by
+    // user id (stable) rather than name (collides on duplicates, drifts
+    // on rename).
+    if (i.employeeId) {
+      const empKey = `${i.bucketMonth}:${i.employeeId}`;
       empStandardByMonth.set(
         empKey,
         (empStandardByMonth.get(empKey) ?? 0) + i.standardValue,
@@ -335,8 +340,8 @@ export function allocateSdToBuckets(
         (clientBilledHoursByMonth.get(clientKey) ?? 0) + i.hours,
       );
 
-      if (i.employeeName) {
-        const empKey = `${i.bucketMonth}:${i.employeeName}`;
+      if (i.employeeId) {
+        const empKey = `${i.bucketMonth}:${i.employeeId}`;
         empBilledByMonth.set(empKey, (empBilledByMonth.get(empKey) ?? 0) + revShare);
         empBilledHoursByMonth.set(
           empKey,
@@ -371,8 +376,8 @@ export function allocateSdToBuckets(
           clientKey,
           (clientBilledByMonth.get(clientKey) ?? 0) + revShare,
         );
-        if (i.employeeName) {
-          const empKey = `${i.bucketMonth}:${i.employeeName}`;
+        if (i.employeeId) {
+          const empKey = `${i.bucketMonth}:${i.employeeId}`;
           empBilledByMonth.set(
             empKey,
             (empBilledByMonth.get(empKey) ?? 0) + revShare,
@@ -409,15 +414,15 @@ export function allocateSdToBuckets(
     if (nonWaivedTotal > 0) {
       const perEmpShares = new Map<string, number>();
       for (const i of itemsWithBucket) {
-        if (i.isWaived || !i.employeeName) continue;
+        if (i.isWaived || !i.employeeId) continue;
         perEmpShares.set(
-          i.employeeName,
-          (perEmpShares.get(i.employeeName) ?? 0) + i.standardValue,
+          i.employeeId,
+          (perEmpShares.get(i.employeeId) ?? 0) + i.standardValue,
         );
       }
-      for (const [empName, share] of perEmpShares) {
+      for (const [empId, share] of perEmpShares) {
         const empRetainerShare = (share / nonWaivedTotal) * retainerPortion;
-        const empKey = `${dominantMonth}:${empName}`;
+        const empKey = `${dominantMonth}:${empId}`;
         empBilledByMonth.set(
           empKey,
           (empBilledByMonth.get(empKey) ?? 0) + empRetainerShare,
@@ -710,7 +715,7 @@ export async function getTrendData(): Promise<TrendResponse> {
             with: {
               timeEntry: {
                 columns: { hours: true, description: true },
-                with: { user: { columns: { name: true } } },
+                with: { user: { columns: { id: true, name: true } } },
               },
             },
           },
@@ -815,9 +820,9 @@ export async function getTrendData(): Promise<TrendResponse> {
       realization: standardRateValue > 0 ? Math.round((billedRevenue / standardRateValue) * 100) : 0,
       byEmployee: (employeeMap.get(monthStart) ?? []).map((emp) => ({
         ...emp,
-        billedRevenue: Math.round((employeeBilledMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
-        billedHours: Math.round((employeeBilledHoursMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
-        standardRateValue: Math.round((employeeStandardMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
+        billedRevenue: Math.round((employeeBilledMap.get(`${monthStart}:${emp.id}`) ?? 0) * 100) / 100,
+        billedHours: Math.round((employeeBilledHoursMap.get(`${monthStart}:${emp.id}`) ?? 0) * 100) / 100,
+        standardRateValue: Math.round((employeeStandardMap.get(`${monthStart}:${emp.id}`) ?? 0) * 100) / 100,
       })),
       byClient: buildByClientForMonth(
         monthStart,

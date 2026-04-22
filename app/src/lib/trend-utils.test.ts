@@ -245,6 +245,7 @@ describe("pickFallbackDate", () => {
     hours,
     standardValue: hours * 100,
     isWaived,
+    employeeId: null,
     employeeName: null,
   });
 
@@ -270,6 +271,7 @@ describe("pickDominantMonth", () => {
     hours,
     standardValue: hours * 100,
     isWaived,
+    employeeId: null,
     employeeName: null,
     bucketMonth,
   });
@@ -393,6 +395,7 @@ describe("allocateSdToBuckets", () => {
               originalHours: 6,
               displayOrder: 0,
               waiveMode: null,
+              employeeId: "u-alice",
               employeeName: "Alice",
             },
             {
@@ -404,6 +407,7 @@ describe("allocateSdToBuckets", () => {
               originalHours: 2,
               displayOrder: 1,
               waiveMode: null,
+              employeeId: "u-bob",
               employeeName: "Bob",
             },
           ],
@@ -425,10 +429,10 @@ describe("allocateSdToBuckets", () => {
     expect(byMonth.get("2026-03-01")?.billedRevenue).toBeCloseTo(200, 2);
     expect(byMonth.get("2026-02-01")?.billedHours).toBe(6);
     expect(byMonth.get("2026-03-01")?.billedHours).toBe(2);
-    expect(empBilledByMonth.get("2026-02-01:Alice")).toBeCloseTo(600, 2);
-    expect(empBilledByMonth.get("2026-03-01:Bob")).toBeCloseTo(200, 2);
-    expect(empBilledHoursByMonth.get("2026-02-01:Alice")).toBe(6);
-    expect(empBilledHoursByMonth.get("2026-03-01:Bob")).toBe(2);
+    expect(empBilledByMonth.get("2026-02-01:u-alice")).toBeCloseTo(600, 2);
+    expect(empBilledByMonth.get("2026-03-01:u-bob")).toBeCloseTo(200, 2);
+    expect(empBilledHoursByMonth.get("2026-02-01:u-alice")).toBe(6);
+    expect(empBilledHoursByMonth.get("2026-03-01:u-bob")).toBe(2);
 
     // Per-client assertions (clientId "c1" from buildSd defaults)
     expect(clientBilledByMonth.get("2026-02-01:c1")).toBeCloseTo(600, 2);
@@ -479,6 +483,7 @@ describe("allocateSdToBuckets", () => {
               originalHours: 10,
               displayOrder: 0,
               waiveMode: null,
+              employeeId: "u-alice",
               employeeName: "Alice",
             },
             {
@@ -490,6 +495,7 @@ describe("allocateSdToBuckets", () => {
               originalHours: 15,
               displayOrder: 1,
               waiveMode: null,
+              employeeId: "u-bob",
               employeeName: "Bob",
             },
           ],
@@ -525,20 +531,20 @@ describe("allocateSdToBuckets", () => {
     // €750 stays per-item.
     //   Alice: 300 (Feb non-retainer) + 2000 (March retainer, 2000/5000 * 5000)
     //   Bob:   450 (March non-retainer) + 3000 (March retainer, 3000/5000 * 5000)
-    expect(empBilledByMonth.get("2026-02-01:Alice")).toBeCloseTo(300, 2);
-    expect(empBilledByMonth.get("2026-03-01:Alice")).toBeCloseTo(2000, 2);
-    expect(empBilledByMonth.get("2026-03-01:Bob")).toBeCloseTo(450 + 3000, 2);
+    expect(empBilledByMonth.get("2026-02-01:u-alice")).toBeCloseTo(300, 2);
+    expect(empBilledByMonth.get("2026-03-01:u-alice")).toBeCloseTo(2000, 2);
+    expect(empBilledByMonth.get("2026-03-01:u-bob")).toBeCloseTo(450 + 3000, 2);
     // Retainer loop does not write hours — only the non-retainer per-item loop does.
-    expect(empBilledHoursByMonth.get("2026-02-01:Alice")).toBe(10);
-    expect(empBilledHoursByMonth.get("2026-03-01:Bob")).toBe(15);
+    expect(empBilledHoursByMonth.get("2026-02-01:u-alice")).toBe(10);
+    expect(empBilledHoursByMonth.get("2026-03-01:u-bob")).toBe(15);
     // Alice has no March hours because her only item was in Feb.
-    expect(empBilledHoursByMonth.get("2026-03-01:Alice")).toBeUndefined();
+    expect(empBilledHoursByMonth.get("2026-03-01:u-alice")).toBeUndefined();
 
     // Reconciliation: per-employee sum equals firm-level total.
     const empTotal =
-      (empBilledByMonth.get("2026-02-01:Alice") ?? 0) +
-      (empBilledByMonth.get("2026-03-01:Alice") ?? 0) +
-      (empBilledByMonth.get("2026-03-01:Bob") ?? 0);
+      (empBilledByMonth.get("2026-02-01:u-alice") ?? 0) +
+      (empBilledByMonth.get("2026-03-01:u-alice") ?? 0) +
+      (empBilledByMonth.get("2026-03-01:u-bob") ?? 0);
     expect(empTotal).toBeCloseTo(5750, 2);
   });
 
@@ -677,6 +683,7 @@ describe("allocateSdToBuckets", () => {
               originalHours: 4,
               displayOrder: 0,
               waiveMode: "EXCLUDED",
+              employeeId: "u-alice",
               employeeName: "Alice",
             },
             {
@@ -688,6 +695,7 @@ describe("allocateSdToBuckets", () => {
               originalHours: 2,
               displayOrder: 1,
               waiveMode: "EXCLUDED",
+              employeeId: "u-bob",
               employeeName: "Bob",
             },
           ],
@@ -714,10 +722,10 @@ describe("allocateSdToBuckets", () => {
     expect(byMonth.get("2026-03-01")?.billedHours).toBe(0);
 
     // Per-employee: each gets their pro-rata share, NO billed hours.
-    expect(empBilledByMonth.get("2026-02-01:Alice")).toBeCloseTo(feeAlice, 2);
-    expect(empBilledByMonth.get("2026-03-01:Bob")).toBeCloseTo(feeBob, 2);
-    expect(empBilledHoursByMonth.get("2026-02-01:Alice")).toBeUndefined();
-    expect(empBilledHoursByMonth.get("2026-03-01:Bob")).toBeUndefined();
+    expect(empBilledByMonth.get("2026-02-01:u-alice")).toBeCloseTo(feeAlice, 2);
+    expect(empBilledByMonth.get("2026-03-01:u-bob")).toBeCloseTo(feeBob, 2);
+    expect(empBilledHoursByMonth.get("2026-02-01:u-alice")).toBeUndefined();
+    expect(empBilledHoursByMonth.get("2026-03-01:u-bob")).toBeUndefined();
 
     // Per-client: same reconciliation — firm-level total matches sum of client
     // buckets AND sum of employee buckets.
@@ -731,8 +739,8 @@ describe("allocateSdToBuckets", () => {
       (clientBilledByMonth.get("2026-02-01:c1") ?? 0) +
       (clientBilledByMonth.get("2026-03-01:c1") ?? 0);
     const empTotal =
-      (empBilledByMonth.get("2026-02-01:Alice") ?? 0) +
-      (empBilledByMonth.get("2026-03-01:Bob") ?? 0);
+      (empBilledByMonth.get("2026-02-01:u-alice") ?? 0) +
+      (empBilledByMonth.get("2026-03-01:u-bob") ?? 0);
     expect(firmTotal).toBeCloseTo(500, 2);
     expect(clientTotal).toBeCloseTo(500, 2);
     expect(empTotal).toBeCloseTo(500, 2);

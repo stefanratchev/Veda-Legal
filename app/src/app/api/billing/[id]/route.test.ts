@@ -103,7 +103,7 @@ describe("GET /api/billing/[id]", () => {
               timeEntry: {
                 description: "Original description",
                 hours: "2.50",
-                user: { name: "John Doe" },
+                user: { id: "u1", name: "John Doe" },
               },
             },
           ],

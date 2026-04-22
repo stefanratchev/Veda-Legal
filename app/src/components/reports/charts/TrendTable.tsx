@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 export type TrendTableMode =
   | "billableHours"
@@ -40,6 +40,22 @@ const RATIO_MODES: readonly TrendTableMode[] = [
 
 export const OTHERS_ROW_ID = "__others__";
 const OTHERS_ROW_NAME = "Others";
+
+type MonthSort = { columnIdx: number; direction: "asc" | "desc" } | null;
+
+/**
+ * 3-state click cycle per column: desc → asc → reset-to-default (null).
+ * Clicking a different column resets to fresh desc on that column.
+ */
+function nextSort(prev: MonthSort, clickedIdx: number): MonthSort {
+  if (!prev || prev.columnIdx !== clickedIdx) {
+    return { columnIdx: clickedIdx, direction: "desc" };
+  }
+  if (prev.direction === "desc") {
+    return { columnIdx: clickedIdx, direction: "asc" };
+  }
+  return null;
+}
 
 /**
  * Resolves a cell's display value independent of mode-specific formatting.
@@ -118,18 +134,31 @@ export function TrendTable({
   topN,
   emptyMessage,
 }: TrendTableProps) {
+  const [sort, setSort] = useState<MonthSort>(null);
+
   const { displayRows, totals } = useMemo(() => {
-    // Sort by most-recent-month value (descending), alphabetical tie-break.
-    // `null` (zero-denom for ratio modes) sorts to the bottom.
+    // Active column: explicit sort column, or default to the last visible month.
+    // Direction: user-selected, or default to desc.
     const lastIdx = monthLabels.length - 1;
+    const sortIdx = sort?.columnIdx ?? lastIdx;
+    const sortFactor = sort?.direction === "asc" ? -1 : 1;
+
     const sorted = [...rows].sort((a, b) => {
-      const aCell = a.monthlyCells[lastIdx];
-      const bCell = b.monthlyCells[lastIdx];
+      const aCell = a.monthlyCells[sortIdx];
+      const bCell = b.monthlyCells[sortIdx];
       const aVal = aCell ? cellValue(aCell, mode) : null;
       const bVal = bCell ? cellValue(bCell, mode) : null;
-      const aSort = aVal ?? -Infinity;
-      const bSort = bVal ?? -Infinity;
-      return bSort - aSort || a.name.localeCompare(b.name);
+      // Null-at-bottom invariant: treat null AND value<=0 as "no data" (matches
+      // `formatValue`'s "—" rule) and pin them at the bottom in BOTH directions.
+      // Using `value ?? -Infinity` would float null to the TOP in asc mode —
+      // that's the trap we are avoiding.
+      const aIsNull = aVal === null || aVal <= 0;
+      const bIsNull = bVal === null || bVal <= 0;
+      if (aIsNull && bIsNull) return a.name.localeCompare(b.name);
+      if (aIsNull) return 1;
+      if (bIsNull) return -1;
+      const cmp = (bVal! - aVal!) * sortFactor;
+      return cmp || a.name.localeCompare(b.name);
     });
 
     // Collapse tail rows into a single "Others" row when topN is set.
@@ -164,7 +193,7 @@ export function TrendTable({
     });
 
     return { displayRows: withOthers, totals: totalsArr };
-  }, [rows, monthLabels, mode, topN]);
+  }, [rows, monthLabels, mode, topN, sort]);
 
   if (rows.length === 0) {
     const msg = emptyMessage ?? `No ${entityLabel.toLowerCase()} data`;
@@ -180,17 +209,44 @@ export function TrendTable({
       <table className="w-full text-[12px]">
         <thead>
           <tr className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-            <th className="text-left py-2 pr-2 font-normal sticky left-0 bg-[var(--bg-elevated)] z-10">
+            <th
+              scope="col"
+              className="text-left py-2 pr-2 font-normal sticky left-0 bg-[var(--bg-elevated)] z-10"
+            >
               {entityLabel}
             </th>
-            {monthLabels.map((label) => (
-              <th
-                key={label}
-                className="text-right py-2 px-1.5 font-normal whitespace-nowrap"
-              >
-                {label.split(" ")[0]}
-              </th>
-            ))}
+            {monthLabels.map((label, idx) => {
+              const isActive = sort?.columnIdx === idx;
+              const ariaSort: "ascending" | "descending" | "none" = isActive
+                ? sort!.direction === "asc"
+                  ? "ascending"
+                  : "descending"
+                : "none";
+              return (
+                <th
+                  key={label}
+                  scope="col"
+                  aria-sort={ariaSort}
+                  className="text-right py-2 px-1.5 font-normal whitespace-nowrap"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSort((prev) => nextSort(prev, idx))}
+                    className="inline-flex items-center gap-1 uppercase tracking-wider cursor-pointer hover:text-[var(--text-primary)] transition-colors"
+                  >
+                    <span>{label.split(" ")[0]}</span>
+                    {isActive && (
+                      <span
+                        aria-hidden="true"
+                        className="text-[var(--text-primary)]"
+                      >
+                        {sort!.direction === "desc" ? "▼" : "▲"}
+                      </span>
+                    )}
+                  </button>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>

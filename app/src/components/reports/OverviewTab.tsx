@@ -1,15 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TrendChart } from "./charts/TrendChart";
 import { RevenueChart } from "./charts/RevenueChart";
 import { PricingHealthChart } from "./charts/PricingHealthChart";
 import { EmployeeTrendTable, type EmployeeHoursMode } from "./charts/EmployeeTrendTable";
 import { ByClientTable } from "./charts/ByClientTable";
+import { useImpersonation } from "@/contexts/ImpersonationContext";
 import type { TrendResponse } from "@/types/reports";
 
-// Module-level cache so tab switching does not re-fetch
-let cachedTrendData: TrendResponse | null = null;
+// Module-level cache so tab switching does not re-fetch. Keyed by impersonated
+// user id (or "__real__" for the real admin) so toggling impersonation forces
+// a re-fetch rather than serving the previous user's cached numbers.
+const CACHE_TTL_MS = 5 * 60 * 1000;
+type TrendCacheEntry = { data: TrendResponse; fetchedAt: number };
+const trendCache = new Map<string, TrendCacheEntry>();
+
+function getCached(key: string): TrendResponse | null {
+  const entry = trendCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) {
+    trendCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
 
 function isAllEmpty(data: TrendResponse): boolean {
   return data.months.every((m) => m.totalHours === 0);
@@ -84,16 +99,33 @@ function EmployeeModeGroup({ label, options, current, onChange }: EmployeeModeGr
 }
 
 export function OverviewTab() {
-  const [trendData, setTrendData] = useState<TrendResponse | null>(
-    cachedTrendData
+  const { impersonatedUser } = useImpersonation();
+  const cacheKey = impersonatedUser?.id ?? "__real__";
+
+  const [trendData, setTrendData] = useState<TrendResponse | null>(() =>
+    getCached(cacheKey),
   );
-  const [loading, setLoading] = useState(cachedTrendData === null);
+  const [loading, setLoading] = useState(() => getCached(cacheKey) === null);
   const [error, setError] = useState<string | null>(null);
   const [employeeMode, setEmployeeMode] = useState<EmployeeHoursMode>("billableHours");
   const [clientMode, setClientMode] = useState<EmployeeHoursMode>("billableHours");
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  const handleRefresh = useCallback(() => {
+    trendCache.delete(cacheKey);
+    setTrendData(null);
+    setError(null);
+    setLoading(true);
+    setRefreshToken((t) => t + 1);
+  }, [cacheKey]);
 
   useEffect(() => {
-    if (cachedTrendData !== null) return;
+    const cached = getCached(cacheKey);
+    if (cached !== null) {
+      setTrendData(cached);
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
 
@@ -110,7 +142,7 @@ export function OverviewTab() {
         }
         const data: TrendResponse = await res.json();
         if (!cancelled) {
-          cachedTrendData = data;
+          trendCache.set(cacheKey, { data, fetchedAt: Date.now() });
           setTrendData(data);
           setLoading(false);
         }
@@ -118,7 +150,7 @@ export function OverviewTab() {
         console.error("Trend fetch failed:", err);
         if (!cancelled) {
           setError(
-            "Couldn't reach the server. Check your connection and try refreshing the page."
+            "Couldn't reach the server. Check your connection and try refreshing the page.",
           );
           setLoading(false);
         }
@@ -129,7 +161,7 @@ export function OverviewTab() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cacheKey, refreshToken]);
 
   if (loading) {
     return (
@@ -145,6 +177,13 @@ export function OverviewTab() {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <p className="text-[var(--text-secondary)] text-[13px]">{error}</p>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          className="mt-3 px-3 py-1.5 text-[12px] rounded bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+        >
+          Try again
+        </button>
       </div>
     );
   }

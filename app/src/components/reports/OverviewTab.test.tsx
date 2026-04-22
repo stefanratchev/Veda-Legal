@@ -2,6 +2,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import type { TrendResponse } from "@/types/reports";
 
+// Mock ImpersonationContext to avoid needing a provider in each test
+vi.mock("@/contexts/ImpersonationContext", () => ({
+  useImpersonation: () => ({
+    isImpersonating: false,
+    impersonatedUser: null,
+    isLoading: false,
+    startImpersonation: async () => {},
+    stopImpersonation: async () => {},
+    refresh: async () => {},
+  }),
+}));
+
 // Mock Recharts components to avoid jsdom SVG issues
 vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (

@@ -620,4 +620,93 @@ describe("allocateSdToBuckets", () => {
     expect(byMonth.has("2026-03-01")).toBe(false);
     expect(byMonth.get("2026-02-01")?.billedHours).toBe(6);
   });
+
+  it("reconciles fully-waived SD with surviving FIXED fee across firm/client/employee maps", () => {
+    // FIXED topic €500 fee whose only line items are all EXCLUDED. The non-
+    // retainer grand total still includes the fee (€500). All underlying
+    // items are waived, so billedHours must stay 0, but the €500 must flow
+    // through per-employee and per-client maps so firm-level and per-entity
+    // totals reconcile.
+    const sd = buildSd({
+      topics: [
+        {
+          id: "t1",
+          topicName: "Flat-fee advisory",
+          displayOrder: 0,
+          pricingMode: "FIXED",
+          hourlyRate: null,
+          fixedFee: 500,
+          capHours: null,
+          discountType: null,
+          discountValue: null,
+          lineItems: [
+            {
+              id: "li1",
+              timeEntryId: "te1",
+              date: "2026-02-10",
+              description: "waived Feb",
+              hours: 4,
+              originalHours: 4,
+              displayOrder: 0,
+              waiveMode: "EXCLUDED",
+              employeeName: "Alice",
+            },
+            {
+              id: "li2",
+              timeEntryId: "te2",
+              date: "2026-03-05",
+              description: "waived Mar",
+              hours: 2,
+              originalHours: 2,
+              displayOrder: 1,
+              waiveMode: "EXCLUDED",
+              employeeName: "Bob",
+            },
+          ],
+        },
+      ],
+    });
+
+    const {
+      byMonth,
+      empBilledByMonth,
+      empBilledHoursByMonth,
+      clientBilledByMonth,
+    } = allocateSdToBuckets(sd, "2026-03-31");
+
+    // Standard values at client.hourlyRate=200: Alice=800, Bob=400, total=1200.
+    // Fee €500 distributed pro-rata: Alice=500*800/1200=333.33, Bob=166.67.
+    const feeAlice = (500 * 800) / 1200;
+    const feeBob = (500 * 400) / 1200;
+
+    // Firm-level: Feb and Mar both see revenue, zero billedHours (all waived).
+    expect(byMonth.get("2026-02-01")?.billedRevenue).toBeCloseTo(feeAlice, 2);
+    expect(byMonth.get("2026-03-01")?.billedRevenue).toBeCloseTo(feeBob, 2);
+    expect(byMonth.get("2026-02-01")?.billedHours).toBe(0);
+    expect(byMonth.get("2026-03-01")?.billedHours).toBe(0);
+
+    // Per-employee: each gets their pro-rata share, NO billed hours.
+    expect(empBilledByMonth.get("2026-02-01:Alice")).toBeCloseTo(feeAlice, 2);
+    expect(empBilledByMonth.get("2026-03-01:Bob")).toBeCloseTo(feeBob, 2);
+    expect(empBilledHoursByMonth.get("2026-02-01:Alice")).toBeUndefined();
+    expect(empBilledHoursByMonth.get("2026-03-01:Bob")).toBeUndefined();
+
+    // Per-client: same reconciliation — firm-level total matches sum of client
+    // buckets AND sum of employee buckets.
+    expect(clientBilledByMonth.get("2026-02-01:c1")).toBeCloseTo(feeAlice, 2);
+    expect(clientBilledByMonth.get("2026-03-01:c1")).toBeCloseTo(feeBob, 2);
+
+    const firmTotal =
+      (byMonth.get("2026-02-01")?.billedRevenue ?? 0) +
+      (byMonth.get("2026-03-01")?.billedRevenue ?? 0);
+    const clientTotal =
+      (clientBilledByMonth.get("2026-02-01:c1") ?? 0) +
+      (clientBilledByMonth.get("2026-03-01:c1") ?? 0);
+    const empTotal =
+      (empBilledByMonth.get("2026-02-01:Alice") ?? 0) +
+      (empBilledByMonth.get("2026-03-01:Bob") ?? 0);
+    expect(firmTotal).toBeCloseTo(500, 2);
+    expect(clientTotal).toBeCloseTo(500, 2);
+    expect(empTotal).toBeCloseTo(500, 2);
+  });
 });

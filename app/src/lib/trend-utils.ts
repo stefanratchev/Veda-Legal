@@ -348,17 +348,49 @@ export function allocateSdToBuckets(
 
   // Fully-waived SD with nonzero non-retainer grand total (e.g. a FIXED
   // topic fee that survived even though all its line items were waived).
-  // The pro-rata loop above had no non-waived base, so attribute the
-  // orphaned revenue to the periodEnd bucket.
+  // The pro-rata loop above had no non-waived base, so fall back to the
+  // total standardValue (including waived items) as the allocation basis.
+  // This keeps the firm, per-client, and per-employee maps in agreement —
+  // without it, firm-level revenue would include the orphaned fee but
+  // per-employee / per-client breakdowns would silently miss it.
+  // Hours are intentionally NOT incremented (all underlying items are
+  // waived); effective rate renders "—" for the affected rows, which
+  // is the correct "fixed fee with no billable hours" signal.
   if (nonWaivedTotal <= 0 && nonRetainerGrandTotal > 0) {
-    const fallbackBucket = periodEnd.slice(0, 7) + "-01";
-    const entry = ensureBucket(fallbackBucket);
-    entry.billedRevenue += nonRetainerGrandTotal;
-    const clientKey = `${fallbackBucket}:${clientId}`;
-    clientBilledByMonth.set(
-      clientKey,
-      (clientBilledByMonth.get(clientKey) ?? 0) + nonRetainerGrandTotal,
+    const totalStandard = itemsWithBucket.reduce(
+      (s, i) => s + i.standardValue,
+      0,
     );
+    if (totalStandard > 0) {
+      for (const i of itemsWithBucket) {
+        const revShare =
+          (i.standardValue / totalStandard) * nonRetainerGrandTotal;
+        ensureBucket(i.bucketMonth).billedRevenue += revShare;
+        const clientKey = `${i.bucketMonth}:${clientId}`;
+        clientBilledByMonth.set(
+          clientKey,
+          (clientBilledByMonth.get(clientKey) ?? 0) + revShare,
+        );
+        if (i.employeeName) {
+          const empKey = `${i.bucketMonth}:${i.employeeName}`;
+          empBilledByMonth.set(
+            empKey,
+            (empBilledByMonth.get(empKey) ?? 0) + revShare,
+          );
+        }
+      }
+    } else {
+      // Pathological: fully waived AND zero total standardValue. Can't
+      // meaningfully distribute — fall back to periodEnd for firm-level
+      // reconciliation only (per-entity rows will simply miss this SD).
+      const fallbackBucket = periodEnd.slice(0, 7) + "-01";
+      ensureBucket(fallbackBucket).billedRevenue += nonRetainerGrandTotal;
+      const clientKey = `${fallbackBucket}:${clientId}`;
+      clientBilledByMonth.set(
+        clientKey,
+        (clientBilledByMonth.get(clientKey) ?? 0) + nonRetainerGrandTotal,
+      );
+    }
   }
 
   // Retainer fee: entirely to the dominant month. Per-employee allocation

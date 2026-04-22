@@ -496,8 +496,14 @@ describe("allocateSdToBuckets", () => {
       ],
     });
 
-    const { byMonth, clientBilledByMonth, clientBilledHoursByMonth, clientStandardByMonth } =
-      allocateSdToBuckets(sd, "2026-03-31");
+    const {
+      byMonth,
+      clientBilledByMonth,
+      clientBilledHoursByMonth,
+      clientStandardByMonth,
+      empBilledByMonth,
+      empBilledHoursByMonth,
+    } = allocateSdToBuckets(sd, "2026-03-31");
 
     expect(byMonth.get("2026-02-01")?.billedRevenue).toBeCloseTo(300, 2);
     expect(byMonth.get("2026-03-01")?.billedRevenue).toBeCloseTo(5450, 2);
@@ -512,6 +518,27 @@ describe("allocateSdToBuckets", () => {
     expect(clientBilledHoursByMonth.get("2026-03-01:c1")).toBe(15);
     expect(clientStandardByMonth.get("2026-02-01:c1")).toBe(2000);
     expect(clientStandardByMonth.get("2026-03-01:c1")).toBe(3000);
+
+    // Per-employee: the retainer fee (€5000) splits by non-waived standard
+    // share and lands entirely in the dominant month (March). The non-retainer
+    // €750 stays per-item.
+    //   Alice: 300 (Feb non-retainer) + 2000 (March retainer, 2000/5000 * 5000)
+    //   Bob:   450 (March non-retainer) + 3000 (March retainer, 3000/5000 * 5000)
+    expect(empBilledByMonth.get("2026-02-01:Alice")).toBeCloseTo(300, 2);
+    expect(empBilledByMonth.get("2026-03-01:Alice")).toBeCloseTo(2000, 2);
+    expect(empBilledByMonth.get("2026-03-01:Bob")).toBeCloseTo(450 + 3000, 2);
+    // Retainer loop does not write hours — only the non-retainer per-item loop does.
+    expect(empBilledHoursByMonth.get("2026-02-01:Alice")).toBe(10);
+    expect(empBilledHoursByMonth.get("2026-03-01:Bob")).toBe(15);
+    // Alice has no March hours because her only item was in Feb.
+    expect(empBilledHoursByMonth.get("2026-03-01:Alice")).toBeUndefined();
+
+    // Reconciliation: per-employee sum equals firm-level total.
+    const empTotal =
+      (empBilledByMonth.get("2026-02-01:Alice") ?? 0) +
+      (empBilledByMonth.get("2026-03-01:Alice") ?? 0) +
+      (empBilledByMonth.get("2026-03-01:Bob") ?? 0);
+    expect(empTotal).toBeCloseTo(5750, 2);
   });
 
   it("waived items contribute to standardRateValue only (not billedHours or billedRevenue share)", () => {

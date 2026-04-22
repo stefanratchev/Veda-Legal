@@ -69,13 +69,27 @@ export interface MonthlyTrendPoint {
   utilization: number;  // percentage 0-100
   billedRevenue: number;     // grand total from finalized SDs
   standardRateValue: number; // potential revenue at standard rates
+  billedHours: number;       // hours billed on finalized SDs bucketed by periodEnd
   realization: number;       // percentage: billedRevenue / standardRateValue * 100
   byEmployee: {
     id: string;
     name: string;
     hours: number;
     billableHours: number;
+    billableRevenue: number; // billableHours * client hourlyRate (theoretical)
     billedRevenue: number;
+    billedHours: number; // hours billed on finalized SDs bucketed by periodEnd
+    standardRateValue: number; // per-employee standard-rate value of items on finalized SDs (denominator of realization)
+  }[];
+  byClient: {
+    id: string;
+    name: string;
+    hours: number;
+    billableHours: number;
+    billableRevenue: number; // billableHours * client hourlyRate (theoretical)
+    billedRevenue: number;
+    billedHours: number; // hours billed on finalized SDs bucketed by line-item date
+    standardRateValue: number; // per-client standard-rate value of items on finalized SDs
   }[];
 }
 

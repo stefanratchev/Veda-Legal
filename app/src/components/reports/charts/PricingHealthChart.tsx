@@ -10,22 +10,38 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { formatEur } from "./chart-format";
+import { formatEur, formatEurPerHour } from "./chart-format";
 import type { MonthlyTrendPoint } from "@/types/reports";
 
-interface RevenueTooltipProps {
-  active?: boolean;
-  payload?: {
-    dataKey: string;
-    value: number;
-    payload: MonthlyTrendPoint;
-  }[];
+/** Chart-ready point: original MonthlyTrendPoint + derived display fields. */
+export interface PricingHealthPoint extends MonthlyTrendPoint {
+  lostRevenue: number;
+  effectiveRate: number | null;
 }
 
-function RevenueTooltip({ active, payload }: RevenueTooltipProps) {
-  if (!active || !payload?.length) return null;
+/**
+ * Pure data transform — exported for testing.
+ * lostRevenue: clamped at 0 to absorb sub-cent rounding artefacts.
+ * effectiveRate: null when billedHours === 0 so Recharts draws a gap (per D-03).
+ */
+export function prepareChartData(data: MonthlyTrendPoint[]): PricingHealthPoint[] {
+  return data.map((p) => ({
+    ...p,
+    lostRevenue: Math.max(0, p.standardRateValue - p.billedRevenue),
+    effectiveRate: p.billedHours > 0 ? p.billedRevenue / p.billedHours : null,
+  }));
+}
 
+interface PricingHealthTooltipProps {
+  active?: boolean;
+  payload?: { dataKey: string; value: number; payload: PricingHealthPoint }[];
+}
+
+function PricingHealthTooltip({ active, payload }: PricingHealthTooltipProps) {
+  if (!active || !payload?.length) return null;
   const point = payload[0].payload;
+  const rateLabel =
+    point.effectiveRate != null ? `€${Math.round(point.effectiveRate)}/hr` : "—";
 
   return (
     <div
@@ -37,52 +53,62 @@ function RevenueTooltip({ active, payload }: RevenueTooltipProps) {
         fontSize: "11px",
       }}
     >
-      <div
-        style={{
-          color: "var(--text-primary)",
-          marginBottom: 4,
-          fontWeight: 500,
-        }}
-      >
+      <div style={{ color: "var(--text-primary)", marginBottom: 4, fontWeight: 500 }}>
         {point.label}
       </div>
-      <div style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+      <div
+        style={{
+          color: "var(--text-secondary)",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginBottom: 2,
+        }}
+      >
         <span
           style={{
             display: "inline-block",
             width: 8,
             height: 8,
             borderRadius: "50%",
-            backgroundColor: "#4ECDC4",
+            backgroundColor: "#F87171",
           }}
         />
-        Billed: €{point.billedRevenue.toLocaleString()}
+        Lost Revenue: {formatEur(point.lostRevenue)}
       </div>
-      <div style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+      <div
+        style={{
+          color: "var(--text-secondary)",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
         <span
           style={{
             display: "inline-block",
             width: 8,
             height: 8,
             borderRadius: "50%",
-            backgroundColor: "#F5A623",
+            backgroundColor: "#5A8FC7",
           }}
         />
-        Realization: {point.realization}%
+        Effective Rate: {rateLabel}
       </div>
     </div>
   );
 }
 
-interface RevenueChartProps {
+interface PricingHealthChartProps {
   data: MonthlyTrendPoint[];
 }
 
-export function RevenueChart({ data }: RevenueChartProps) {
+export function PricingHealthChart({ data }: PricingHealthChartProps) {
+  const chartData = prepareChartData(data);
   return (
     <ResponsiveContainer width="100%" height={280}>
       <ComposedChart
-        data={data}
+        data={chartData}
         margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
       >
         <XAxis
@@ -101,17 +127,17 @@ export function RevenueChart({ data }: RevenueChartProps) {
         <YAxis
           yAxisId="right"
           orientation="right"
-          domain={[0, (max: number) => Math.max(100, Math.ceil(max / 10) * 10)]}
           tick={{ fill: "var(--text-muted)", fontSize: 11 }}
           axisLine={{ stroke: "var(--border-subtle)" }}
           tickLine={false}
-          tickFormatter={(v: number) => `${v}%`}
+          tickFormatter={formatEurPerHour}
         />
         <Tooltip
-          content={<RevenueTooltip />}
+          content={<PricingHealthTooltip />}
           cursor={{ fill: "var(--bg-surface)", fillOpacity: 0.5 }}
         />
         <Legend
+          itemSorter={(item) => (item.dataKey === "lostRevenue" ? 0 : 1)}
           formatter={(value: string) => (
             <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>
               {value}
@@ -120,23 +146,24 @@ export function RevenueChart({ data }: RevenueChartProps) {
         />
         <Bar
           yAxisId="left"
-          dataKey="billedRevenue"
-          fill="#4ECDC4"
+          dataKey="lostRevenue"
+          fill="#F87171"
           fillOpacity={0.4}
           radius={[4, 4, 0, 0]}
-          name="Billed Revenue"
+          name="Lost Revenue"
           isAnimationActive={false}
         />
         <Line
           yAxisId="right"
-          dataKey="realization"
+          dataKey="effectiveRate"
           type="monotone"
-          stroke="#F5A623"
+          stroke="#5A8FC7"
           strokeWidth={2}
           dot={false}
           activeDot={{ r: 4, strokeWidth: 0 }}
-          name="Realization"
+          name="Effective Rate"
           isAnimationActive={false}
+          connectNulls={false}
         />
       </ComposedChart>
     </ResponsiveContainer>

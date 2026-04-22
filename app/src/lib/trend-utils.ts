@@ -6,19 +6,28 @@ import {
   calculateGrandTotal,
   calculateRetainerGrandTotal,
 } from "@/lib/billing-pdf";
+import { BILLING_START_DATE } from "@/lib/billing-config";
 import type { MonthlyTrendPoint, TrendResponse } from "@/types/reports";
+import type { ServiceDescription } from "@/types";
 
 /**
- * Generate an array of 12 ISO date strings representing the first day of each
- * month, from 11 months ago through the current month.
+ * Generate ISO date strings for the first day of each month in the trend
+ * window. Default window is the last 12 months ending at `now`, but when a
+ * `floor` date is provided, any months before the floor's month are excluded.
+ *
+ * With a floor newer than 11 months ago the array is shorter than 12; the
+ * window grows month-by-month until the rolling 12-month cap takes over.
  */
-export function generateLast12Months(now: Date = new Date()): string[] {
+export function generateLast12Months(now: Date = new Date(), floor?: string): string[] {
+  const floorMonthKey = floor ? floor.slice(0, 7) + "-01" : null;
   const months: string[] = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
-    months.push(`${year}-${month}-01`);
+    const iso = `${year}-${month}-01`;
+    if (floorMonthKey && iso < floorMonthKey) continue;
+    months.push(iso);
   }
   return months;
 }
@@ -50,11 +59,458 @@ export function calculateUtilization(
 }
 
 /**
+ * A line item flattened for bucket allocation. Positive-hours items only;
+ * zero/negative-hour items are dropped by buildSdLineItems.
+ */
+export interface LineItemForAllocation {
+  date: string | null;
+  hours: number;
+  standardValue: number;
+  isWaived: boolean;
+  employeeId: string | null;
+  employeeName: string | null;
+}
+
+/**
+ * Flatten an SD's topics into positive-hours line items annotated with
+ * standardValue (hours * rate) and waive state.
+ *
+ * HOURLY topics use `topic.hourlyRate`; FIXED topics use `client.hourlyRate`
+ * as the standard-rate proxy. When rate is missing, standardValue is 0 but
+ * hours still count. For TE-linked items, originalHours is preferred over
+ * the (possibly edited) billed hours so the standard-rate value reflects
+ * what was actually worked.
+ */
+export function buildSdLineItems(sd: {
+  topics: Array<{
+    pricingMode: "HOURLY" | "FIXED";
+    hourlyRate: number | null;
+    lineItems: Array<{
+      timeEntryId: string | null;
+      originalHours?: number;
+      hours: number | null;
+      date: string | null;
+      waiveMode: "EXCLUDED" | "ZERO" | null;
+      employeeId?: string;
+      employeeName?: string;
+    }>;
+  }>;
+  client: { hourlyRate: number | null };
+}): LineItemForAllocation[] {
+  const out: LineItemForAllocation[] = [];
+  for (const topic of sd.topics) {
+    const rate =
+      topic.pricingMode === "HOURLY"
+        ? (topic.hourlyRate ?? 0)
+        : (sd.client.hourlyRate ?? 0);
+    for (const li of topic.lineItems) {
+      const hours = li.timeEntryId
+        ? (li.originalHours ?? li.hours ?? 0)
+        : (li.hours ?? 0);
+      if (hours <= 0) continue;
+      out.push({
+        date: li.date,
+        hours,
+        standardValue: hours * rate,
+        isWaived: li.waiveMode === "EXCLUDED" || li.waiveMode === "ZERO",
+        employeeId: li.employeeId ?? null,
+        employeeName: li.employeeName ?? null,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Pick the date used for manual line items without an explicit date.
+ * Uses the date of the largest (by hours) non-waived item with a date.
+ * Falls back to `periodEnd` when no non-waived dated items exist.
+ */
+export function pickFallbackDate(
+  items: LineItemForAllocation[],
+  periodEnd: string,
+): string {
+  let best: LineItemForAllocation | null = null;
+  for (const i of items) {
+    if (i.isWaived || i.date == null) continue;
+    if (best == null || i.hours > best.hours) best = i;
+  }
+  return best?.date ?? periodEnd;
+}
+
+/**
+ * The month with the most non-waived hours across the SD's line items.
+ * Ties broken by the latest month. Used to place the retainer fee, which
+ * isn't tied to any specific line item. Falls back to the periodEnd bucket
+ * when there are no non-waived items.
+ */
+export function pickDominantMonth(
+  itemsWithBucket: Array<LineItemForAllocation & { bucketMonth: string }>,
+  periodEnd: string,
+): string {
+  const periodEndBucket = periodEnd.slice(0, 7) + "-01";
+  const byMonth = new Map<string, number>();
+  for (const i of itemsWithBucket) {
+    if (i.isWaived) continue;
+    byMonth.set(i.bucketMonth, (byMonth.get(i.bucketMonth) ?? 0) + i.hours);
+  }
+  if (byMonth.size === 0) return periodEndBucket;
+  let topMonth: string | null = null;
+  let topHours = -1;
+  for (const [month, hours] of byMonth) {
+    if (hours > topHours || (hours === topHours && topMonth != null && month > topMonth)) {
+      topHours = hours;
+      topMonth = month;
+    }
+  }
+  return topMonth ?? periodEndBucket;
+}
+
+/**
+ * For a retainer SD, split the grand total into the retainer-fee portion
+ * and the rest (overage + fixed topics). The SD-level discount is applied
+ * proportionally so this works for both PERCENTAGE and AMOUNT discounts:
+ * compute the pre-discount retainer total and use its ratio to grandTotal.
+ */
+export function splitRetainerGrandTotal(
+  sd: {
+    topics: ServiceDescription["topics"];
+    retainerFee: number;
+    retainerHours: number;
+    retainerOverageRate: number | null;
+    discountType: "PERCENTAGE" | "AMOUNT" | null;
+    discountValue: number | null;
+  },
+  grandTotal: number,
+): { retainerPortion: number; nonRetainerGrandTotal: number } {
+  const preDiscountTotal = calculateRetainerGrandTotal(
+    sd.topics,
+    sd.retainerFee,
+    sd.retainerHours,
+    sd.retainerOverageRate ?? 0,
+    null,
+    null,
+  );
+  if (preDiscountTotal <= 0) {
+    if (grandTotal > 0) {
+      // Data anomaly: the retainer math can't allocate a positive grand total
+      // when pre-discount is zero (would divide by zero). Retainer fee silently
+      // disappears from per-employee/per-client allocation. Surface it.
+      console.warn(
+        `[trend-utils] Retainer SD has non-positive preDiscountTotal=${preDiscountTotal} ` +
+          `with grandTotal=${grandTotal}; retainer fee will not be attributed.`,
+      );
+    }
+    return { retainerPortion: 0, nonRetainerGrandTotal: grandTotal };
+  }
+  const discountFactor = grandTotal / preDiscountTotal;
+  const retainerPortion = sd.retainerFee * discountFactor;
+  return {
+    retainerPortion,
+    nonRetainerGrandTotal: grandTotal - retainerPortion,
+  };
+}
+
+/**
+ * Distribute an SD's billed revenue, standard-rate value, and billed hours
+ * into per-month buckets keyed by `lineItem.date`. Manual items without a
+ * date use the fallback (largest non-waived dated item, else periodEnd).
+ *
+ * Waived items contribute to `standardRateValue` (so they show as lost
+ * revenue) but NOT to `billedHours` or the pro-rata `billedRevenue`
+ * distribution.
+ *
+ * For retainer SDs, the retainer-fee portion is placed in the dominant
+ * month; the rest (overage + fixed topic totals) is distributed per line
+ * item. Per-employee billed revenue is allocated proportionally to
+ * non-waived standard share within each SD.
+ */
+export function allocateSdToBuckets(
+  sd: ServiceDescription,
+  periodEnd: string,
+): {
+  byMonth: Map<string, { billedRevenue: number; standardRateValue: number; billedHours: number }>;
+  empBilledByMonth: Map<string, number>;
+  empBilledHoursByMonth: Map<string, number>;
+  empStandardByMonth: Map<string, number>;
+  clientBilledByMonth: Map<string, number>;
+  clientBilledHoursByMonth: Map<string, number>;
+  clientStandardByMonth: Map<string, number>;
+  clientNames: Map<string, string>;
+} {
+  const items = buildSdLineItems(sd);
+  const fallbackDate = pickFallbackDate(items, periodEnd);
+  const itemsWithBucket = items.map((i) => ({
+    ...i,
+    bucketMonth: (i.date ?? fallbackDate).slice(0, 7) + "-01",
+  }));
+
+  const isRetainer = sd.retainerFee != null && sd.retainerHours != null;
+  const grandTotal = isRetainer
+    ? calculateRetainerGrandTotal(
+        sd.topics,
+        sd.retainerFee!,
+        sd.retainerHours!,
+        sd.retainerOverageRate ?? 0,
+        sd.discountType,
+        sd.discountValue,
+      )
+    : calculateGrandTotal(sd.topics, sd.discountType, sd.discountValue);
+
+  const { retainerPortion, nonRetainerGrandTotal } = isRetainer
+    ? splitRetainerGrandTotal(
+        {
+          topics: sd.topics,
+          retainerFee: sd.retainerFee!,
+          retainerHours: sd.retainerHours!,
+          retainerOverageRate: sd.retainerOverageRate ?? 0,
+          discountType: sd.discountType,
+          discountValue: sd.discountValue,
+        },
+        grandTotal,
+      )
+    : { retainerPortion: 0, nonRetainerGrandTotal: grandTotal };
+
+  const nonWaivedTotal = itemsWithBucket
+    .filter((i) => !i.isWaived)
+    .reduce((s, i) => s + i.standardValue, 0);
+
+  const byMonth = new Map<
+    string,
+    { billedRevenue: number; standardRateValue: number; billedHours: number }
+  >();
+  const empBilledByMonth = new Map<string, number>();
+  const empBilledHoursByMonth = new Map<string, number>();
+  const empStandardByMonth = new Map<string, number>();
+  const clientBilledByMonth = new Map<string, number>();
+  const clientBilledHoursByMonth = new Map<string, number>();
+  const clientStandardByMonth = new Map<string, number>();
+  const clientNames = new Map<string, string>();
+
+  const clientId = sd.client.id;
+  const clientName = sd.client.name;
+  clientNames.set(clientId, clientName);
+
+  const ensureBucket = (month: string) => {
+    let e = byMonth.get(month);
+    if (!e) {
+      e = { billedRevenue: 0, standardRateValue: 0, billedHours: 0 };
+      byMonth.set(month, e);
+    }
+    return e;
+  };
+
+  for (const i of itemsWithBucket) {
+    const entry = ensureBucket(i.bucketMonth);
+    // Standard value: all items contribute (waived too — they are lost revenue).
+    entry.standardRateValue += i.standardValue;
+    // Per-client standard value mirrors firm-level: include waived so
+    // per-client realization is comparable with firm-level.
+    const clientStdKey = `${i.bucketMonth}:${clientId}`;
+    clientStandardByMonth.set(
+      clientStdKey,
+      (clientStandardByMonth.get(clientStdKey) ?? 0) + i.standardValue,
+    );
+    // Per-employee standard value mirrors firm-level: include waived so
+    // per-employee realization is comparable with firm-level. Keyed by
+    // user id (stable) rather than name (collides on duplicates, drifts
+    // on rename).
+    if (i.employeeId) {
+      const empKey = `${i.bucketMonth}:${i.employeeId}`;
+      empStandardByMonth.set(
+        empKey,
+        (empStandardByMonth.get(empKey) ?? 0) + i.standardValue,
+      );
+    }
+    if (i.isWaived) continue;
+
+    entry.billedHours += i.hours;
+
+    if (nonWaivedTotal > 0) {
+      const revShare = (i.standardValue / nonWaivedTotal) * nonRetainerGrandTotal;
+      entry.billedRevenue += revShare;
+
+      const clientKey = `${i.bucketMonth}:${clientId}`;
+      clientBilledByMonth.set(
+        clientKey,
+        (clientBilledByMonth.get(clientKey) ?? 0) + revShare,
+      );
+      clientBilledHoursByMonth.set(
+        clientKey,
+        (clientBilledHoursByMonth.get(clientKey) ?? 0) + i.hours,
+      );
+
+      if (i.employeeId) {
+        const empKey = `${i.bucketMonth}:${i.employeeId}`;
+        empBilledByMonth.set(empKey, (empBilledByMonth.get(empKey) ?? 0) + revShare);
+        empBilledHoursByMonth.set(
+          empKey,
+          (empBilledHoursByMonth.get(empKey) ?? 0) + i.hours,
+        );
+      }
+    }
+  }
+
+  // Fully-waived SD with nonzero non-retainer grand total (e.g. a FIXED
+  // topic fee that survived even though all its line items were waived).
+  // The pro-rata loop above had no non-waived base, so fall back to the
+  // total standardValue (including waived items) as the allocation basis.
+  // This keeps the firm, per-client, and per-employee maps in agreement —
+  // without it, firm-level revenue would include the orphaned fee but
+  // per-employee / per-client breakdowns would silently miss it.
+  // Hours are intentionally NOT incremented (all underlying items are
+  // waived); effective rate renders "—" for the affected rows, which
+  // is the correct "fixed fee with no billable hours" signal.
+  if (nonWaivedTotal <= 0 && nonRetainerGrandTotal > 0) {
+    const totalStandard = itemsWithBucket.reduce(
+      (s, i) => s + i.standardValue,
+      0,
+    );
+    if (totalStandard > 0) {
+      for (const i of itemsWithBucket) {
+        const revShare =
+          (i.standardValue / totalStandard) * nonRetainerGrandTotal;
+        ensureBucket(i.bucketMonth).billedRevenue += revShare;
+        const clientKey = `${i.bucketMonth}:${clientId}`;
+        clientBilledByMonth.set(
+          clientKey,
+          (clientBilledByMonth.get(clientKey) ?? 0) + revShare,
+        );
+        if (i.employeeId) {
+          const empKey = `${i.bucketMonth}:${i.employeeId}`;
+          empBilledByMonth.set(
+            empKey,
+            (empBilledByMonth.get(empKey) ?? 0) + revShare,
+          );
+        }
+      }
+    } else {
+      // Pathological: fully waived AND zero total standardValue. Can't
+      // meaningfully distribute — fall back to periodEnd for firm-level
+      // reconciliation only (per-entity rows will simply miss this SD).
+      const fallbackBucket = periodEnd.slice(0, 7) + "-01";
+      ensureBucket(fallbackBucket).billedRevenue += nonRetainerGrandTotal;
+      const clientKey = `${fallbackBucket}:${clientId}`;
+      clientBilledByMonth.set(
+        clientKey,
+        (clientBilledByMonth.get(clientKey) ?? 0) + nonRetainerGrandTotal,
+      );
+    }
+  }
+
+  // Retainer fee: entirely to the dominant month. Per-employee allocation
+  // uses the SD's non-waived standard-value share. Per-client is trivial —
+  // the whole retainer goes to the SD's one client.
+  if (retainerPortion > 0) {
+    const dominantMonth = pickDominantMonth(itemsWithBucket, periodEnd);
+    ensureBucket(dominantMonth).billedRevenue += retainerPortion;
+
+    const clientKey = `${dominantMonth}:${clientId}`;
+    clientBilledByMonth.set(
+      clientKey,
+      (clientBilledByMonth.get(clientKey) ?? 0) + retainerPortion,
+    );
+
+    if (nonWaivedTotal > 0) {
+      const perEmpShares = new Map<string, number>();
+      for (const i of itemsWithBucket) {
+        if (i.isWaived || !i.employeeId) continue;
+        perEmpShares.set(
+          i.employeeId,
+          (perEmpShares.get(i.employeeId) ?? 0) + i.standardValue,
+        );
+      }
+      for (const [empId, share] of perEmpShares) {
+        const empRetainerShare = (share / nonWaivedTotal) * retainerPortion;
+        const empKey = `${dominantMonth}:${empId}`;
+        empBilledByMonth.set(
+          empKey,
+          (empBilledByMonth.get(empKey) ?? 0) + empRetainerShare,
+        );
+      }
+    }
+  }
+
+  return {
+    byMonth,
+    empBilledByMonth,
+    empBilledHoursByMonth,
+    empStandardByMonth,
+    clientBilledByMonth,
+    clientBilledHoursByMonth,
+    clientStandardByMonth,
+    clientNames,
+  };
+}
+
+/**
+ * Merge Query-4 (time-entry-based) per-client rows with SD-allocation-based
+ * per-client billed/standard maps for one month. Also includes any clientId
+ * that has SD allocations in this month but no time entries (e.g. an SD
+ * finalized in this month whose entries all fall in an earlier month).
+ */
+export function buildByClientForMonth(
+  monthStart: string,
+  clientMap: Map<
+    string,
+    { id: string; name: string; hours: number; billableHours: number; billableRevenue: number }[]
+  >,
+  clientBilledMap: Map<string, number>,
+  clientBilledHoursMap: Map<string, number>,
+  clientStandardMap: Map<string, number>,
+  clientNamesMap: Map<string, string>,
+): import("@/types/reports").MonthlyTrendPoint["byClient"] {
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const rows = clientMap.get(monthStart) ?? [];
+  const seenIds = new Set<string>();
+  const out = rows.map((c) => {
+    seenIds.add(c.id);
+    return {
+      ...c,
+      billedRevenue: round(clientBilledMap.get(`${monthStart}:${c.id}`) ?? 0),
+      billedHours: round(clientBilledHoursMap.get(`${monthStart}:${c.id}`) ?? 0),
+      standardRateValue: round(clientStandardMap.get(`${monthStart}:${c.id}`) ?? 0),
+    };
+  });
+
+  // Sweep SD-allocation maps for any clients that have billed/standard values
+  // in this month but no matching time entries. This can happen when an SD's
+  // period covers earlier months or when items are manual/undated.
+  const prefix = `${monthStart}:`;
+  const extraClientIds = new Set<string>();
+  for (const key of clientBilledMap.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    const id = key.slice(prefix.length);
+    if (!seenIds.has(id)) extraClientIds.add(id);
+  }
+  for (const key of clientStandardMap.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    const id = key.slice(prefix.length);
+    if (!seenIds.has(id)) extraClientIds.add(id);
+  }
+
+  for (const id of extraClientIds) {
+    out.push({
+      id,
+      name: clientNamesMap.get(id) ?? "Unknown",
+      hours: 0,
+      billableHours: 0,
+      billableRevenue: 0,
+      billedRevenue: round(clientBilledMap.get(`${monthStart}:${id}`) ?? 0),
+      billedHours: round(clientBilledHoursMap.get(`${monthStart}:${id}`) ?? 0),
+      standardRateValue: round(clientStandardMap.get(`${monthStart}:${id}`) ?? 0),
+    });
+  }
+
+  return out;
+}
+
+/**
  * Fetch and aggregate the last 12 months of time entry data for the trend dashboard.
  */
 export async function getTrendData(): Promise<TrendResponse> {
-  const monthStarts = generateLast12Months();
-  const startDate = monthStarts[0]; // first day of oldest month
+  const monthStarts = generateLast12Months(new Date(), BILLING_START_DATE);
+  const startDate = monthStarts[0]; // first day of oldest month (floored at BILLING_START_DATE)
 
   // Last day of the most recent month
   const lastMonthStart = monthStarts[monthStarts.length - 1];
@@ -89,6 +545,7 @@ export async function getTrendData(): Promise<TrendResponse> {
       userName: users.name,
       hours: sql<string>`COALESCE(SUM(${timeEntries.hours}), 0)`,
       billableHours: sql<string>`COALESCE(SUM(CASE WHEN ${clients.clientType} = 'REGULAR' AND ${timeEntries.isWrittenOff} = false THEN ${timeEntries.hours} ELSE 0 END), 0)`,
+      billableRevenue: sql<string>`COALESCE(SUM(CASE WHEN ${clients.clientType} = 'REGULAR' AND ${timeEntries.isWrittenOff} = false THEN ${timeEntries.hours} * ${clients.hourlyRate} ELSE 0 END), 0)`,
     })
     .from(timeEntries)
     .innerJoin(users, eq(timeEntries.userId, users.id))
@@ -98,6 +555,37 @@ export async function getTrendData(): Promise<TrendResponse> {
       sql`DATE_TRUNC('month', ${timeEntries.date})::date`,
       timeEntries.userId,
       users.name
+    )
+    .orderBy(sql`month`);
+
+  // Query 4: Per-client monthly aggregation, REGULAR clients only.
+  // Mirrors Query 2 but grouped by clientId + client name. Excludes
+  // INTERNAL/MANAGEMENT clients since only REGULAR clients are relevant
+  // for the By Client trend view.
+  const clientRows = await db
+    .select({
+      month: sql<string>`DATE_TRUNC('month', ${timeEntries.date})::date`.as(
+        "month"
+      ),
+      clientId: timeEntries.clientId,
+      clientName: clients.name,
+      hours: sql<string>`COALESCE(SUM(${timeEntries.hours}), 0)`,
+      billableHours: sql<string>`COALESCE(SUM(CASE WHEN ${clients.clientType} = 'REGULAR' AND ${timeEntries.isWrittenOff} = false THEN ${timeEntries.hours} ELSE 0 END), 0)`,
+      billableRevenue: sql<string>`COALESCE(SUM(CASE WHEN ${clients.clientType} = 'REGULAR' AND ${timeEntries.isWrittenOff} = false THEN ${timeEntries.hours} * ${clients.hourlyRate} ELSE 0 END), 0)`,
+    })
+    .from(timeEntries)
+    .innerJoin(clients, eq(timeEntries.clientId, clients.id))
+    .where(
+      and(
+        gte(timeEntries.date, startDate),
+        lte(timeEntries.date, endDate),
+        eq(clients.clientType, "REGULAR"),
+      ),
+    )
+    .groupBy(
+      sql`DATE_TRUNC('month', ${timeEntries.date})::date`,
+      timeEntries.clientId,
+      clients.name,
     )
     .orderBy(sql`month`);
 
@@ -124,7 +612,7 @@ export async function getTrendData(): Promise<TrendResponse> {
 
   const employeeMap = new Map<
     string,
-    { id: string; name: string; hours: number; billableHours: number }[]
+    { id: string; name: string; hours: number; billableHours: number; billableRevenue: number }[]
   >();
 
   for (const row of employeeRows) {
@@ -137,15 +625,37 @@ export async function getTrendData(): Promise<TrendResponse> {
       name: row.userName || "Unknown",
       hours: Number(row.hours),
       billableHours: Number(row.billableHours),
+      billableRevenue: Number(row.billableRevenue),
     });
   }
 
-  // Query 3: Finalized service descriptions in the 12-month window (for billing metrics)
+  const clientMap = new Map<
+    string,
+    { id: string; name: string; hours: number; billableHours: number; billableRevenue: number }[]
+  >();
+
+  for (const row of clientRows) {
+    const key = String(row.month);
+    if (!clientMap.has(key)) {
+      clientMap.set(key, []);
+    }
+    clientMap.get(key)!.push({
+      id: row.clientId,
+      name: row.clientName || "Unknown",
+      hours: Number(row.hours),
+      billableHours: Number(row.billableHours),
+      billableRevenue: Number(row.billableRevenue),
+    });
+  }
+
+  // Query 3: Finalized service descriptions whose billing period ends in the
+  // 12-month window. The actual per-month allocation inside allocateSdToBuckets
+  // buckets by each line item's own date, which is finer-grained than periodEnd.
   const finalizedSDs = await db.query.serviceDescriptions.findMany({
     where: and(
       eq(serviceDescriptions.status, "FINALIZED"),
-      gte(serviceDescriptions.finalizedAt, startDate),
-      lte(serviceDescriptions.finalizedAt, endDate + "T23:59:59.999"),
+      gte(serviceDescriptions.periodEnd, startDate),
+      lte(serviceDescriptions.periodEnd, endDate),
     ),
     columns: {
       id: true,
@@ -205,7 +715,7 @@ export async function getTrendData(): Promise<TrendResponse> {
             with: {
               timeEntry: {
                 columns: { hours: true, description: true },
-                with: { user: { columns: { name: true } } },
+                with: { user: { columns: { id: true, name: true } } },
               },
             },
           },
@@ -214,88 +724,73 @@ export async function getTrendData(): Promise<TrendResponse> {
     },
   });
 
-  // Compute billed revenue and standard rate value per month (by finalizedAt)
-  const billingMap = new Map<string, { billedRevenue: number; standardRateValue: number }>();
-  // Per-employee billed revenue keyed by "YYYY-MM-01:employeeName"
+  // Per-month firm-level totals, bucketed by line-item date.
+  const billingMap = new Map<
+    string,
+    { billedRevenue: number; standardRateValue: number; billedHours: number }
+  >();
+  // Per-employee billed revenue/hours + standard value keyed by "YYYY-MM-01:employeeName".
   const employeeBilledMap = new Map<string, number>();
+  const employeeBilledHoursMap = new Map<string, number>();
+  const employeeStandardMap = new Map<string, number>();
+  // Per-client billed revenue/hours + standard value keyed by "YYYY-MM-01:clientId".
+  const clientBilledMap = new Map<string, number>();
+  const clientBilledHoursMap = new Map<string, number>();
+  const clientStandardMap = new Map<string, number>();
+  const clientNamesMap = new Map<string, string>();
 
   for (const rawSd of finalizedSDs) {
-    if (!rawSd.finalizedAt) continue;
-    const finalizedMonth = rawSd.finalizedAt.slice(0, 7) + "-01"; // "YYYY-MM-01"
-
-    const sd = serializeServiceDescription(rawSd as Parameters<typeof serializeServiceDescription>[0]);
-
-    // Compute grand total (numerator)
-    const isRetainer = sd.retainerFee != null && sd.retainerHours != null;
-    const grandTotal = isRetainer
-      ? calculateRetainerGrandTotal(
-          sd.topics,
-          sd.retainerFee!,
-          sd.retainerHours!,
-          sd.retainerOverageRate || 0,
-          sd.discountType,
-          sd.discountValue,
-        )
-      : calculateGrandTotal(sd.topics, sd.discountType, sd.discountValue);
-
-    // Compute standard rate value (denominator)
-    let standardValue = 0;
-    for (const topic of sd.topics) {
-      for (const item of topic.lineItems) {
-        const hours = item.timeEntryId
-          ? (item.originalHours ?? item.hours ?? 0) // time entry hours
-          : (item.hours ?? 0); // manual line item
-        if (hours <= 0) continue;
-
-        if (topic.pricingMode === "HOURLY" && topic.hourlyRate) {
-          standardValue += hours * topic.hourlyRate;
-        } else if (topic.pricingMode === "FIXED" && sd.client.hourlyRate) {
-          standardValue += hours * sd.client.hourlyRate;
-        }
-      }
+    if (!rawSd.periodEnd) {
+      // Finalized SDs without periodEnd are dropped from reporting because
+      // bucketing cannot default them. This is a data-integrity red flag
+      // (periodEnd should be set before finalize) — log once per occurrence.
+      console.warn(
+        `[trend-utils] Skipping finalized SD without periodEnd: id=${rawSd.id}`,
+      );
+      continue;
     }
+    const sd = serializeServiceDescription(
+      rawSd as Parameters<typeof serializeServiceDescription>[0],
+    );
+    const allocation = allocateSdToBuckets(sd, rawSd.periodEnd);
 
-    const entry = billingMap.get(finalizedMonth) ?? { billedRevenue: 0, standardRateValue: 0 };
-    entry.billedRevenue += grandTotal;
-    entry.standardRateValue += standardValue;
-    billingMap.set(finalizedMonth, entry);
-
-    // Attribute billed revenue to employees proportionally by their standard-rate contribution
-    // First compute per-employee standard value for this SD
-    const empStandardValues = new Map<string, { name: string; value: number }>();
-    for (const topic of sd.topics) {
-      for (const item of topic.lineItems) {
-        if (!item.timeEntryId || !item.employeeName) continue;
-        const hours = item.originalHours ?? item.hours ?? 0;
-        if (hours <= 0) continue;
-
-        let rate = 0;
-        if (topic.pricingMode === "HOURLY" && topic.hourlyRate) {
-          rate = topic.hourlyRate;
-        } else if (topic.pricingMode === "FIXED" && sd.client.hourlyRate) {
-          rate = sd.client.hourlyRate;
-        }
-
-        // Use timeEntryId as a proxy to find the userId — we need to look it up
-        // from the line item's timeEntry relation. The employeeName is available.
-        const empName = item.employeeName;
-        const existing = empStandardValues.get(empName) ?? { name: empName, value: 0 };
-        existing.value += hours * rate;
-        empStandardValues.set(empName, existing);
-      }
+    for (const [bucket, val] of allocation.byMonth) {
+      const entry = billingMap.get(bucket) ?? {
+        billedRevenue: 0,
+        standardRateValue: 0,
+        billedHours: 0,
+      };
+      entry.billedRevenue += val.billedRevenue;
+      entry.standardRateValue += val.standardRateValue;
+      entry.billedHours += val.billedHours;
+      billingMap.set(bucket, entry);
     }
-
-    // Proportionally allocate grandTotal to employees
-    const totalStandard = Array.from(empStandardValues.values()).reduce((sum, e) => sum + e.value, 0);
-    if (totalStandard > 0) {
-      for (const [empName, emp] of empStandardValues) {
-        const proportion = emp.value / totalStandard;
-        const allocated = grandTotal * proportion;
-
-        const empKey = `${finalizedMonth}:${empName}`;
-        const empEntry = employeeBilledMap.get(empKey) ?? 0;
-        employeeBilledMap.set(empKey, empEntry + allocated);
-      }
+    for (const [key, val] of allocation.empBilledByMonth) {
+      employeeBilledMap.set(key, (employeeBilledMap.get(key) ?? 0) + val);
+    }
+    for (const [key, val] of allocation.empBilledHoursByMonth) {
+      employeeBilledHoursMap.set(
+        key,
+        (employeeBilledHoursMap.get(key) ?? 0) + val,
+      );
+    }
+    for (const [key, val] of allocation.empStandardByMonth) {
+      employeeStandardMap.set(key, (employeeStandardMap.get(key) ?? 0) + val);
+    }
+    for (const [key, val] of allocation.clientBilledByMonth) {
+      clientBilledMap.set(key, (clientBilledMap.get(key) ?? 0) + val);
+    }
+    for (const [key, val] of allocation.clientBilledHoursByMonth) {
+      clientBilledHoursMap.set(
+        key,
+        (clientBilledHoursMap.get(key) ?? 0) + val,
+      );
+    }
+    for (const [key, val] of allocation.clientStandardByMonth) {
+      clientStandardMap.set(key, (clientStandardMap.get(key) ?? 0) + val);
+    }
+    for (const [id, name] of allocation.clientNames) {
+      clientNamesMap.set(id, name);
     }
   }
 
@@ -309,6 +804,7 @@ export async function getTrendData(): Promise<TrendResponse> {
     const billing = billingMap.get(monthStart);
     const billedRevenue = Math.round((billing?.billedRevenue ?? 0) * 100) / 100;
     const standardRateValue = Math.round((billing?.standardRateValue ?? 0) * 100) / 100;
+    const billedHours = Math.round((billing?.billedHours ?? 0) * 100) / 100;
 
     return {
       month: monthStart.slice(0, 7), // "YYYY-MM"
@@ -320,30 +816,44 @@ export async function getTrendData(): Promise<TrendResponse> {
       utilization: calculateUtilization(regularHours, totalHours),
       billedRevenue,
       standardRateValue,
+      billedHours,
       realization: standardRateValue > 0 ? Math.round((billedRevenue / standardRateValue) * 100) : 0,
       byEmployee: (employeeMap.get(monthStart) ?? []).map((emp) => ({
         ...emp,
-        billedRevenue: Math.round((employeeBilledMap.get(`${monthStart}:${emp.name}`) ?? 0) * 100) / 100,
+        billedRevenue: Math.round((employeeBilledMap.get(`${monthStart}:${emp.id}`) ?? 0) * 100) / 100,
+        billedHours: Math.round((employeeBilledHoursMap.get(`${monthStart}:${emp.id}`) ?? 0) * 100) / 100,
+        standardRateValue: Math.round((employeeStandardMap.get(`${monthStart}:${emp.id}`) ?? 0) * 100) / 100,
       })),
+      byClient: buildByClientForMonth(
+        monthStart,
+        clientMap,
+        clientBilledMap,
+        clientBilledHoursMap,
+        clientStandardMap,
+        clientNamesMap,
+      ),
     };
   });
 
+  // When the window is short (e.g. only 1 month past the floor), fall back
+  // to zeros for missing latest/previous so callers can render a month-1
+  // trend without special-casing.
   const latest = months[months.length - 1];
   const previous = months[months.length - 2];
 
   return {
     months,
     latest: {
-      totalHours: latest.totalHours,
-      revenue: latest.revenue,
-      activeClients: latest.activeClients,
-      utilization: latest.utilization,
+      totalHours: latest?.totalHours ?? 0,
+      revenue: latest?.revenue ?? 0,
+      activeClients: latest?.activeClients ?? 0,
+      utilization: latest?.utilization ?? 0,
     },
     previous: {
-      totalHours: previous.totalHours,
-      revenue: previous.revenue,
-      activeClients: previous.activeClients,
-      utilization: previous.utilization,
+      totalHours: previous?.totalHours ?? 0,
+      revenue: previous?.revenue ?? 0,
+      activeClients: previous?.activeClients ?? 0,
+      utilization: previous?.utilization ?? 0,
     },
   };
 }

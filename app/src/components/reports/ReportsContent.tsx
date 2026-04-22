@@ -17,19 +17,13 @@ type TabType = "overview" | "detail";
 
 interface ReportsContentProps {
   initialData: ReportData;
-  initialComparisonData: ReportData | null;
   isAdmin: boolean;
-  currentUserId: string;
 }
 
 export function ReportsContent({
   initialData,
-  initialComparisonData: _initialComparisonData,
   isAdmin,
-  currentUserId: _currentUserId,
 }: ReportsContentProps) {
-  void _initialComparisonData;
-  void _currentUserId;
   const today = new Date();
   const defaultRange = getMonthRange(today);
   const [startDate, setStartDate] = useState(defaultRange.start);

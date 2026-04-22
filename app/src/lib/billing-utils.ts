@@ -49,7 +49,7 @@ interface RawServiceDescription {
       timeEntry?: {
         description: string;
         hours: string;
-        user: { name: string | null } | null;
+        user: { id: string; name: string | null } | null;
       } | null;
     }>;
   }>;
@@ -108,6 +108,7 @@ export function serializeServiceDescription(sd: RawServiceDescription): ServiceD
         ...(item.timeEntry ? {
           originalDescription: item.timeEntry.description,
           originalHours: serializeDecimal(item.timeEntry.hours) ?? undefined,
+          employeeId: item.timeEntry.user?.id ?? undefined,
           employeeName: item.timeEntry.user?.name ?? undefined,
         } : {}),
       })),

@@ -1,28 +1,131 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TrendChart } from "./charts/TrendChart";
 import { RevenueChart } from "./charts/RevenueChart";
+import { PricingHealthChart } from "./charts/PricingHealthChart";
 import { EmployeeTrendTable, type EmployeeHoursMode } from "./charts/EmployeeTrendTable";
+import { ByClientTable } from "./charts/ByClientTable";
+import { useImpersonation } from "@/contexts/ImpersonationContext";
 import type { TrendResponse } from "@/types/reports";
 
-// Module-level cache so tab switching does not re-fetch
-let cachedTrendData: TrendResponse | null = null;
+// Module-level cache so tab switching does not re-fetch. Keyed by impersonated
+// user id (or "__real__" for the real admin) so toggling impersonation forces
+// a re-fetch rather than serving the previous user's cached numbers.
+const CACHE_TTL_MS = 5 * 60 * 1000;
+type TrendCacheEntry = { data: TrendResponse; fetchedAt: number };
+const trendCache = new Map<string, TrendCacheEntry>();
+
+function getCached(key: string): TrendResponse | null {
+  const entry = trendCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) {
+    trendCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
 
 function isAllEmpty(data: TrendResponse): boolean {
   return data.months.every((m) => m.totalHours === 0);
 }
 
-export function OverviewTab() {
-  const [trendData, setTrendData] = useState<TrendResponse | null>(
-    cachedTrendData
+function messageForStatus(status: number): string {
+  if (status === 401) {
+    return "Your session expired. Sign in again to load the dashboard.";
+  }
+  if (status === 403) {
+    return "You no longer have access to reports. Ask an admin to restore your access.";
+  }
+  if (status >= 500) {
+    return "The server hit an error loading trend data. Try again in a moment.";
+  }
+  return "Something went wrong loading trend data. Try refreshing the page.";
+}
+
+interface ModeOption {
+  value: EmployeeHoursMode;
+  label: string;
+}
+
+const HOURS_MODE_OPTIONS: ModeOption[] = [
+  { value: "billableHours", label: "Billable" },
+  { value: "billedHours", label: "Billed" },
+  { value: "unbillableHours", label: "Unbillable" },
+];
+
+const EUR_MODE_OPTIONS: ModeOption[] = [
+  { value: "billableRevenue", label: "Billable" },
+  { value: "billedRevenue", label: "Billed" },
+  { value: "lostRevenue", label: "Lost" },
+];
+
+const RATIO_MODE_OPTIONS: ModeOption[] = [
+  { value: "realization", label: "Realization" },
+  { value: "utilization", label: "Utilization" },
+  { value: "effectiveRate", label: "Eff Rate" },
+];
+
+interface EmployeeModeGroupProps {
+  label: string;
+  options: ModeOption[];
+  current: EmployeeHoursMode;
+  onChange: (mode: EmployeeHoursMode) => void;
+}
+
+function EmployeeModeGroup({ label, options, current, onChange }: EmployeeModeGroupProps) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+        {label}
+      </span>
+      <div className="flex items-center gap-1 bg-[var(--bg-surface)] rounded p-0.5">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+              current === opt.value
+                ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
-  const [loading, setLoading] = useState(cachedTrendData === null);
+}
+
+export function OverviewTab() {
+  const { impersonatedUser } = useImpersonation();
+  const cacheKey = impersonatedUser?.id ?? "__real__";
+
+  const [trendData, setTrendData] = useState<TrendResponse | null>(() =>
+    getCached(cacheKey),
+  );
+  const [loading, setLoading] = useState(() => getCached(cacheKey) === null);
   const [error, setError] = useState<string | null>(null);
-  const [employeeMode, setEmployeeMode] = useState<EmployeeHoursMode>("billable");
+  const [employeeMode, setEmployeeMode] = useState<EmployeeHoursMode>("billableHours");
+  const [clientMode, setClientMode] = useState<EmployeeHoursMode>("billableHours");
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  const handleRefresh = useCallback(() => {
+    trendCache.delete(cacheKey);
+    setTrendData(null);
+    setError(null);
+    setLoading(true);
+    setRefreshToken((t) => t + 1);
+  }, [cacheKey]);
 
   useEffect(() => {
-    if (cachedTrendData !== null) return;
+    const cached = getCached(cacheKey);
+    if (cached !== null) {
+      setTrendData(cached);
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
 
@@ -30,18 +133,24 @@ export function OverviewTab() {
       try {
         const res = await fetch("/api/reports/trends");
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+          if (!cancelled) {
+            setError(messageForStatus(res.status));
+            setLoading(false);
+          }
+          console.error(`Trend fetch failed: HTTP ${res.status}`);
+          return;
         }
         const data: TrendResponse = await res.json();
         if (!cancelled) {
-          cachedTrendData = data;
+          trendCache.set(cacheKey, { data, fetchedAt: Date.now() });
           setTrendData(data);
           setLoading(false);
         }
-      } catch {
+      } catch (err) {
+        console.error("Trend fetch failed:", err);
         if (!cancelled) {
           setError(
-            "Failed to load trend data. Check your connection and try refreshing the page."
+            "Couldn't reach the server. Check your connection and try refreshing the page.",
           );
           setLoading(false);
         }
@@ -52,7 +161,7 @@ export function OverviewTab() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cacheKey, refreshToken]);
 
   if (loading) {
     return (
@@ -68,6 +177,13 @@ export function OverviewTab() {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <p className="text-[var(--text-secondary)] text-[13px]">{error}</p>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          className="mt-3 px-3 py-1.5 text-[12px] rounded bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -118,36 +234,72 @@ export function OverviewTab() {
         <RevenueChart data={trendData.months} />
       </div>
 
+      {/* Pricing Health Chart */}
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+        <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mb-4">
+          Pricing Health (12 Months)
+        </h3>
+        <PricingHealthChart data={trendData.months} />
+      </div>
+
       {/* Employee Table */}
       <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
           <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
             By Employee (12 Months)
           </h3>
-          <div className="flex items-center gap-1 bg-[var(--bg-surface)] rounded p-0.5">
-            <button
-              onClick={() => setEmployeeMode("billable")}
-              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
-                employeeMode === "billable"
-                  ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-              }`}
-            >
-              Billable
-            </button>
-            <button
-              onClick={() => setEmployeeMode("total")}
-              className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
-                employeeMode === "total"
-                  ? "bg-[var(--bg-elevated)] text-[var(--text-primary)]"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-              }`}
-            >
-              Total
-            </button>
+          <div className="flex items-center gap-4 flex-wrap">
+            <EmployeeModeGroup
+              label="Hours"
+              options={HOURS_MODE_OPTIONS}
+              current={employeeMode}
+              onChange={setEmployeeMode}
+            />
+            <EmployeeModeGroup
+              label="€"
+              options={EUR_MODE_OPTIONS}
+              current={employeeMode}
+              onChange={setEmployeeMode}
+            />
+            <EmployeeModeGroup
+              label="%"
+              options={RATIO_MODE_OPTIONS}
+              current={employeeMode}
+              onChange={setEmployeeMode}
+            />
           </div>
         </div>
         <EmployeeTrendTable data={trendData.months} mode={employeeMode} />
+      </div>
+
+      {/* Client Table */}
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded p-4">
+        <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+          <h3 className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
+            By Client (12 Months)
+          </h3>
+          <div className="flex items-center gap-4 flex-wrap">
+            <EmployeeModeGroup
+              label="Hours"
+              options={HOURS_MODE_OPTIONS}
+              current={clientMode}
+              onChange={setClientMode}
+            />
+            <EmployeeModeGroup
+              label="€"
+              options={EUR_MODE_OPTIONS}
+              current={clientMode}
+              onChange={setClientMode}
+            />
+            <EmployeeModeGroup
+              label="%"
+              options={RATIO_MODE_OPTIONS}
+              current={clientMode}
+              onChange={setClientMode}
+            />
+          </div>
+        </div>
+        <ByClientTable data={trendData.months} mode={clientMode} />
       </div>
     </div>
   );

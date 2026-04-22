@@ -36,7 +36,7 @@ export default async function ServiceDescriptionPage({ params }: PageProps) {
                 columns: { description: true, hours: true },
                 with: {
                   user: {
-                    columns: { name: true },
+                    columns: { id: true, name: true },
                   },
                 },
               },

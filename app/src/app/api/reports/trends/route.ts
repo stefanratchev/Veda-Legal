@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Failed to fetch trend data:", error);
     return NextResponse.json(
-      { error: "Failed to fetch trend data" },
+      { error: "Failed to fetch trend data", code: "TREND_FETCH_FAILED" },
       { status: 500 }
     );
   }

@@ -146,6 +146,7 @@ export interface ServiceDescriptionLineItem {
   originalDescription?: string;
   originalHours?: number;
   // Lawyer who logged the time entry
+  employeeId?: string;
   employeeName?: string;
 }
 

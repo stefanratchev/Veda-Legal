@@ -37,7 +37,6 @@ const RATIO_MODES: readonly TrendTableMode[] = [
 ];
 // Modes where high value = bad (red highlight). Ratio modes are all
 // higher-is-better and stay out of this list.
-const WARN_MODES: readonly TrendTableMode[] = ["unbillableHours", "lostRevenue"];
 
 export const OTHERS_ROW_ID = "__others__";
 const OTHERS_ROW_NAME = "Others";
@@ -119,7 +118,7 @@ export function TrendTable({
   topN,
   emptyMessage,
 }: TrendTableProps) {
-  const { displayRows, topPerMonth, totals } = useMemo(() => {
+  const { displayRows, totals } = useMemo(() => {
     // Sort by most-recent-month value (descending), alphabetical tie-break.
     // `null` (zero-denom for ratio modes) sorts to the bottom.
     const lastIdx = monthLabels.length - 1;
@@ -154,26 +153,6 @@ export function TrendTable({
       ];
     }
 
-    // Max per month. WARN_MODES → red tint; others → green.
-    // Others row is NEVER highlighted, even when its value is the max.
-    // Ratio cells with null value (denom=0) are not eligible for highlight.
-    const tops: (string | null)[] = monthLabels.map((_, monthIdx) => {
-      let maxValue = -Infinity;
-      let topId: string | null = null;
-      for (const row of withOthers) {
-        if (row.id === OTHERS_ROW_ID) continue;
-        const cell = row.monthlyCells[monthIdx];
-        if (!cell) continue;
-        const v = cellValue(cell, mode);
-        if (v === null || v <= 0) continue;
-        if (v > maxValue) {
-          maxValue = v;
-          topId = row.id;
-        }
-      }
-      return topId;
-    });
-
     // Per-month totals across all visible rows (including Others when present).
     // For ratio modes this yields the correct weighted aggregate via
     // aggregateCells; for absolute modes it yields the raw sum.
@@ -184,12 +163,8 @@ export function TrendTable({
       return aggregateCells(monthCells, mode);
     });
 
-    return { displayRows: withOthers, topPerMonth: tops, totals: totalsArr };
+    return { displayRows: withOthers, totals: totalsArr };
   }, [rows, monthLabels, mode, topN]);
-
-  const highlightBg = WARN_MODES.includes(mode)
-    ? "rgba(239, 68, 68, 0.30)" // red-500 @ 30%
-    : "rgba(74, 157, 110, 0.35)"; // existing green
 
   if (rows.length === 0) {
     const msg = emptyMessage ?? `No ${entityLabel.toLowerCase()} data`;
@@ -238,13 +213,11 @@ export function TrendTable({
                 {row.monthlyCells.map((cell, i) => {
                   const value = cellValue(cell, mode);
                   const hasValue = value !== null && value > 0;
-                  const isTop = !isOthers && topPerMonth[i] === row.id;
                   return (
                     <td
                       key={i}
                       className="text-right py-2 px-1.5 tabular-nums"
                       style={{
-                        backgroundColor: isTop ? highlightBg : "transparent",
                         color: isOthers
                           ? "var(--text-muted)"
                           : hasValue

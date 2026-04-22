@@ -4,10 +4,6 @@ import { TrendTable, type TrendTableRow } from "./TrendTable";
 
 const MONTH_LABELS = ["Feb '26", "Mar '26", "Apr '26"];
 
-// JSDOM normalizes trailing zeros: 0.30 → 0.3, 0.35 stays.
-const GREEN = "rgba(74, 157, 110, 0.35)";
-const RED = "rgba(239, 68, 68, 0.3)";
-
 function makeRow(id: string, name: string, values: number[]): TrendTableRow {
   return {
     id,
@@ -70,69 +66,6 @@ describe("TrendTable", () => {
     expect(footCells[3].textContent).toBe("58h");
   });
 
-  it("highlights the max per month with green background in positive modes", () => {
-    const rows = [
-      makeRow("a", "Alice", [10, 5, 30]),
-      makeRow("b", "Bob", [20, 15, 10]),
-    ];
-    const { container } = render(
-      <TrendTable
-        rows={rows}
-        monthLabels={MONTH_LABELS}
-        mode="billableHours"
-        entityLabel="Employee"
-      />,
-    );
-
-    const bodyTrs = container.querySelectorAll("tbody tr");
-    // Sorted by last-month desc: Alice (30) first, Bob (10) second.
-    const aliceRow = bodyTrs[0];
-    const bobRow = bodyTrs[1];
-    const aliceCells = aliceRow.querySelectorAll("td");
-    const bobCells = bobRow.querySelectorAll("td");
-
-    // Column 0 (Feb): Bob 20 > Alice 10 → Bob highlighted.
-    // Column 1 (Mar): Bob 15 > Alice 5 → Bob highlighted.
-    // Column 2 (Apr): Alice 30 > Bob 10 → Alice highlighted.
-    expect(bobCells[1].getAttribute("style")).toContain(GREEN);
-    expect(bobCells[2].getAttribute("style")).toContain(GREEN);
-    expect(aliceCells[3].getAttribute("style")).toContain(GREEN);
-
-    // Non-max cells should NOT have the green highlight.
-    expect(aliceCells[1].getAttribute("style") || "").not.toContain(GREEN);
-    expect(aliceCells[2].getAttribute("style") || "").not.toContain(GREEN);
-    expect(bobCells[3].getAttribute("style") || "").not.toContain(GREEN);
-  });
-
-  it("highlights the max per month with red in warn modes (unbillableHours)", () => {
-    const rows = [
-      makeRow("a", "Alice", [10, 5, 30]),
-      makeRow("b", "Bob", [20, 15, 10]),
-    ];
-    const { container } = render(
-      <TrendTable
-        rows={rows}
-        monthLabels={MONTH_LABELS}
-        mode="unbillableHours"
-        entityLabel="Employee"
-      />,
-    );
-
-    const bodyTrs = container.querySelectorAll("tbody tr");
-    // Sorted by last-month desc: Alice (30) first.
-    const aliceRow = bodyTrs[0];
-    const bobRow = bodyTrs[1];
-    const aliceCells = aliceRow.querySelectorAll("td");
-    const bobCells = bobRow.querySelectorAll("td");
-
-    // Column 2 max is Alice (30) → red, not green.
-    expect(aliceCells[3].getAttribute("style")).toContain(RED);
-    expect(aliceCells[3].getAttribute("style") || "").not.toContain(GREEN);
-    // Columns 0 and 1 max is Bob → red.
-    expect(bobCells[1].getAttribute("style")).toContain(RED);
-    expect(bobCells[2].getAttribute("style")).toContain(RED);
-  });
-
   it("collapses tail rows into a single Others row when topN < rows.length", () => {
     // 22 rows with distinct most-recent-month values (1..22). topN=20 → top 20
     // kept (values 22 down to 3), remainder (values 2, 1) becomes Others.
@@ -164,12 +97,6 @@ describe("TrendTable", () => {
     // Others last-month value = sum of remainder = 2 + 1 = 3.
     const othersCells = othersRow.querySelectorAll("td");
     expect(othersCells[3].textContent).toBe("3h");
-
-    // Others never gets the highlight, even though it would be the 3rd-highest
-    // only; but assert no green bg on its cells.
-    for (let i = 1; i <= 3; i++) {
-      expect(othersCells[i].getAttribute("style") || "").not.toContain(GREEN);
-    }
 
     // Footer total reconciles with the sum of all 22 original rows:
     // 1+2+...+22 = 253.
@@ -353,9 +280,8 @@ describe("TrendTable", () => {
     expect(othersCells[1].textContent).toBe("15%");
   });
 
-  it("zero-denominator cells render dash and are not max-highlighted", () => {
+  it("zero-denominator cells render dash and sort to the bottom", () => {
     // Row A: [500, 0] → null/"—". Row B: [100, 10] → €10.
-    // Only B has a valid value, so B is max-highlighted; A is not highlighted.
     const rows = [
       makeRatioRow("a", "Alice", [[500, 0]]),
       makeRatioRow("b", "Bob", [[100, 10]]),
@@ -379,11 +305,9 @@ describe("TrendTable", () => {
     const aCells = aRow.querySelectorAll("td");
     const bCells = bRow.querySelectorAll("td");
 
-    // A: 500/0 = "—", no highlight.
+    // A: 500/0 = "—".
     expect(aCells[1].textContent).toBe("—");
-    expect(aCells[1].getAttribute("style") || "").not.toContain(GREEN);
-    // B: 100/10 = "€10", highlighted.
+    // B: 100/10 = "€10".
     expect(bCells[1].textContent).toBe("€10");
-    expect(bCells[1].getAttribute("style")).toContain(GREEN);
   });
 });

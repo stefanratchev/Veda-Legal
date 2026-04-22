@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { TrendTable, type TrendTableRow } from "./TrendTable";
 
 const MONTH_LABELS = ["Feb '26", "Mar '26", "Apr '26"];
@@ -309,5 +309,335 @@ describe("TrendTable", () => {
     expect(aCells[1].textContent).toBe("—");
     // B: 100/10 = "€10".
     expect(bCells[1].textContent).toBe("€10");
+  });
+
+  it("month headers are buttons; entity header is plain text", () => {
+    const rows = [
+      makeRow("a", "Alice", [1, 2, 3]),
+      makeRow("b", "Bob", [4, 5, 6]),
+      makeRow("c", "Carol", [7, 8, 9]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableHours"
+        entityLabel="Employee"
+      />,
+    );
+
+    const headerThs = container.querySelectorAll("thead th");
+    // 1 entity + 3 month headers = 4 total
+    expect(headerThs.length).toBe(4);
+
+    // Entity <th> (idx 0) has no <button> child
+    expect(headerThs[0].querySelector("button")).toBeNull();
+
+    // Each month <th> (idx 1-3) has exactly one <button>
+    for (let i = 1; i <= 3; i++) {
+      const buttons = headerThs[i].querySelectorAll("button");
+      expect(buttons.length).toBe(1);
+    }
+  });
+
+  it("initial aria-sort state is 'none' on month headers; entity has no aria-sort", () => {
+    const rows = [
+      makeRow("a", "Alice", [1, 2, 3]),
+      makeRow("b", "Bob", [4, 5, 6]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableHours"
+        entityLabel="Employee"
+      />,
+    );
+
+    const headerThs = container.querySelectorAll("thead th");
+    // Entity <th> has no aria-sort attribute
+    expect(headerThs[0].hasAttribute("aria-sort")).toBe(false);
+    // Month <th>s all have aria-sort="none" before any click
+    expect(headerThs[1].getAttribute("aria-sort")).toBe("none");
+    expect(headerThs[2].getAttribute("aria-sort")).toBe("none");
+    expect(headerThs[3].getAttribute("aria-sort")).toBe("none");
+  });
+
+  it("3-state click cycle: 1st desc, 2nd asc, 3rd reset (with caret + aria-sort)", () => {
+    // Middle month has distinct values that differ from last-month order.
+    // Default (no click): last-month desc → Alice(30), Carol(20), Bob(10).
+    const rows = [
+      makeRow("a", "Alice", [0, 5, 30]),
+      makeRow("b", "Bob", [0, 20, 10]),
+      makeRow("c", "Carol", [0, 10, 20]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableHours"
+        entityLabel="Employee"
+      />,
+    );
+
+    // Initial: sorted by last-month desc → Alice(30), Carol(20), Bob(10).
+    let bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[0].textContent).toContain("Alice");
+    expect(bodyTrs[1].textContent).toContain("Carol");
+    expect(bodyTrs[2].textContent).toContain("Bob");
+
+    const headerThs = container.querySelectorAll("thead th");
+    // idx 2 = "Mar" (idx 0 entity, 1 Feb, 2 Mar, 3 Apr)
+    const marTh = headerThs[2] as HTMLElement;
+    const marButton = marTh.querySelector("button") as HTMLButtonElement;
+
+    // 1st click: sort by Mar desc → Bob(20), Carol(10), Alice(5)
+    fireEvent.click(marButton);
+    bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[0].textContent).toContain("Bob");
+    expect(bodyTrs[1].textContent).toContain("Carol");
+    expect(bodyTrs[2].textContent).toContain("Alice");
+    expect(marTh.getAttribute("aria-sort")).toBe("descending");
+    expect(marTh.textContent).toContain("▼");
+
+    // 2nd click: flip to asc → Alice(5), Carol(10), Bob(20)
+    fireEvent.click(marButton);
+    bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[0].textContent).toContain("Alice");
+    expect(bodyTrs[1].textContent).toContain("Carol");
+    expect(bodyTrs[2].textContent).toContain("Bob");
+    expect(marTh.getAttribute("aria-sort")).toBe("ascending");
+    expect(marTh.textContent).toContain("▲");
+
+    // 3rd click: reset to default (last-month desc) → Alice(30), Carol(20), Bob(10)
+    fireEvent.click(marButton);
+    bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[0].textContent).toContain("Alice");
+    expect(bodyTrs[1].textContent).toContain("Carol");
+    expect(bodyTrs[2].textContent).toContain("Bob");
+    expect(marTh.getAttribute("aria-sort")).toBe("none");
+    // No caret anywhere in the header row
+    const headerRow = container.querySelector("thead tr") as HTMLElement;
+    expect(headerRow.textContent).not.toContain("▼");
+    expect(headerRow.textContent).not.toContain("▲");
+  });
+
+  it("clicking a different column resets to fresh desc on the new column", () => {
+    const rows = [
+      makeRow("a", "Alice", [0, 5, 30]),
+      makeRow("b", "Bob", [0, 20, 10]),
+      makeRow("c", "Carol", [0, 10, 20]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableHours"
+        entityLabel="Employee"
+      />,
+    );
+
+    const headerThs = container.querySelectorAll("thead th");
+    const marTh = headerThs[2] as HTMLElement;
+    const aprTh = headerThs[3] as HTMLElement;
+    const marButton = marTh.querySelector("button") as HTMLButtonElement;
+    const aprButton = aprTh.querySelector("button") as HTMLButtonElement;
+
+    // Click Mar (desc)
+    fireEvent.click(marButton);
+    expect(marTh.getAttribute("aria-sort")).toBe("descending");
+    expect(marTh.textContent).toContain("▼");
+
+    // Click Apr: Mar loses caret/sort; Apr becomes active desc
+    fireEvent.click(aprButton);
+    expect(marTh.getAttribute("aria-sort")).toBe("none");
+    expect(marTh.textContent).not.toContain("▼");
+    expect(marTh.textContent).not.toContain("▲");
+    expect(aprTh.getAttribute("aria-sort")).toBe("descending");
+    expect(aprTh.textContent).toContain("▼");
+
+    // Row order should be Apr desc: Alice(30), Carol(20), Bob(10)
+    const bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[0].textContent).toContain("Alice");
+    expect(bodyTrs[1].textContent).toContain("Carol");
+    expect(bodyTrs[2].textContent).toContain("Bob");
+  });
+
+  it("null/zero cells sort to bottom in BOTH directions (absolute mode)", () => {
+    // Absolute billableHours. Alice Mar=0, Bob Mar=0, Carol Mar=7.
+    // Distinct last-month values so default order is predictable.
+    const rows = [
+      makeRow("a", "Alice", [10, 0, 1]),
+      makeRow("b", "Bob", [5, 0, 2]),
+      makeRow("c", "Carol", [3, 7, 3]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableHours"
+        entityLabel="Employee"
+      />,
+    );
+
+    const headerThs = container.querySelectorAll("thead th");
+    const marButton = headerThs[2].querySelector("button") as HTMLButtonElement;
+
+    // 1st click (desc on Mar): Carol(7) first, then Alice, Bob (both 0, alpha tie-break)
+    fireEvent.click(marButton);
+    let bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[0].textContent).toContain("Carol");
+    expect(bodyTrs[1].textContent).toContain("Alice");
+    expect(bodyTrs[2].textContent).toContain("Bob");
+
+    // 2nd click (asc on Mar): null-at-bottom invariant — Carol (7) still first
+    // because she's the only real value, Alice+Bob (0 counts as null) trail.
+    fireEvent.click(marButton);
+    bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[0].textContent).toContain("Carol");
+    expect(bodyTrs[1].textContent).toContain("Alice");
+    expect(bodyTrs[2].textContent).toContain("Bob");
+  });
+
+  it("ratio-mode null (denominator=0) trails in both directions", () => {
+    // Single month for simplicity.
+    // Alice: [100, 10] = €10, Bob: [500, 0] = null, Carol: [300, 5] = €60.
+    const rows = [
+      makeRatioRow("a", "Alice", [[100, 10]]),
+      makeRatioRow("b", "Bob", [[500, 0]]),
+      makeRatioRow("c", "Carol", [[300, 5]]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={["Apr '26"]}
+        mode="effectiveRate"
+        entityLabel="Employee"
+      />,
+    );
+
+    const headerThs = container.querySelectorAll("thead th");
+    // Only 1 month header (idx 0 entity, idx 1 Apr)
+    const aprButton = headerThs[1].querySelector("button") as HTMLButtonElement;
+
+    // 1st click (desc): Carol(60), Alice(10), Bob(null → last)
+    fireEvent.click(aprButton);
+    let bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[0].textContent).toContain("Carol");
+    expect(bodyTrs[1].textContent).toContain("Alice");
+    expect(bodyTrs[2].textContent).toContain("Bob");
+
+    // 2nd click (asc): Alice(10), Carol(60), Bob(null → still last)
+    fireEvent.click(aprButton);
+    bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[0].textContent).toContain("Alice");
+    expect(bodyTrs[1].textContent).toContain("Carol");
+    expect(bodyTrs[2].textContent).toContain("Bob");
+  });
+
+  it("Others row stays at bottom when sort column is changed (desc + asc)", () => {
+    // 22 rows, topN=20 → last body row should be Others in both states.
+    const rows: TrendTableRow[] = [];
+    for (let i = 1; i <= 22; i++) {
+      rows.push(
+        makeRow(`c${i}`, `Client ${String(i).padStart(2, "0")}`, [i, i, i]),
+      );
+    }
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableHours"
+        entityLabel="Client"
+        topN={20}
+      />,
+    );
+
+    const headerThs = container.querySelectorAll("thead th");
+    // idx 1 = "Feb" (the earliest month / idx 0 of month columns)
+    const febButton = headerThs[1].querySelector("button") as HTMLButtonElement;
+
+    // Click Feb (desc): Others still last body row
+    fireEvent.click(febButton);
+    let bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[bodyTrs.length - 1].textContent).toContain("Others");
+
+    // Click Feb again (asc): Others still last body row
+    fireEvent.click(febButton);
+    bodyTrs = container.querySelectorAll("tbody tr");
+    expect(bodyTrs[bodyTrs.length - 1].textContent).toContain("Others");
+  });
+
+  it("mode toggle persistence — changing `mode` prop after click does NOT reset sort state", () => {
+    const rows = [
+      makeRatioRow("a", "Alice", [
+        [10, 1],
+        [20, 1],
+        [30, 1],
+      ]),
+      makeRatioRow("b", "Bob", [
+        [5, 1],
+        [15, 1],
+        [25, 1],
+      ]),
+    ];
+    const { container, rerender } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableHours"
+        entityLabel="Employee"
+      />,
+    );
+
+    const headerThs = container.querySelectorAll("thead th");
+    const marTh = headerThs[2] as HTMLElement;
+    const marButton = marTh.querySelector("button") as HTMLButtonElement;
+
+    // Click Mar (desc)
+    fireEvent.click(marButton);
+    expect(marTh.getAttribute("aria-sort")).toBe("descending");
+    expect(marTh.textContent).toContain("▼");
+
+    // Re-render with different mode
+    rerender(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableRevenue"
+        entityLabel="Employee"
+      />,
+    );
+
+    // Sort state persists across mode changes
+    const marThAfter = container.querySelectorAll("thead th")[2] as HTMLElement;
+    expect(marThAfter.getAttribute("aria-sort")).toBe("descending");
+    expect(marThAfter.textContent).toContain("▼");
+  });
+
+  it("Total row in <tfoot> is never reordered by sort", () => {
+    const rows = [
+      makeRow("a", "Alice", [10, 20, 30]),
+      makeRow("b", "Bob", [5, 15, 25]),
+      makeRow("c", "Carol", [1, 2, 3]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="billableHours"
+        entityLabel="Employee"
+      />,
+    );
+
+    const headerThs = container.querySelectorAll("thead th");
+    const marButton = headerThs[2].querySelector("button") as HTMLButtonElement;
+
+    // Click any month header
+    fireEvent.click(marButton);
+
+    // <tfoot> row's first cell still reads "Total"
+    const footCells = container.querySelectorAll("tfoot tr td");
+    expect(footCells[0].textContent).toBe("Total");
   });
 });

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { MonthlyTrendPoint } from "@/types/reports";
 import {
   TrendTable,
+  type TrendTableCell,
   type TrendTableMode,
   type TrendTableRow,
 } from "./TrendTable";
@@ -11,23 +12,48 @@ import {
 // Kept as an alias so existing imports (e.g. OverviewTab) keep working.
 export type EmployeeHoursMode = TrendTableMode;
 
-function pickValue(
+// Ratio modes live here too (local constant, not imported from TrendTable
+// which keeps its own internal copy) — lets us decide default cell shape for
+// absent entries: denom=1 for absolute modes (0/1 → "—"), denom=0 for ratio
+// modes (0/0 → "—") so display is consistent in both cases.
+const RATIO_MODES_IN_WRAPPER: readonly TrendTableMode[] = [
+  "realization",
+  "utilization",
+  "effectiveRate",
+];
+
+function pickCell(
   emp: MonthlyTrendPoint["byEmployee"][number],
   mode: EmployeeHoursMode,
-): number {
+): TrendTableCell {
   switch (mode) {
     case "billableHours":
-      return emp.billableHours;
+      return { numerator: emp.billableHours, denominator: 1 };
     case "billedHours":
-      return emp.billedHours;
+      return { numerator: emp.billedHours, denominator: 1 };
     case "unbillableHours":
-      return Math.max(0, emp.hours - emp.billableHours);
+      return {
+        numerator: Math.max(0, emp.hours - emp.billableHours),
+        denominator: 1,
+      };
     case "billableRevenue":
-      return emp.billableRevenue;
+      return { numerator: emp.billableRevenue, denominator: 1 };
     case "billedRevenue":
-      return emp.billedRevenue;
+      return { numerator: emp.billedRevenue, denominator: 1 };
     case "lostRevenue":
-      return Math.max(0, emp.standardRateValue - emp.billedRevenue);
+      return {
+        numerator: Math.max(0, emp.standardRateValue - emp.billedRevenue),
+        denominator: 1,
+      };
+    case "realization":
+      return {
+        numerator: emp.billedRevenue,
+        denominator: emp.standardRateValue,
+      };
+    case "utilization":
+      return { numerator: emp.billableHours, denominator: emp.hours };
+    case "effectiveRate":
+      return { numerator: emp.billedRevenue, denominator: emp.billedHours };
   }
 }
 
@@ -39,12 +65,12 @@ interface EmployeeTrendTableProps {
 export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
   const { rows, monthLabels } = useMemo(() => {
     const labels = data.map((m) => m.label);
+    const defaultDenom = RATIO_MODES_IN_WRAPPER.includes(mode) ? 0 : 1;
 
-    const employeeMap = new Map<string, {
-      id: string;
-      name: string;
-      monthly: number[];
-    }>();
+    const employeeMap = new Map<
+      string,
+      { id: string; name: string; monthly: TrendTableCell[] }
+    >();
 
     for (let i = 0; i < data.length; i++) {
       for (const emp of data[i].byEmployee) {
@@ -52,11 +78,14 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
           employeeMap.set(emp.id, {
             id: emp.id,
             name: emp.name,
-            monthly: new Array(data.length).fill(0),
+            monthly: Array.from({ length: data.length }, () => ({
+              numerator: 0,
+              denominator: defaultDenom,
+            })),
           });
         }
         const entry = employeeMap.get(emp.id)!;
-        entry.monthly[i] = pickValue(emp, mode);
+        entry.monthly[i] = pickCell(emp, mode);
       }
     }
 
@@ -64,7 +93,7 @@ export function EmployeeTrendTable({ data, mode }: EmployeeTrendTableProps) {
       (emp) => ({
         id: emp.id,
         name: emp.name,
-        monthlyValues: emp.monthly,
+        monthlyCells: emp.monthly,
       }),
     );
 

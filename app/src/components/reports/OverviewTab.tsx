@@ -32,6 +32,12 @@ const EUR_MODE_OPTIONS: ModeOption[] = [
   { value: "lostRevenue", label: "Lost" },
 ];
 
+const RATIO_MODE_OPTIONS: ModeOption[] = [
+  { value: "realization", label: "Realization" },
+  { value: "utilization", label: "Utilization" },
+  { value: "effectiveRate", label: "Eff Rate" },
+];
+
 interface EmployeeModeGroupProps {
   label: string;
   options: ModeOption[];
@@ -197,6 +203,12 @@ export function OverviewTab() {
               current={employeeMode}
               onChange={setEmployeeMode}
             />
+            <EmployeeModeGroup
+              label="%"
+              options={RATIO_MODE_OPTIONS}
+              current={employeeMode}
+              onChange={setEmployeeMode}
+            />
           </div>
         </div>
         <EmployeeTrendTable data={trendData.months} mode={employeeMode} />
@@ -218,6 +230,12 @@ export function OverviewTab() {
             <EmployeeModeGroup
               label="€"
               options={EUR_MODE_OPTIONS}
+              current={clientMode}
+              onChange={setClientMode}
+            />
+            <EmployeeModeGroup
+              label="%"
+              options={RATIO_MODE_OPTIONS}
               current={clientMode}
               onChange={setClientMode}
             />

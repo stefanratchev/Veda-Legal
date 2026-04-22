@@ -9,7 +9,26 @@ const GREEN = "rgba(74, 157, 110, 0.35)";
 const RED = "rgba(239, 68, 68, 0.3)";
 
 function makeRow(id: string, name: string, values: number[]): TrendTableRow {
-  return { id, name, monthlyValues: values };
+  return {
+    id,
+    name,
+    monthlyCells: values.map((v) => ({ numerator: v, denominator: 1 })),
+  };
+}
+
+function makeRatioRow(
+  id: string,
+  name: string,
+  pairs: [number, number][],
+): TrendTableRow {
+  return {
+    id,
+    name,
+    monthlyCells: pairs.map(([numerator, denominator]) => ({
+      numerator,
+      denominator,
+    })),
+  };
 }
 
 describe("TrendTable", () => {
@@ -231,5 +250,140 @@ describe("TrendTable", () => {
     expect(footCells[1].textContent).toBe("31h");
     expect(footCells[2].textContent).toBe("31h");
     expect(footCells[3].textContent).toBe("36h");
+  });
+
+  it("renders realization cells as integer percentages", () => {
+    const rows = [
+      makeRatioRow("a", "Alice", [
+        [50, 100],
+        [30, 60],
+        [75, 100],
+      ]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="realization"
+        entityLabel="Employee"
+      />,
+    );
+
+    const aliceCells = container
+      .querySelectorAll("tbody tr")[0]
+      .querySelectorAll("td");
+    // 50/100 = 50%, 30/60 = 50%, 75/100 = 75%
+    expect(aliceCells[1].textContent).toBe("50%");
+    expect(aliceCells[2].textContent).toBe("50%");
+    expect(aliceCells[3].textContent).toBe("75%");
+  });
+
+  it("renders effective rate cells as €/hr with dash when billedHours=0", () => {
+    const rows = [
+      makeRatioRow("a", "Alice", [
+        [1000, 10],
+        [2000, 0],
+        [3000, 25],
+      ]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={MONTH_LABELS}
+        mode="effectiveRate"
+        entityLabel="Employee"
+      />,
+    );
+
+    const aliceCells = container
+      .querySelectorAll("tbody tr")[0]
+      .querySelectorAll("td");
+    // 1000/10 = 100 → "€100"
+    expect(aliceCells[1].textContent).toBe("€100");
+    // 2000/0 → "—"
+    expect(aliceCells[2].textContent).toBe("—");
+    // 3000/25 = 120 → "€120"
+    expect(aliceCells[3].textContent).toBe("€120");
+  });
+
+  it("Total row uses weighted aggregation for realization, not simple mean", () => {
+    // Row A: [80, 100] → 80%. Row B: [20, 200] → 10%.
+    // Weighted Total = (80+20)/(100+200) = 100/300 = 33% (rounded).
+    // Simple mean would be (80+10)/2 = 45% — we assert NOT that.
+    const rows = [
+      makeRatioRow("a", "Alice", [[80, 100]]),
+      makeRatioRow("b", "Bob", [[20, 200]]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={["Apr '26"]}
+        mode="realization"
+        entityLabel="Employee"
+      />,
+    );
+
+    const footCells = container.querySelectorAll("tfoot tr td");
+    expect(footCells[1].textContent).toBe("33%");
+    expect(footCells[1].textContent).not.toBe("45%");
+  });
+
+  it("Others row uses weighted aggregation for utilization", () => {
+    // Kept A: [80, 100] → 80%.
+    // Tail B: [10, 100], Tail C: [20, 100] → Others weighted = (10+20)/(100+100) = 30/200 = 15%.
+    const rows = [
+      makeRatioRow("a", "Alice", [[80, 100]]),
+      makeRatioRow("b", "Bob", [[10, 100]]),
+      makeRatioRow("c", "Carol", [[20, 100]]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={["Apr '26"]}
+        mode="utilization"
+        entityLabel="Employee"
+        topN={1}
+      />,
+    );
+
+    const bodyTrs = container.querySelectorAll("tbody tr");
+    // 1 kept + Others = 2.
+    expect(bodyTrs.length).toBe(2);
+    const othersCells = bodyTrs[1].querySelectorAll("td");
+    expect(othersCells[1].textContent).toBe("15%");
+  });
+
+  it("zero-denominator cells render dash and are not max-highlighted", () => {
+    // Row A: [500, 0] → null/"—". Row B: [100, 10] → €10.
+    // Only B has a valid value, so B is max-highlighted; A is not highlighted.
+    const rows = [
+      makeRatioRow("a", "Alice", [[500, 0]]),
+      makeRatioRow("b", "Bob", [[100, 10]]),
+    ];
+    const { container } = render(
+      <TrendTable
+        rows={rows}
+        monthLabels={["Apr '26"]}
+        mode="effectiveRate"
+        entityLabel="Employee"
+      />,
+    );
+
+    const bodyTrs = container.querySelectorAll("tbody tr");
+    // Sort by last-month value desc: B (10) > A (null sorts to bottom).
+    const bRow = bodyTrs[0];
+    const aRow = bodyTrs[1];
+    expect(bRow.textContent).toContain("Bob");
+    expect(aRow.textContent).toContain("Alice");
+
+    const aCells = aRow.querySelectorAll("td");
+    const bCells = bRow.querySelectorAll("td");
+
+    // A: 500/0 = "—", no highlight.
+    expect(aCells[1].textContent).toBe("—");
+    expect(aCells[1].getAttribute("style") || "").not.toContain(GREEN);
+    // B: 100/10 = "€10", highlighted.
+    expect(bCells[1].textContent).toBe("€10");
+    expect(bCells[1].getAttribute("style")).toContain(GREEN);
   });
 });

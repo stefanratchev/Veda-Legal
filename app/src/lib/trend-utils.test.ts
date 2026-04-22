@@ -13,6 +13,7 @@ import {
   pickDominantMonth,
   splitRetainerGrandTotal,
   allocateSdToBuckets,
+  buildByClientForMonth,
   type LineItemForAllocation,
 } from "./trend-utils";
 import type { ServiceDescription } from "@/types";
@@ -735,5 +736,148 @@ describe("allocateSdToBuckets", () => {
     expect(firmTotal).toBeCloseTo(500, 2);
     expect(clientTotal).toBeCloseTo(500, 2);
     expect(empTotal).toBeCloseTo(500, 2);
+  });
+});
+
+describe("buildByClientForMonth", () => {
+  it("includes clients from the TE clientMap with SD allocations merged in", () => {
+    const monthStart = "2026-03-01";
+    // clientMap = TE-aggregation result for March. Alpha is billable, Beta is not.
+    const clientMap = new Map<
+      string,
+      { id: string; name: string; hours: number; billableHours: number; billableRevenue: number }[]
+    >([
+      [
+        monthStart,
+        [
+          {
+            id: "alpha",
+            name: "Alpha Corp",
+            hours: 20,
+            billableHours: 15,
+            billableRevenue: 3000,
+          },
+        ],
+      ],
+    ]);
+    const clientBilledMap = new Map<string, number>([
+      [`${monthStart}:alpha`, 2500],
+    ]);
+    const clientBilledHoursMap = new Map<string, number>([
+      [`${monthStart}:alpha`, 12],
+    ]);
+    const clientStandardMap = new Map<string, number>([
+      [`${monthStart}:alpha`, 3000],
+    ]);
+    const clientNamesMap = new Map<string, string>([["alpha", "Alpha Corp"]]);
+
+    const result = buildByClientForMonth(
+      monthStart,
+      clientMap,
+      clientBilledMap,
+      clientBilledHoursMap,
+      clientStandardMap,
+      clientNamesMap,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "alpha",
+      name: "Alpha Corp",
+      hours: 20,
+      billableHours: 15,
+      billableRevenue: 3000,
+      billedRevenue: 2500,
+      billedHours: 12,
+      standardRateValue: 3000,
+    });
+  });
+
+  it("sweeps in extra clients that have SD allocations but no time entries in the month", () => {
+    // This covers the catch-up-billing case: an SD finalized this month whose
+    // line items were dated in an earlier month (or all manual/undated) ends
+    // up with client allocations in clientBilledMap that never appear in
+    // clientMap (since clientMap is driven by time-entry aggregation).
+    const monthStart = "2026-03-01";
+    const clientMap = new Map<
+      string,
+      { id: string; name: string; hours: number; billableHours: number; billableRevenue: number }[]
+    >([
+      [
+        monthStart,
+        [
+          {
+            id: "alpha",
+            name: "Alpha Corp",
+            hours: 20,
+            billableHours: 15,
+            billableRevenue: 3000,
+          },
+        ],
+      ],
+    ]);
+    const clientBilledMap = new Map<string, number>([
+      [`${monthStart}:alpha`, 2500],
+      [`${monthStart}:ghost`, 1500], // ghost has no TEs this month
+    ]);
+    const clientBilledHoursMap = new Map<string, number>([
+      [`${monthStart}:alpha`, 12],
+      [`${monthStart}:ghost`, 8],
+    ]);
+    const clientStandardMap = new Map<string, number>([
+      [`${monthStart}:alpha`, 3000],
+      [`${monthStart}:ghost`, 1800],
+    ]);
+    const clientNamesMap = new Map<string, string>([
+      ["alpha", "Alpha Corp"],
+      ["ghost", "Ghost Ltd"],
+    ]);
+
+    const result = buildByClientForMonth(
+      monthStart,
+      clientMap,
+      clientBilledMap,
+      clientBilledHoursMap,
+      clientStandardMap,
+      clientNamesMap,
+    );
+
+    // Both clients appear in the result; ghost is added by the sweep with
+    // hours=0/billable=0 (no TE data) but its SD-side values are preserved.
+    const ids = result.map((r) => r.id).sort();
+    expect(ids).toEqual(["alpha", "ghost"]);
+
+    const ghost = result.find((r) => r.id === "ghost")!;
+    expect(ghost).toMatchObject({
+      id: "ghost",
+      name: "Ghost Ltd",
+      hours: 0,
+      billableHours: 0,
+      billableRevenue: 0,
+      billedRevenue: 1500,
+      billedHours: 8,
+      standardRateValue: 1800,
+    });
+  });
+
+  it("falls back to 'Unknown' when a swept client id has no name in clientNamesMap", () => {
+    const monthStart = "2026-03-01";
+    const clientMap = new Map<
+      string,
+      { id: string; name: string; hours: number; billableHours: number; billableRevenue: number }[]
+    >();
+    const clientBilledMap = new Map<string, number>([
+      [`${monthStart}:orphan`, 100],
+    ]);
+    const result = buildByClientForMonth(
+      monthStart,
+      clientMap,
+      clientBilledMap,
+      new Map(),
+      new Map(),
+      new Map(), // empty names map
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Unknown");
   });
 });

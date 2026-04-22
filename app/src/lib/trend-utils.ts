@@ -444,7 +444,7 @@ export function allocateSdToBuckets(
  * that has SD allocations in this month but no time entries (e.g. an SD
  * finalized in this month whose entries all fall in an earlier month).
  */
-function buildByClientForMonth(
+export function buildByClientForMonth(
   monthStart: string,
   clientMap: Map<
     string,
